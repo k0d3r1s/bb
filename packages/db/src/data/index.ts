@@ -218,39 +218,6 @@ export {
 } from "./plugin-state-snapshots.js";
 
 export {
-  acquireWorkQuiesceLease,
-  beginWorkQuiesceSeal,
-  completeWorkQuiesceSeal,
-  isWorkAdmissionOpen,
-  readWorkQuiesceLease,
-  ownsWorkQuiesceLease,
-  releaseWorkQuiesceLease,
-  renewDrainingWorkQuiesceLease,
-  transitionWorkQuiescePhase,
-  type AcquireWorkQuiesceLeaseInput,
-  type AcquireWorkQuiesceLeaseResult,
-  type BeginWorkQuiesceSealInput,
-  type ReleaseWorkQuiesceLeaseInput,
-  type TransitionWorkQuiescePhaseInput,
-  type WorkQuiesceOwner,
-  type WorkQuiesceLease,
-} from "./work-quiesce.js";
-export {
-  admitExecutionStart,
-  admitExecutionStartInTransaction,
-  assertWorkAdmissionOpen,
-  clearStaleWorkAdmissions,
-  listOpenWorkAdmissions,
-  markWorkAdmissionActive,
-  settleWorkAdmission,
-  type AdmitExecutionStartInput,
-  type AdmitExecutionStartResult,
-  type WorkAdmissionToken,
-  type WorkAdmissionOpenResult,
-  type WorkQuiescedResult,
-} from "./work-admissions.js";
-
-export {
   getStoredThemeId,
   getStoredFaviconColor,
   setStoredAppearance,
@@ -543,3 +510,4 @@ export {
 export * from "./project-attachments.js";
 
 export * from "./project-attachment-backfill.js";
+export * from "./index.fork.js";

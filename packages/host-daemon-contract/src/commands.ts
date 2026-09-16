@@ -1,3 +1,4 @@
+import { forkHostDaemonCommandRegistry } from "./commands.fork.js";
 import {
   desktopBrowserCommandSchemas,
   desktopBrowserResultSchemas,
@@ -1269,60 +1270,11 @@ const providerCliInstallResultSchema = z
   })
   .strict();
 
-export const hostDaemonWorkActivitySnapshotSchema = z
-  .object({
-    activeByKind: z.record(z.string().min(1), z.number().int().nonnegative()),
-  })
-  .strict();
-export type HostDaemonWorkActivitySnapshot = z.infer<
-  typeof hostDaemonWorkActivitySnapshotSchema
->;
-
-const workQuiesceCommandSchema = z
-  .object({
-    type: z.literal("work.quiesce"),
-    operationId: z.string().min(1),
-    expiresAt: z.number().int().nonnegative(),
-  })
-  .strict();
-const workSealCommandSchema = z
-  .object({
-    type: z.literal("work.seal"),
-    operationId: z.string().min(1),
-  })
-  .strict();
-const workUnquiesceCommandSchema = z
-  .object({
-    type: z.literal("work.unquiesce"),
-    operationId: z.string().min(1),
-  })
-  .strict();
-const workQuiesceResultSchema = z
-  .object({
-    operationId: z.string().min(1),
-    gatePhase: z.literal("draining"),
-    activity: hostDaemonWorkActivitySnapshotSchema,
-  })
-  .strict();
-const workSealResultSchema = z
-  .object({
-    operationId: z.string().min(1),
-    gatePhase: z.literal("sealed"),
-    activity: hostDaemonWorkActivitySnapshotSchema,
-  })
-  .strict();
-const workUnquiesceResultSchema = z
-  .object({
-    operationId: z.string().min(1),
-    released: z.literal(true),
-  })
-  .strict();
-
 type HostDaemonCommandTransport = "settled" | "onlineRpc";
 export type HostDaemonCommandEnvironmentLane = "read" | "write";
 type HostDaemonFlushEventsBeforeResult = boolean | "when-initiated";
 
-interface HostDaemonCommandDescriptor<
+export interface HostDaemonCommandDescriptor<
   Type extends string,
   Schema extends z.ZodTypeAny,
   ResultSchema extends z.ZodTypeAny,
@@ -1338,7 +1290,7 @@ interface HostDaemonCommandDescriptor<
   envLane: HostDaemonCommandEnvironmentLane | null;
 }
 
-function defineHostDaemonCommandDescriptor<
+export function defineHostDaemonCommandDescriptor<
   const Type extends string,
   Schema extends z.ZodTypeAny,
   ResultSchema extends z.ZodTypeAny,
@@ -1362,34 +1314,7 @@ function defineHostDaemonCommandDescriptor<
   return descriptor;
 }
 
-export const hostDaemonCommandRegistry = {
-  "work.quiesce": defineHostDaemonCommandDescriptor({
-    type: "work.quiesce",
-    schema: workQuiesceCommandSchema,
-    resultSchema: workQuiesceResultSchema,
-    transport: "settled",
-    retryable: false,
-    flushEventsBeforeResult: false,
-    envLane: null,
-  }),
-  "work.seal": defineHostDaemonCommandDescriptor({
-    type: "work.seal",
-    schema: workSealCommandSchema,
-    resultSchema: workSealResultSchema,
-    transport: "settled",
-    retryable: false,
-    flushEventsBeforeResult: false,
-    envLane: null,
-  }),
-  "work.unquiesce": defineHostDaemonCommandDescriptor({
-    type: "work.unquiesce",
-    schema: workUnquiesceCommandSchema,
-    resultSchema: workUnquiesceResultSchema,
-    transport: "settled",
-    retryable: false,
-    flushEventsBeforeResult: false,
-    envLane: null,
-  }),
+export const coreHostDaemonCommandRegistry = {
   "desktop.browser.list_instances": defineHostDaemonCommandDescriptor({
     type: "desktop.browser.list_instances",
     schema: desktopBrowserCommandSchemas["desktop.browser.list_instances"],
@@ -1408,17 +1333,15 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: null,
   }),
-  "desktop.browser.create_tab": defineHostDaemonCommandDescriptor(
-    {
-      type: "desktop.browser.create_tab",
-      schema: desktopBrowserCommandSchemas["desktop.browser.create_tab"],
-      resultSchema: desktopBrowserResultSchemas["desktop.browser.create_tab"],
-      transport: "onlineRpc",
-      retryable: false,
-      flushEventsBeforeResult: false,
-      envLane: null,
-    },
-  ),
+  "desktop.browser.create_tab": defineHostDaemonCommandDescriptor({
+    type: "desktop.browser.create_tab",
+    schema: desktopBrowserCommandSchemas["desktop.browser.create_tab"],
+    resultSchema: desktopBrowserResultSchemas["desktop.browser.create_tab"],
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
   "desktop.browser.reveal_tab": defineHostDaemonCommandDescriptor({
     type: "desktop.browser.reveal_tab",
     schema: desktopBrowserCommandSchemas["desktop.browser.reveal_tab"],
@@ -1446,28 +1369,26 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: null,
   }),
-  "desktop.browser.acquire_control":
-    defineHostDaemonCommandDescriptor({
-      type: "desktop.browser.acquire_control",
-      schema: desktopBrowserCommandSchemas["desktop.browser.acquire_control"],
-      resultSchema:
-        desktopBrowserResultSchemas["desktop.browser.acquire_control"],
-      transport: "onlineRpc",
-      retryable: false,
-      flushEventsBeforeResult: false,
-      envLane: null,
-    }),
-  "desktop.browser.open_connection":
-    defineHostDaemonCommandDescriptor({
-      type: "desktop.browser.open_connection",
-      schema: desktopBrowserCommandSchemas["desktop.browser.open_connection"],
-      resultSchema:
-        desktopBrowserResultSchemas["desktop.browser.open_connection"],
-      transport: "onlineRpc",
-      retryable: false,
-      flushEventsBeforeResult: false,
-      envLane: null,
-    }),
+  "desktop.browser.acquire_control": defineHostDaemonCommandDescriptor({
+    type: "desktop.browser.acquire_control",
+    schema: desktopBrowserCommandSchemas["desktop.browser.acquire_control"],
+    resultSchema:
+      desktopBrowserResultSchemas["desktop.browser.acquire_control"],
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "desktop.browser.open_connection": defineHostDaemonCommandDescriptor({
+    type: "desktop.browser.open_connection",
+    schema: desktopBrowserCommandSchemas["desktop.browser.open_connection"],
+    resultSchema:
+      desktopBrowserResultSchemas["desktop.browser.open_connection"],
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
   "desktop.browser.release_control": defineHostDaemonCommandDescriptor({
     type: "desktop.browser.release_control",
     schema: desktopBrowserCommandSchemas["desktop.browser.release_control"],
@@ -1478,29 +1399,25 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: null,
   }),
-  "desktop.browser.list_import_sources":
-    defineHostDaemonCommandDescriptor({
-      type: "desktop.browser.list_import_sources",
-      schema:
-        desktopBrowserCommandSchemas["desktop.browser.list_import_sources"],
-      resultSchema:
-        desktopBrowserResultSchemas["desktop.browser.list_import_sources"],
-      transport: "onlineRpc",
-      retryable: false,
-      flushEventsBeforeResult: false,
-      envLane: null,
-    }),
-  "desktop.browser.import_cookies":
-    defineHostDaemonCommandDescriptor({
-      type: "desktop.browser.import_cookies",
-      schema: desktopBrowserCommandSchemas["desktop.browser.import_cookies"],
-      resultSchema:
-        desktopBrowserResultSchemas["desktop.browser.import_cookies"],
-      transport: "onlineRpc",
-      retryable: false,
-      flushEventsBeforeResult: false,
-      envLane: null,
-    }),
+  "desktop.browser.list_import_sources": defineHostDaemonCommandDescriptor({
+    type: "desktop.browser.list_import_sources",
+    schema: desktopBrowserCommandSchemas["desktop.browser.list_import_sources"],
+    resultSchema:
+      desktopBrowserResultSchemas["desktop.browser.list_import_sources"],
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
+  "desktop.browser.import_cookies": defineHostDaemonCommandDescriptor({
+    type: "desktop.browser.import_cookies",
+    schema: desktopBrowserCommandSchemas["desktop.browser.import_cookies"],
+    resultSchema: desktopBrowserResultSchemas["desktop.browser.import_cookies"],
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
   "thread.rewind.discard": defineHostDaemonCommandDescriptor({
     type: "thread.rewind.discard",
     schema: threadRewindDiscardCommandSchema,
@@ -1645,16 +1562,15 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: "write",
   }),
-  "workspace.pull_request_action":
-    defineHostDaemonCommandDescriptor({
-      type: "workspace.pull_request_action",
-      schema: workspacePullRequestActionCommandSchema,
-      resultSchema: workspacePullRequestActionResultSchema,
-      transport: "settled",
-      retryable: false,
-      flushEventsBeforeResult: false,
-      envLane: "write",
-    }),
+  "workspace.pull_request_action": defineHostDaemonCommandDescriptor({
+    type: "workspace.pull_request_action",
+    schema: workspacePullRequestActionCommandSchema,
+    resultSchema: workspacePullRequestActionResultSchema,
+    transport: "settled",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: "write",
+  }),
   "host.list_files": defineHostDaemonCommandDescriptor({
     type: "host.list_files",
     schema: hostListFilesCommandSchema,
@@ -1837,17 +1753,15 @@ export const hostDaemonCommandRegistry = {
     flushEventsBeforeResult: false,
     envLane: null,
   }),
-  "host.install_global_skills": defineHostDaemonCommandDescriptor(
-    {
-      type: "host.install_global_skills",
-      schema: hostInstallGlobalSkillsCommandSchema,
-      resultSchema: installGlobalSkillsResultSchema,
-      transport: "onlineRpc",
-      retryable: false,
-      flushEventsBeforeResult: false,
-      envLane: null,
-    },
-  ),
+  "host.install_global_skills": defineHostDaemonCommandDescriptor({
+    type: "host.install_global_skills",
+    schema: hostInstallGlobalSkillsCommandSchema,
+    resultSchema: installGlobalSkillsResultSchema,
+    transport: "onlineRpc",
+    retryable: false,
+    flushEventsBeforeResult: false,
+    envLane: null,
+  }),
   "host.global_skills_status": defineHostDaemonCommandDescriptor({
     type: "host.global_skills_status",
     schema: hostGlobalSkillsStatusCommandSchema,
@@ -2057,6 +1971,11 @@ export const hostDaemonCommandRegistry = {
   }),
 };
 
+export const hostDaemonCommandRegistry = {
+  ...coreHostDaemonCommandRegistry,
+  ...forkHostDaemonCommandRegistry,
+};
+
 type HostDaemonCommandRegistry = typeof hostDaemonCommandRegistry;
 type AnyHostDaemonCommandDescriptor =
   HostDaemonCommandRegistry[keyof HostDaemonCommandRegistry];
@@ -2217,7 +2136,6 @@ export function isHostDaemonCommand(
 ): command is HostDaemonCommand {
   return isHostDaemonSettledCommandType(command.type);
 }
-
 
 export const hostDaemonCommandResultSchemaByType =
   hostDaemonResultSchemaByTypeForTransport("settled");

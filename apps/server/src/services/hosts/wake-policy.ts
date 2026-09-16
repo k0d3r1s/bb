@@ -1,15 +1,13 @@
 import { type HostDaemonRpcCommand } from "@bb/host-daemon-contract";
+import { forkHostCommandWakePolicy } from "./wake-policy.fork.js";
 
-const hostCommandWakePolicy = {
+const coreHostCommandWakePolicy = {
   "server_move.abort": "never",
   "server_move.activate": "never",
   "server_move.delete_old_copy": "never",
   "server_move.inspect": "never",
   "server_move.prepare": "never",
   "server_move.probe": "never",
-  "work.quiesce": "never",
-  "work.seal": "never",
-  "work.unquiesce": "never",
   "thread.rewind.discard": "never",
   "thread.rewind.prepare": "work",
   "thread.start": "work",
@@ -76,6 +74,11 @@ const hostCommandWakePolicy = {
   "workspace.diffFiles": "work",
   "workspace.diffPatch": "work",
   "workspace.pull_request": "work",
+} satisfies Record<string, "never" | "work">;
+
+const hostCommandWakePolicy = {
+  ...coreHostCommandWakePolicy,
+  ...forkHostCommandWakePolicy,
 } satisfies Record<HostDaemonRpcCommand["type"], "never" | "work">;
 
 export function hostCommandMayWake(command: HostDaemonRpcCommand): boolean {
