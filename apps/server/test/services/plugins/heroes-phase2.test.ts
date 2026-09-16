@@ -7,11 +7,11 @@ import {
   buildExecutionOptions,
   buildThreadStartCommand,
 } from "../../../src/services/threads/thread-commands.js";
+import { UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME } from "../../../src/services/threads/thread-environment-directory.js";
 import {
   ENTER_WORKTREE_TOOL_NAME,
   KEEP_CHECKOUT_TOOL_NAME,
-  UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME,
-} from "../../../src/services/threads/thread-environment-directory.js";
+} from "../../../src/services/threads/thread-environment-directory.fork.js";
 import { sendThreadMessage } from "../../../src/services/threads/thread-send.js";
 import {
   internalAuthHeaders,

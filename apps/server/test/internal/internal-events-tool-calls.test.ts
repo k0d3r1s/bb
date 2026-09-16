@@ -52,10 +52,8 @@ import { startTestServer, withTestHarness } from "../helpers/test-app.js";
 import type { TestAppHarness } from "../helpers/test-app.js";
 import { setPluginAgentContributions } from "../../src/services/plugins/plugin-agent-contributions.js";
 import type { PluginAgentToolRecord } from "../../src/services/plugins/plugin-api.js";
-import {
-  handleKeepCheckoutToolCall,
-  handleUpdateEnvironmentDirectoryToolCall,
-} from "../../src/services/threads/thread-environment-directory.js";
+import { handleUpdateEnvironmentDirectoryToolCall } from "../../src/services/threads/thread-environment-directory.js";
+import { handleKeepCheckoutToolCall } from "../../src/services/threads/thread-environment-directory.fork.js";
 
 async function postEventBatch(args: {
   acceptEncoding?: string;

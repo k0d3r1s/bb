@@ -31,11 +31,11 @@ import { discoverPluginSkillIds } from "../skills/injected-skills.js";
 import { resolveWorkspaceProjectSkills } from "../skills/workspace-skills.js";
 import { resolveSharedSkills } from "../skills/shared-skills.js";
 import { DEFAULT_ENVIRONMENT_PROVIDER_ID } from "../environments/environment-provider-ids.js";
+import { UPDATE_ENVIRONMENT_DIRECTORY_TOOL } from "./thread-environment-directory.js";
 import {
   ENTER_WORKTREE_TOOL,
   KEEP_CHECKOUT_TOOL,
-  UPDATE_ENVIRONMENT_DIRECTORY_TOOL,
-} from "./thread-environment-directory.js";
+} from "./thread-environment-directory.fork.js";
 import {
   DATA_DIR_AGENT_INSTRUCTIONS_RELATIVE_PATH,
   WORKSPACE_AGENT_INSTRUCTIONS_RELATIVE_PATH,

@@ -17,11 +17,11 @@ import {
   buildThreadStartCommand,
   prepareTurnSubmitCommandPayload,
 } from "../../../src/services/threads/thread-commands.js";
+import { UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME } from "../../../src/services/threads/thread-environment-directory.js";
 import {
   ENTER_WORKTREE_TOOL_NAME,
   KEEP_CHECKOUT_TOOL_NAME,
-  UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME,
-} from "../../../src/services/threads/thread-environment-directory.js";
+} from "../../../src/services/threads/thread-environment-directory.fork.js";
 import { internalAuthHeaders } from "../../helpers/commands.js";
 import { readJson } from "../../helpers/json.js";
 import { textInput } from "../../helpers/prompt-input.js";

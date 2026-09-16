@@ -14,13 +14,15 @@ import {
   invokePluginAgentTool,
 } from "../services/plugins/plugin-agent-contributions.js";
 import {
+  handleUpdateEnvironmentDirectoryToolCall,
+  UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME,
+} from "../services/threads/thread-environment-directory.js";
+import {
   ENTER_WORKTREE_TOOL_NAME,
   handleEnterWorktreeToolCall,
   handleKeepCheckoutToolCall,
-  handleUpdateEnvironmentDirectoryToolCall,
   KEEP_CHECKOUT_TOOL_NAME,
-  UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME,
-} from "../services/threads/thread-environment-directory.js";
+} from "../services/threads/thread-environment-directory.fork.js";
 import { requireAuthenticatedDaemonSession } from "./session-state.js";
 
 const textEncoder = new TextEncoder();
