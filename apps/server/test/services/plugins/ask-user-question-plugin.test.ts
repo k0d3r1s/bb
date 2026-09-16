@@ -124,6 +124,7 @@ describe("ask-user-question builtin plugin", () => {
       "question",
       "header",
       "options",
+      "multiSelect",
     ]);
     expect(
       schema.properties.questions.items.properties.multiSelect.default,
