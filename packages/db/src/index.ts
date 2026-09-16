@@ -10,6 +10,7 @@ export type {
 export * from "./schema.js";
 export {
   createQueuedThreadMessageId,
+  createEnvironmentId,
   createEventId,
   createHostId,
   createThreadProvisioningId,

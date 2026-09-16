@@ -71,6 +71,15 @@ describe("resolveRootComposeThreadEnvironment", () => {
     });
   });
 
+  it("preserves the implicit project default for the server policy", () => {
+    expect(
+      resolveRootComposeThreadEnvironment({
+        environmentValue: "project-default",
+        projectId,
+      }),
+    ).toEqual({ type: "project-default" });
+  });
+
   it("carries a provider's inputs verbatim with the picked machine", () => {
     expect(
       resolveRootComposeThreadEnvironment({

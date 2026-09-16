@@ -1,0 +1,37 @@
+{
+  "name": "bb-plugin-dir-skills",
+  "version": "0.1.0",
+  "description": "Inject bb skills into a thread only when its workspace lives under a configured directory, for every provider.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "server.ts",
+    "skills",
+    "scopes.json",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "bb plugin build"
+  },
+  "engines": {
+    "bb": ">=0.41",
+    "bbPluginSdk": ">=0.4.34"
+  },
+  "bb": {
+    "name": "Directory skills",
+    "description": "Skills scoped to a directory tree: a skill listed in scopes.json is injected only into threads whose workspace (or project checkout) is under that directory. Works for every provider.",
+    "branding": {
+      "icon": "FolderTree"
+    },
+    "server": "./server.ts",
+    "skills": [
+      "skills"
+    ]
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "^0.4.34",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

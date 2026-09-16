@@ -74,6 +74,8 @@ export {
   listActiveVisiblePinnedThreadRootsWithPendingInteractionState,
   listLiveThreadsInEnvironment,
   listThreadMentionRowsByIds,
+  listThreadTranscriptSegments,
+  upsertThreadSearchSegments,
   listNonDeletedChildThreads,
   listThreadEnvironmentAssignmentsOnHost,
   listUnarchivedAssignedChildThreads,
@@ -106,6 +108,9 @@ export type {
   ReorderPinnedThreadResult,
   RunningThreadRow,
   ThreadSearchResultGroup,
+  ThreadTranscriptSegment,
+  ThreadTranscriptSourceKind,
+  ListThreadTranscriptSegmentsArgs,
   ThreadWithPendingInteractionState,
   ThreadExecutionOverride,
   UpdateThreadInput,
@@ -190,6 +195,7 @@ export {
 } from "./plugin-storage.js";
 export {
   claimPluginScheduledRun,
+  claimPluginScheduledRunWithAdmission,
   deletePluginSchedules,
   listDuePluginSchedules,
   listPluginSchedules,
@@ -210,6 +216,39 @@ export {
   setPluginStateSnapshotRollbackPending,
   type PluginStateSnapshotRow,
 } from "./plugin-state-snapshots.js";
+
+export {
+  acquireWorkQuiesceLease,
+  beginWorkQuiesceSeal,
+  completeWorkQuiesceSeal,
+  isWorkAdmissionOpen,
+  readWorkQuiesceLease,
+  ownsWorkQuiesceLease,
+  releaseWorkQuiesceLease,
+  renewDrainingWorkQuiesceLease,
+  transitionWorkQuiescePhase,
+  type AcquireWorkQuiesceLeaseInput,
+  type AcquireWorkQuiesceLeaseResult,
+  type BeginWorkQuiesceSealInput,
+  type ReleaseWorkQuiesceLeaseInput,
+  type TransitionWorkQuiescePhaseInput,
+  type WorkQuiesceOwner,
+  type WorkQuiesceLease,
+} from "./work-quiesce.js";
+export {
+  admitExecutionStart,
+  admitExecutionStartInTransaction,
+  assertWorkAdmissionOpen,
+  clearStaleWorkAdmissions,
+  listOpenWorkAdmissions,
+  markWorkAdmissionActive,
+  settleWorkAdmission,
+  type AdmitExecutionStartInput,
+  type AdmitExecutionStartResult,
+  type WorkAdmissionToken,
+  type WorkAdmissionOpenResult,
+  type WorkQuiescedResult,
+} from "./work-admissions.js";
 
 export {
   getStoredThemeId,
@@ -418,6 +457,7 @@ export {
   createQueuedThreadMessageInTransaction,
   deleteClaimedQueuedThreadMessageBatchInTransaction,
   deleteQueuedThreadMessage,
+  deleteQueuedThreadMessageInTransaction,
   getQueuedThreadMessage,
   hasQueuedRetryOfTurnRequest,
   hasQueuedThreadMessages,

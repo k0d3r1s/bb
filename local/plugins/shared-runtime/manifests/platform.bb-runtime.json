@@ -1,0 +1,560 @@
+{
+  "version": 1,
+  "name": "Platform",
+  "compose": {
+    "envFile": "docker/dev/.env",
+    "projectVariable": "PROJECT"
+  },
+  "lifecycle": {
+    "ensure": ["bash", "scripts/dev.sh"],
+    "recreate": ["bash", "scripts/dev.sh", "--override"],
+    "stop": ["bash", "scripts/stop.sh"]
+  },
+  "worktrees": {
+    "containerRoot": "/bb-worktrees"
+  },
+  "isolation": {
+    "builder": "go",
+    "probe": "symfony"
+  },
+  "search": {
+    "defaultPath": "src"
+  },
+  "containers": {
+    "go": {
+      "service": "tracigo_go",
+      "root": "src/go",
+      "mounts": [{ "host": ".", "container": "/app" }]
+    },
+    "sveltekit": {
+      "service": "sveltekit",
+      "root": "src/sveltekit",
+      "mounts": [
+        { "host": ".", "container": "/platform-primary" },
+        { "host": "src/sveltekit", "container": "/app" }
+      ]
+    },
+    "symfony": {
+      "service": "zts",
+      "root": "src/symfony",
+      "mounts": [
+        { "host": ".", "container": "${primaryRoot}" },
+        { "host": "src/symfony", "container": "/var/www/html" }
+      ]
+    }
+  },
+  "scratch": {
+    "go-cache": { "env": ["GOCACHE"] },
+    "go-mod": { "env": [] },
+    "ttsc-cache": { "env": [] }
+  },
+  "dependencies": [
+    { "path": "src/symfony/vendor", "link": "/var/www/html/vendor" },
+    {
+      "path": "src/sveltekit/node_modules",
+      "mirror": "/app/node_modules",
+      "local": [".cache", ".pnpm-task-run-state-v1"]
+    },
+    {
+      "path": "src/sveltekit/apps/*/node_modules",
+      "mirror": "/app/apps/*/node_modules",
+      "local": ["$app", ".vite", ".vite-temp"]
+    },
+    {
+      "path": "src/sveltekit/packages/*/node_modules",
+      "mirror": "/app/packages/*/node_modules",
+      "local": [".vite", ".vite-temp"]
+    }
+  ],
+  "operations": {
+    "shell_syntax": {
+      "steps": [
+        {
+          "container": "symfony",
+          "cwd": ".",
+          "argv": ["bash", "-n", "scripts/dev.sh"]
+        },
+        {
+          "container": "symfony",
+          "cwd": ".",
+          "argv": ["bash", "-n", "scripts/stop.sh"]
+        },
+        {
+          "container": "symfony",
+          "cwd": ".",
+          "argv": ["bash", "-n", "scripts/lib/primary-checkout.sh"]
+        },
+        {
+          "container": "symfony",
+          "cwd": ".",
+          "argv": ["bash", "-n", "scripts/test-tracigo-integration-postgres.sh"]
+        },
+        {
+          "container": "symfony",
+          "cwd": ".",
+          "argv": [
+            "bash",
+            "-n",
+            "scripts/tests/test-extracted-products-absent.sh"
+          ]
+        }
+      ]
+    },
+    "shell_tests": {
+      "container": "symfony",
+      "cwd": ".",
+      "argv": ["bash", "scripts/tests/test-extracted-products-absent.sh"]
+    },
+    "symfony_tests": {
+      "container": "symfony",
+      "argv": ["bin/run-all"],
+      "env": { "TEST_TOKEN": "_${env}" }
+    },
+    "symfony_unit": {
+      "container": "symfony",
+      "argv": ["bin/unit", "${target}"],
+      "env": { "TEST_TOKEN": "_${env}" },
+      "target": {
+        "required": true,
+        "pattern": "^(?:infrastructure|apps/[a-z0-9][a-z0-9.-]*|valksor(?:-dev|-plugin)?(?:/[a-zA-Z0-9][a-zA-Z0-9._-]*)*)$",
+        "description": "Symfony-relative component or app directory"
+      }
+    },
+    "symfony_static": {
+      "container": "symfony",
+      "argv": ["bin/stan"]
+    },
+    "symfony_format_and_tests": {
+      "container": "symfony",
+      "argv": ["composer", "done"],
+      "env": { "TEST_TOKEN": "_${env}" }
+    },
+    "symfony_full": {
+      "steps": ["symfony_format_and_tests", "symfony_static"]
+    },
+    "svelte_check": {
+      "container": "sveltekit",
+      "argv": ["pnpm", "-r", "--stream", "--workspace-concurrency=1", "check"],
+      "env": {
+        "GOPATH": "${scratch.go-mod}",
+        "NODE_OPTIONS": "--require=${runtime}/ttsc-isolation-preload.cjs",
+        "TEMP": "${scratch.ttsc-cache}",
+        "TMP": "${scratch.ttsc-cache}",
+        "TMPDIR": "${scratch.ttsc-cache}",
+        "TTSC_CACHE_DIR": "${scratch.ttsc-cache}/ttsc"
+      }
+    },
+    "svelte_lint": {
+      "container": "sveltekit",
+      "argv": ["pnpm", "-r", "--workspace-concurrency=1", "lint"]
+    },
+    "svelte_tests": {
+      "container": "sveltekit",
+      "argv": ["pnpm", "-r", "--workspace-concurrency=1", "test"],
+      "env": {
+        "BB_NODE_COPY_ROOTS": "${cwd}",
+        "BB_TTSC_COPY_COMPAT_FORCE": "1",
+        "NODE_OPTIONS": "--require=${runtime}/ttsc-isolation-preload.cjs"
+      }
+    },
+    "svelte_format_check": {
+      "container": "sveltekit",
+      "argv": [
+        "${cwd}/packages/config/node_modules/.bin/prettier",
+        "--check",
+        "."
+      ]
+    },
+    "svelte_format": {
+      "container": "sveltekit",
+      "argv": [
+        "${cwd}/packages/config/node_modules/.bin/prettier",
+        "--write",
+        "."
+      ]
+    },
+    "svelte_full": {
+      "steps": [
+        "svelte_format_check",
+        "svelte_check",
+        "svelte_lint",
+        "svelte_tests"
+      ]
+    },
+    "go_format": {
+      "container": "go",
+      "argv": ["go", "fmt", "./..."]
+    },
+    "go_format_check": {
+      "container": "go",
+      "argv": ["gofmt", "-l", "."],
+      "failOnStdout": true
+    },
+    "go_vet": {
+      "container": "go",
+      "argv": ["go", "vet", "./..."]
+    },
+    "go_tests": {
+      "container": "go",
+      "argv": ["go", "test", "-timeout=120s", "./..."],
+      "target": {
+        "variants": {
+          "tracigo_write_through_inventory_generate": {
+            "container": "go",
+            "argv": [
+              "go",
+              "run",
+              "./apps/tracigo.com/cmd/tracigo-write-through-inventory",
+              "--root",
+              "./apps/tracigo.com",
+              "--ledger",
+              "../../docs/plans/tracigo/2026-09-07-redis-write-through-ledger.json",
+              "--starting-commit",
+              "03c1e8a2e15534655f0dabaa719971d9233bac13"
+            ]
+          },
+          "tracigo_write_through_inventory_require_zero": {
+            "container": "go",
+            "argv": [
+              "go",
+              "run",
+              "./apps/tracigo.com/cmd/tracigo-write-through-inventory",
+              "--root",
+              "./apps/tracigo.com",
+              "--family",
+              "knowledge",
+              "--require-zero",
+              "--summary"
+            ]
+          },
+          "tracigo_timeline_context_postgres": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/content/narrativetimeline",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestListContextEvents",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_unit": {
+            "container": "go",
+            "argv": [
+              "go",
+              "test",
+              "-json",
+              "-timeout=240s",
+              "./apps/tracigo.com/cmd/tracigo-write-through-inventory",
+              "./apps/tracigo.com/internal/writethrough",
+              "./apps/tracigo.com/internal/writethrough/bypassguard",
+              "./apps/tracigo.com/internal/writethrough/reconcile",
+              "./apps/tracigo.com/internal/writethrough/typedrepo"
+            ]
+          },
+          "tracigo_write_through_postgres": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/server ./apps/tracigo.com/internal/writethrough/publication ./apps/tracigo.com/internal/writethrough/reconcile ./apps/tracigo.com/internal/writethrough/typedrepo ./apps/tracigo.com/internal/features/platform/cachepublications ./apps/tracigo.com/internal/features/knowledge/core",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^(TestExecute|TestWriteThrough|TestPostgres|TestRepositoryReadInsideProjectTransaction|TestRepositoryWriteInsideProjectTransaction|TestFactoryRefusesKeyRetirement|TestPublicationSetMigration|TestReconciliationMigration)",
+              "TRACIGO_IT_TIMEOUT": "120s",
+              "TRACIGO_REDIS_TEST_PREFIX": "bb:${envSlug}:write-through:v2",
+              "TRACIGO_TEST_REDIS_COORDINATION_URL": "redis://dragonfly:6379/14",
+              "TRACIGO_TEST_REDIS_REQUIRED": "1",
+              "TRACIGO_TEST_REDIS_VALUES_URL": "redis://dragonfly:6379/15"
+            }
+          },
+          "tracigo_write_through_redis_required": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-redis.sh"],
+            "containers": ["go"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/writethrough/redisstore ./apps/tracigo.com/internal/writethrough/readiness",
+              "TRACIGO_IT_RUN": "^Test",
+              "TRACIGO_IT_TIMEOUT": "120s",
+              "TRACIGO_REDIS_TEST_PREFIX": "bb:${envSlug}:write-through:v2",
+              "TRACIGO_TEST_REDIS_COORDINATION_URL": "redis://dragonfly:6379/14",
+              "TRACIGO_TEST_REDIS_REQUIRED": "1",
+              "TRACIGO_TEST_REDIS_VALUES_URL": "redis://dragonfly:6379/15"
+            }
+          },
+          "tracigo_write_through_race": {
+            "container": "go",
+            "argv": [
+              "go",
+              "test",
+              "-json",
+              "-race",
+              "-timeout=240s",
+              "./apps/tracigo.com/internal/writethrough/..."
+            ]
+          },
+          "tracigo_e2e": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-e2e.sh"],
+            "containers": ["go", "symfony", "sveltekit"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony"
+            }
+          },
+          "tracigo_write_through_knowledge": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/knowledge/...",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_sources": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/sources/...",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_content": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/content/...",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_automation_developer": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/automation/... ./apps/tracigo.com/internal/features/developer/...",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_ai": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/ai/...",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_sre": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/sre/...",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_platform": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/platform/...",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_secondary": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/features/learning/... ./apps/tracigo.com/internal/features/progressgoals ./apps/tracigo.com/internal/features/libraries ./apps/tracigo.com/internal/features/apidocs ./apps/tracigo.com/internal/features/capture",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          },
+          "tracigo_write_through_background": {
+            "kind": "host",
+            "argv": ["bash", "scripts/test-tracigo-integration-postgres.sh"],
+            "containers": ["go", "symfony"],
+            "env": {
+              "PRODUCT_E2E_DOCKER_BIN": "${docker}",
+              "PRODUCT_E2E_GO_CACHE": "${scratch.go-cache}",
+              "PRODUCT_E2E_GO_ISOLATION_LAUNCHER": "${launcher.go}",
+              "PRODUCT_E2E_GO_WORKDIR": "${root.go}/src/go",
+              "PRODUCT_E2E_ISOLATION_WORKSPACE": "${root.go}",
+              "PRODUCT_E2E_ROOT": "${hostRoot}",
+              "PRODUCT_E2E_TMP": "${tmp}",
+              "PRODUCT_E2E_ZTS_ISOLATION_LAUNCHER": "${launcher.symfony}",
+              "PRODUCT_E2E_ZTS_WORKDIR": "${root.symfony}/src/symfony",
+              "TRACIGO_IT_PACKAGES": "./apps/tracigo.com/internal/jobs/... ./apps/tracigo.com/internal/events/... ./apps/tracigo.com/internal/server/... ./apps/tracigo.com/internal/ingest/... ./apps/tracigo.com/internal/scheduledtasks/...",
+              "TRACIGO_IT_PARALLEL": "1",
+              "TRACIGO_IT_RUN": "^TestWriteThrough",
+              "TRACIGO_IT_TIMEOUT": "120s"
+            }
+          }
+        }
+      }
+    },
+    "go_full": {
+      "steps": ["go_format_check", "go_vet", "go_tests"]
+    }
+  },
+  "git": {
+    "prepareCommit": {
+      "generators": [
+        {
+          "container": "symfony",
+          "cwd": ".",
+          "argv": ["php", "scripts/generate-components.php", "--modified"],
+          "requires": "scripts/generate-components.php",
+          "stages": [".github/deploy/components-modified.json"],
+          "tolerateMissingExecutable": true
+        },
+        {
+          "container": "symfony",
+          "cwd": ".",
+          "argv": ["php", "scripts/generate-platform-registry.php"],
+          "requires": "scripts/generate-platform-registry.php",
+          "stages": [
+            "config/svelte-runtime-apps.tsv",
+            "config/go-runtime-products.tsv",
+            "config/suspended-apps.tsv",
+            "src/symfony/config/product-catalog.json",
+            "src/sveltekit/packages/config/src/product-registry.generated.ts",
+            "src/symfony/apps/admin.valksor.com/src/Content/ProductSites.php",
+            "src/go/platformregistry/registry.go"
+          ],
+          "tolerateMissingExecutable": true
+        }
+      ],
+      "hardlinks": [
+        {
+          "source": "profile/public/profile/README.md",
+          "target": "profile/private/profile/README.md"
+        }
+      ]
+    }
+  },
+  "codegraph": { "enabled": true }
+}

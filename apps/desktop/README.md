@@ -266,6 +266,27 @@ is baked into the Electron main/preload bundles and selects the nightly product
 identity, yellow icon, and update URLs. Omit the variable (or set it to
 `latest`) for stable and local builds.
 
+## Local build
+
+Local builds set `BB_DESKTOP_LOCAL_BUILD=1` at build time. They install and run
+alongside a stable `bb` because they keep a distinct on-disk identity:
+
+- product name / bundle folder: `bb Local.app`
+- bundle identifier: `dev.bb.desktop.local`
+- Linux binary name: `bb-local`, so it never shadows stable `bb` on PATH
+- no update feed (`publish` is empty; auto-update and version checks are off)
+
+The macOS display name is deliberately overridden to `bb` via
+`CFBundleDisplayName` (`scripts/run-electron-builder.mjs`), so notifications,
+the Dock, and Finder read `bb` like the stable build. Only the display name is
+overridden: `CFBundleName` stays `bb Local`, and the runtime `app.setName` value
+(`bb Local`, from `DESKTOP_RELEASE_INFO.applicationName`) keeps the About panel,
+menu-bar title, and `userData` directory on `bb Local`. Because the display name
+matches stable, a local build is not visually distinct from stable in the Dock
+or Notification Center — the `bb Local.app` filename and About panel are the way
+to tell them apart. The embedded bb runtime uses the normal `~/.bb` data, so a
+local build and a stable build share threads.
+
 ## About panel
 
 The app menu's About item opens a message box listing the facts a bug report

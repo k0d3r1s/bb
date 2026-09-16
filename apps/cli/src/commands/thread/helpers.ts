@@ -3,9 +3,11 @@ import { basename, isAbsolute, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createBuiltinPlanCommandTextInput,
+  parseSerializedThreadMentions,
   permissionModeInputSchema,
   type PermissionMode,
   type PromptInput,
+  type PromptTextMention,
   serviceTierSchema,
   type ServiceTier,
 } from "@bb/domain";
@@ -28,28 +30,44 @@ export const PERMISSION_MODE_HELP =
 export const PLAN_HELP =
   "Send the message as the provider's /plan action so the agent proposes a plan for approval before executing";
 
+export function parseThreadMentions(text: string): PromptTextMention[] {
+  return parseSerializedThreadMentions(text);
+}
+
 export function buildPromptInputs(args: {
   message: string;
   files?: readonly string[];
   images?: readonly string[];
   plan?: boolean;
 }): PromptInput[] {
+  const mentions = parseThreadMentions(args.message);
+  const textInput = args.plan
+    ? createBuiltinPlanCommandTextInput(args.message)
+    : {
+        type: "text" as const,
+        text: args.message,
+        mentions,
+      };
+  if (args.plan && mentions.length > 0) {
+    const offset = textInput.text.length - args.message.length;
+    textInput.mentions.push(
+      ...mentions.map((mention) => ({
+        ...mention,
+        start: mention.start + offset,
+        end: mention.end + offset,
+      })),
+    );
+  }
   return [
-    args.plan
-      ? createBuiltinPlanCommandTextInput(args.message)
-      : { type: "text", text: args.message, mentions: [] },
-    ...(args.files ?? []).map(
-      (path): PromptInput => ({
-        type: "localFile",
-        path,
-      }),
-    ),
-    ...(args.images ?? []).map(
-      (path): PromptInput => ({
-        type: "localImage",
-        path,
-      }),
-    ),
+    textInput,
+    ...(args.files ?? []).map((path): PromptInput => ({
+      type: "localFile",
+      path,
+    })),
+    ...(args.images ?? []).map((path): PromptInput => ({
+      type: "localImage",
+      path,
+    })),
   ];
 }
 

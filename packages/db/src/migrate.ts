@@ -131,6 +131,10 @@ interface AppliedMigrationCountRow {
   count: number;
 }
 
+interface SchemaSqlRow {
+  sql: string | null;
+}
+
 interface PendingInteractionProviderRequestDuplicateRow {
   duplicateCount: number;
   providerId: string;
@@ -165,6 +169,14 @@ const branchLocalThreadSearchMigrationCreatedAts = [
   1781403656070, 1781403656071,
 ] as const;
 const branchLocalThreadTabsMigrationCreatedAts = [1783633750817] as const;
+const branchLocalWorkQuiesceMigration = {
+  createdAts: [1789145421512, 1789371340185],
+  hash: "f162a056f845a9e712b63f50351f0651858c5659c6c2fc05cd063f49c15ca87f",
+} as const;
+const branchLocalWorktreePromotionMigration = {
+  createdAt: 1789372194462,
+  hash: "dbdda013c3b84e828babc97fcebe1761bea42507c6cf8dabcb6dc8b4b392f07d",
+} as const;
 const pendingInteractionColumns: ExpectedColumn[] = [
   { name: "id", type: "text", notNull: true, primaryKey: true },
   { name: "thread_id", type: "text", notNull: true, primaryKey: false },
@@ -456,6 +468,44 @@ function indexExists(
   return getIndexes(db, tableName).some((index) => index.name === indexName);
 }
 
+function indexMatches(
+  db: DbConnection,
+  tableName: string,
+  expected: ExpectedIndex,
+): boolean {
+  const actual = getIndexes(db, tableName).find(
+    (index) => index.name === expected.name,
+  );
+  return Boolean(
+    actual &&
+    actual.unique === expected.unique &&
+    getIndexColumnNames(db, expected.name).join("\0") ===
+      expected.columns.join("\0"),
+  );
+}
+
+function normalizeSchemaSql(value: string): string {
+  return value.toLowerCase().replace(/[\s`"().]/gu, "");
+}
+
+function tableHasSqlFragments(
+  db: DbConnection,
+  tableName: string,
+  fragments: readonly string[],
+): boolean {
+  const row = db.$client
+    .prepare<[string], SchemaSqlRow>(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .get(tableName);
+  return Boolean(
+    row?.sql &&
+    fragments.every((fragment) =>
+      normalizeSchemaSql(row.sql ?? "").includes(normalizeSchemaSql(fragment)),
+    ),
+  );
+}
+
 function readExpectedAppliedMigrations(
   migrationsFolder: string,
 ): ExpectedAppliedMigration[] {
@@ -588,6 +638,114 @@ function applyMigrationStatements(
   });
 
   apply();
+}
+
+function repairBranchLocalWorkQuiesceMigration(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  if (!tableExists(db, "__drizzle_migrations")) {
+    return;
+  }
+
+  const legacyCreatedAt = branchLocalWorkQuiesceMigration.createdAts.find(
+    (createdAt) =>
+      db.$client
+        .prepare<[number], AppliedMigrationIdentityRow>(
+          `
+        SELECT hash, created_at AS createdAt
+        FROM __drizzle_migrations
+        WHERE created_at = ?
+      `,
+        )
+        .get(createdAt)?.hash === branchLocalWorkQuiesceMigration.hash,
+  );
+  if (legacyCreatedAt === undefined) {
+    return;
+  }
+
+  const expectedMigrations = readExpectedAppliedMigrations(migrationsFolder);
+  const appliedCreatedAts = readAppliedMigrationCreatedAts(db);
+  for (const tag of [
+    "0117_machine_providers",
+    "0118_brave_marvel_zombies",
+    "0119_provider_model_catalogs",
+    "0120_perfect_clint_barton",
+    "0121_fluffy_major_mapleleaf",
+    "0122_attachment_accounting",
+    "0123_cheerful_tomorrow_man",
+    "0124_thread_pruning",
+    "0125_silent_guardian",
+  ]) {
+    const migration = requireExpectedAppliedMigration(expectedMigrations, tag);
+    if (appliedCreatedAts.has(migration.createdAt)) {
+      continue;
+    }
+    const reflectedInSchema =
+      (tag === "0120_perfect_clint_barton" &&
+        columnExists(db, "threads", "storage_deleted_at")) ||
+      (tag === "0121_fluffy_major_mapleleaf" &&
+        columnExists(db, "threads", "lifecycle_owner_thread_id") &&
+        indexExists(db, "threads", "threads_lifecycle_owner_idx")) ||
+      (tag === "0122_attachment_accounting" &&
+        tableExists(db, "project_attachment_backfills") &&
+        tableExists(db, "project_attachment_threads") &&
+        tableExists(db, "project_attachments") &&
+        indexExists(db, "threads", "threads_project_id_idx")) ||
+      (tag === "0123_cheerful_tomorrow_man" &&
+        tableExists(db, "environment_variables")) ||
+      (tag === "0124_thread_pruning" &&
+        tableExists(db, "thread_pruning_cursors")) ||
+      (tag === "0125_silent_guardian" &&
+        indexExists(db, "events", "events_provider_identity_idx"));
+    if (reflectedInSchema) {
+      markMigrationApplied(db, migration);
+    } else {
+      applyMigrationStatements(db, migration);
+    }
+    appliedCreatedAts.add(migration.createdAt);
+  }
+
+  const workQuiesceMigration = requireExpectedAppliedMigration(
+    expectedMigrations,
+    "0126_work_quiesce",
+  );
+  markMigrationApplied(db, workQuiesceMigration);
+  db.$client
+    .prepare<[number]>("DELETE FROM __drizzle_migrations WHERE created_at = ?")
+    .run(legacyCreatedAt);
+}
+
+function repairBranchLocalWorktreePromotionMigration(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  if (!tableExists(db, "__drizzle_migrations")) {
+    return;
+  }
+
+  const legacyMigration = db.$client
+    .prepare<[number], AppliedMigrationIdentityRow>(
+      `
+        SELECT hash, created_at AS createdAt
+        FROM __drizzle_migrations
+        WHERE created_at = ?
+      `,
+    )
+    .get(branchLocalWorktreePromotionMigration.createdAt);
+  if (legacyMigration?.hash !== branchLocalWorktreePromotionMigration.hash) {
+    return;
+  }
+
+  const expectedMigrations = readExpectedAppliedMigrations(migrationsFolder);
+  const promotionMigration = requireExpectedAppliedMigration(
+    expectedMigrations,
+    "0127_thread_worktree_promotion",
+  );
+  markMigrationApplied(db, promotionMigration);
+  db.$client
+    .prepare<[number]>("DELETE FROM __drizzle_migrations WHERE created_at = ?")
+    .run(branchLocalWorktreePromotionMigration.createdAt);
 }
 
 function hasPublishedTimestampFallback(
@@ -1439,6 +1597,87 @@ function repairBranchLocalThreadTabsBeforePendingInteractionsMigration(
   applyMigrationStatements(db, pendingInteractionsMigration);
 }
 
+function validateWorkQuiesceSchema(db: DbConnection): void {
+  const expectedColumns = new Map([
+    [
+      "work_admissions",
+      [
+        "id",
+        "command_type",
+        "transport",
+        "host_id",
+        "context_json",
+        "state",
+        "created_at",
+        "settled_at",
+      ],
+    ],
+    [
+      "work_quiesce",
+      [
+        "scope",
+        "operation_id",
+        "owner_secret_hash",
+        "reason",
+        "phase",
+        "acquired_at",
+        "expires_at",
+        "candidate_release",
+        "previous_release",
+        "cohort_json",
+        "updated_at",
+      ],
+    ],
+    ["work_quiesce_resolutions", ["operation_id", "resolution", "resolved_at"]],
+  ]);
+  for (const [tableName, columns] of expectedColumns) {
+    if (
+      !tableExists(db, tableName) ||
+      getTableInfo(db, tableName)
+        .map((column) => column.name)
+        .join("\0") !== columns.join("\0")
+    ) {
+      throw new Error(
+        `Work quiesce migration left an invalid ${tableName} table`,
+      );
+    }
+  }
+  if (
+    !indexMatches(db, "work_admissions", {
+      name: "work_admissions_state_idx",
+      columns: ["state"],
+      unique: false,
+    }) ||
+    !indexMatches(db, "work_admissions", {
+      name: "work_admissions_host_id_idx",
+      columns: ["host_id"],
+      unique: false,
+    }) ||
+    !indexMatches(db, "work_quiesce", {
+      name: "work_quiesce_operation_id_unique",
+      columns: ["operation_id"],
+      unique: true,
+    })
+  ) {
+    throw new Error("Work quiesce migration left required indexes invalid");
+  }
+  if (
+    !tableHasSqlFragments(db, "work_admissions", [
+      "constraint work_admissions_transport_valid check work_admissions transport in 'settled','onlineRpc'",
+      "constraint work_admissions_state_valid check work_admissions state in 'pending','active','settled'",
+    ]) ||
+    !tableHasSqlFragments(db, "work_quiesce", [
+      "constraint work_quiesce_global_scope check work_quiesce scope = 'global'",
+      "constraint work_quiesce_operation_id_nonempty check length work_quiesce operation_id > 0",
+      "constraint work_quiesce_owner_secret_hash_nonempty check length work_quiesce owner_secret_hash > 0",
+      "constraint work_quiesce_reason_nonempty check length work_quiesce reason > 0",
+      "constraint work_quiesce_phase_valid check work_quiesce phase in 'draining','sealing','sealed','activating','verifying','rolling-back','rollback-failed','releasing'",
+    ])
+  ) {
+    throw new Error("Work quiesce migration left required constraints missing");
+  }
+}
+
 function warnAboutFutureAppliedMigrations(
   db: DbConnection,
   options: MigrateOptions,
@@ -1578,6 +1817,8 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       db,
       migrationsFolder,
     );
+    repairBranchLocalWorkQuiesceMigration(db, migrationsFolder);
+    repairBranchLocalWorktreePromotionMigration(db, migrationsFolder);
     const stagedConnectMachineId = stageExistingConnectMachineIdColumn(
       db,
       migrationsFolder,
@@ -1591,6 +1832,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
       if (stagedThreadStorageDeletedAt)
         restoreStagedThreadStorageDeletedAtColumn(db);
     }
+    validateWorkQuiesceSchema(db);
     applyReorderedCleanupMigrations(db, migrationsFolder);
     applyQueuedMessageGroupingSchema(db);
     seedKeepAwakePluginConfiguration(db);

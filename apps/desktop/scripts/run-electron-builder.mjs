@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   createDesktopReleaseConfig,
   createDesktopUpdateReleaseBaseUrl,
-  resolveDesktopReleaseChannel,
+  resolveDesktopBuildSettings,
 } from "./desktop-release-channel.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -160,14 +160,21 @@ function createSigningPlan(env) {
 
 function resolveElectronBuilderConfig(baseConfig, env) {
   const signingPlan = createSigningPlan(env);
-  const releaseChannel = resolveDesktopReleaseChannel(env);
-  const releaseConfig = createDesktopReleaseConfig(releaseChannel);
+  const { localBuild, releaseChannel } = resolveDesktopBuildSettings(env);
+  const releaseConfig = createDesktopReleaseConfig(releaseChannel, localBuild);
   const config = cloneJson(baseConfig);
   const mac = {
     ...config.mac,
     icon: releaseConfig.macIconPath,
     notarize: signingPlan.notarizationEnabled,
   };
+
+  if (releaseConfig.macBundleDisplayName) {
+    mac.extendInfo = {
+      ...config.mac?.extendInfo,
+      CFBundleDisplayName: releaseConfig.macBundleDisplayName,
+    };
+  }
 
   if (signingPlan.mode === "disabled") {
     mac.identity = null;
@@ -187,13 +194,15 @@ function resolveElectronBuilderConfig(baseConfig, env) {
   config.appId = releaseConfig.appId;
   config.artifactName = releaseConfig.artifactName;
   config.productName = releaseConfig.applicationName;
-  config.publish = [
-    {
-      channel: releaseChannel,
-      provider: "generic",
-      url: createDesktopUpdateReleaseBaseUrl(releaseConfig.releaseTag),
-    },
-  ];
+  config.publish = localBuild
+    ? []
+    : [
+        {
+          channel: releaseChannel,
+          provider: "generic",
+          url: createDesktopUpdateReleaseBaseUrl(releaseConfig.releaseTag),
+        },
+      ];
 
   return {
     config,

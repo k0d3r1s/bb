@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
   createDesktopReleaseConfig,
-  resolveDesktopReleaseChannel,
+  resolveDesktopBuildSettings,
 } from "./desktop-release-channel.mjs";
 import { resolvePackagedAppBinary } from "./packaged-app-paths.mjs";
 
@@ -295,9 +295,10 @@ if (
   process.argv[1] &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  const releaseConfig = createDesktopReleaseConfig(
-    resolveDesktopReleaseChannel(process.env),
+  const { localBuild, releaseChannel } = resolveDesktopBuildSettings(
+    process.env,
   );
+  const releaseConfig = createDesktopReleaseConfig(releaseChannel, localBuild);
   const appBinary =
     process.argv[2] ??
     (await resolvePackagedAppBinary({

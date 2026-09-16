@@ -34,9 +34,12 @@ import {
   OPTION_MUTED_CLASS_NAME,
   OPTION_TRIGGER_CONTENT_CLASS_NAME,
 } from "@bb/shared-ui/option-display";
+import { PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID } from "@bb/client-core";
 import {
   encodeProviderValue,
   parseEnvironmentValue,
+  PROJECT_DEFAULT_VALUE,
+  type ParsedEnvironmentValue,
 } from "./environment-picker-value";
 import { selectHosts } from "@/hooks/queries/host-queries";
 import { providerInputsControlRequired } from "./environment-provider-inputs";
@@ -91,6 +94,7 @@ export interface EnvironmentPickerUIProps {
     hostId: string | null,
   ) => void;
   onSelectHost?: (hostId: string) => void;
+  onSelectProjectDefault?: () => void;
 }
 
 export const PROVIDER_INPUTS_CONTROL_MISSING_REASON =
@@ -104,6 +108,11 @@ function providerValueSelected(
 ): boolean {
   return value === encodeProviderValue(provider.id);
 }
+
+const PROJECT_DEFAULT_LABEL = "Checkout, then worktree";
+const PROJECT_DEFAULT_DESCRIPTION =
+  "Starts in the project checkout; the agent is instructed to move to a worktree before the first change";
+const PROJECT_CHECKOUT_DESCRIPTION = "Stays in the project checkout";
 
 function providerDisabledReason(
   provider: SystemEnvironmentProvider,
@@ -128,9 +137,14 @@ function providerDescription(
   if (provider.availability?.status === "setup-required") {
     return provider.availability.message;
   }
-  return (
-    providerDisabledReason(provider, inputsControlProviderIds) ?? undefined
+  const disabledReason = providerDisabledReason(
+    provider,
+    inputsControlProviderIds,
   );
+  if (disabledReason !== null) return disabledReason;
+  return provider.id === PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID
+    ? PROJECT_CHECKOUT_DESCRIPTION
+    : undefined;
 }
 
 function scopedProviders(
@@ -163,6 +177,86 @@ function mergeHostProviders(
     return hostProvider === undefined ? [] : [hostProvider];
   });
 }
+function resolveSelectedEnvironment(args: {
+  host: Host | null | undefined;
+  hostUnavailableReason: string | null;
+  parsed: ParsedEnvironmentValue;
+  selectedMachineName: string | null;
+  selectedProvider: SystemEnvironmentProvider | undefined;
+}): SelectedEnvironment {
+  if (
+    args.parsed?.type === "project-default" &&
+    args.hostUnavailableReason === null
+  ) {
+    return {
+      modeLabel: PROJECT_DEFAULT_LABEL,
+      compactModeLabel: PROJECT_DEFAULT_LABEL,
+      icon: "GitBranch",
+    };
+  }
+  if (
+    args.selectedProvider !== undefined &&
+    (args.selectedProvider.machineProviderId ||
+      args.hostUnavailableReason === null)
+  ) {
+    const showsHost =
+      !args.selectedProvider.machineProviderId &&
+      args.selectedMachineName !== null;
+    return {
+      modeLabel: showsHost
+        ? `${args.selectedMachineName} · ${args.selectedProvider.displayName}`
+        : args.selectedProvider.displayName,
+      compactModeLabel: args.selectedProvider.displayName,
+      icon: pluginIconName(args.selectedProvider.icon),
+    };
+  }
+  if (args.hostUnavailableReason !== null) {
+    return {
+      modeLabel: args.selectedMachineName
+        ? `${args.selectedMachineName} · ${args.hostUnavailableReason}`
+        : args.hostUnavailableReason,
+      compactModeLabel: args.host ? "Offline" : "No host",
+      icon: "AlertTriangle",
+    };
+  }
+  if (args.parsed?.type === "reuse") {
+    return {
+      modeLabel: "Reuse",
+      compactModeLabel: "Reuse",
+      icon: REUSE_ENVIRONMENT_ICON_NAME,
+    };
+  }
+  return {
+    modeLabel: "Environment",
+    compactModeLabel: "Env",
+    icon: "Laptop",
+  };
+}
+
+function ProjectDefaultEnvironmentOption(props: {
+  disabled: boolean;
+  onSelect: (() => void) | undefined;
+  projectless: boolean;
+  value: string;
+}) {
+  if (props.projectless || props.onSelect === undefined) return null;
+  return (
+    <CommandGroup>
+      <EnvironmentMenuItem
+        value={PROJECT_DEFAULT_VALUE}
+        label={PROJECT_DEFAULT_LABEL}
+        description={PROJECT_DEFAULT_DESCRIPTION}
+        icon="GitBranch"
+        selected={
+          parseEnvironmentValue(props.value)?.type === "project-default"
+        }
+        disabled={props.disabled}
+        onSelect={props.onSelect}
+      />
+    </CommandGroup>
+  );
+}
+
 export function EnvironmentPickerUI({
   value,
   sources,
@@ -186,6 +280,7 @@ export function EnvironmentPickerUI({
   multiMachinePickerEnabled = false,
   onSelectProvider,
   onSelectHost,
+  onSelectProjectDefault,
 }: EnvironmentPickerUIProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(
     defaultOpen ?? false,
@@ -257,49 +352,23 @@ export function EnvironmentPickerUI({
       provider.machineProviderId &&
       provider.requires.projectless === projectless,
   );
-  const selected = useMemo((): SelectedEnvironment => {
-    if (
-      selectedProvider !== undefined &&
-      (selectedProvider.machineProviderId || hostUnavailableReason === null)
-    ) {
-      const showsHost =
-        !selectedProvider.machineProviderId && selectedMachineName !== null;
-      return {
-        modeLabel: showsHost
-          ? `${selectedMachineName} · ${selectedProvider.displayName}`
-          : selectedProvider.displayName,
-        compactModeLabel: selectedProvider.displayName,
-        icon: pluginIconName(selectedProvider.icon),
-      };
-    }
-    if (hostUnavailableReason !== null) {
-      return {
-        modeLabel: selectedMachineName
-          ? `${selectedMachineName} · ${hostUnavailableReason}`
-          : hostUnavailableReason,
-        compactModeLabel: availableHost ? "Offline" : "No host",
-        icon: "AlertTriangle" as const,
-      };
-    }
-    if (parsed?.type === "reuse") {
-      return {
-        modeLabel: "Reuse",
-        compactModeLabel: "Reuse",
-        icon: REUSE_ENVIRONMENT_ICON_NAME,
-      };
-    }
-    return {
-      modeLabel: "Environment",
-      compactModeLabel: "Env",
-      icon: "Laptop" as const,
-    };
-  }, [
-    parsed,
-    hostUnavailableReason,
-    availableHost,
-    selectedMachineName,
-    selectedProvider,
-  ]);
+  const selected = useMemo(
+    () =>
+      resolveSelectedEnvironment({
+        parsed,
+        hostUnavailableReason,
+        host: availableHost,
+        selectedMachineName,
+        selectedProvider,
+      }),
+    [
+      parsed,
+      hostUnavailableReason,
+      availableHost,
+      selectedMachineName,
+      selectedProvider,
+    ],
+  );
   const pickerOpen = open ?? uncontrolledOpen;
   const handleOpenChange = (nextOpen: boolean) => {
     setUncontrolledOpen(nextOpen);
@@ -328,7 +397,7 @@ export function EnvironmentPickerUI({
           type="button"
           variant="ghost"
           size="sm"
-          aria-label="Environment"
+          aria-label={`Environment: ${selected.modeLabel}`}
           aria-busy={isLoading}
           disabled={disabled}
           data-promptbox-shrinkable-control=""
@@ -432,6 +501,12 @@ export function EnvironmentPickerUI({
                 showSearch && "flex flex-col overflow-hidden",
               )}
             >
+              <ProjectDefaultEnvironmentOption
+                disabled={hostUnavailableReason !== null}
+                onSelect={onSelectProjectDefault}
+                projectless={projectless}
+                value={value}
+              />
               {isMachineMenu && availableMachines ? (
                 showSearch ? (
                   <MachineContextualEnvironmentOptions

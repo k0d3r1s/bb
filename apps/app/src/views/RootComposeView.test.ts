@@ -825,11 +825,26 @@ describe("resolveRootComposeEffectiveEnvironmentValue", () => {
   const checkoutProvider = makeProjectProvider("project-checkout");
   const worktreeProvider = makeProjectProvider("git-worktree");
 
-  it("falls back to the checkout on the primary host for a project with a source there", () => {
+  it("falls back to bb's project default for a project with a source on the primary host", () => {
     expect(
       resolveRootComposeEffectiveEnvironmentValue({
         knownHostIds: new Set(["host_1"]),
         environmentSelectionValue: "",
+        environmentProviders: [checkoutProvider, worktreeProvider],
+        isProjectless: false,
+        primaryHostId: "host_1",
+        projectSources: [makeProjectSource("host_1")],
+        reuseThreadOptions: [],
+        reuseThreadOptionsLoading: false,
+      }),
+    ).toBe("project-default");
+  });
+
+  it("keeps an explicitly picked checkout distinct from the untouched default", () => {
+    expect(
+      resolveRootComposeEffectiveEnvironmentValue({
+        knownHostIds: new Set(["host_1"]),
+        environmentSelectionValue: "provider:project-checkout",
         environmentProviders: [checkoutProvider, worktreeProvider],
         isProjectless: false,
         primaryHostId: "host_1",
@@ -890,7 +905,7 @@ describe("resolveRootComposeEffectiveEnvironmentValue", () => {
         ...args,
         environmentSelectionValue: "provider:gone",
       }),
-    ).toBe("provider:project-checkout");
+    ).toBe("project-default");
   });
 
   it("keeps a reuse environment only when it belongs to the selected project", () => {
@@ -918,7 +933,7 @@ describe("resolveRootComposeEffectiveEnvironmentValue", () => {
         reuseThreadOptions: [makeReuseThreadOption("env_current")],
         reuseThreadOptionsLoading: false,
       }),
-    ).toBe("provider:project-checkout");
+    ).toBe("project-default");
   });
 
   it("holds a specific reuse selection while project worktrees load", () => {

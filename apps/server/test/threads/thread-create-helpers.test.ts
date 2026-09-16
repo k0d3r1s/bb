@@ -157,6 +157,7 @@ describe("createThreadRecord", () => {
             startedOnBehalfOf: null,
             titleFallback: null,
             visibility: "visible",
+            worktreePromotion: "declined",
           },
         });
         throw new Error("Expected createThreadRecord to throw");

@@ -16,8 +16,8 @@
         "features/compatibility-api.md",
         "features/responsive-accessibility.md"
       ],
-      "sourceFiles": 998,
-      "sourceDigest": "2ba0e4bc86df19991cc71b67c31dccb0d9b86e46c68198bea64101b758176251",
+      "sourceFiles": 1094,
+      "sourceDigest": "d87ac483d8dcf05f1f4b6d7b2249b457bf25459d42b746c40268060e01010920",
       "declarations": []
     },
     "app-routes": {
@@ -28,7 +28,7 @@
         "features/plugin-automations.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "8af6f1c4c4cddee46c796a3eb6bc59bedd3b657832c918f997d5677e8b716990",
+      "sourceDigest": "1e31e9a6da3a575228e4e5c9cd63a91abf696bd9737d0df8284cf11e20915034",
       "declarations": [
         "app-route: packages/client-core/src/routes/route-paths.ts: APP_ROOT_ROUTE_PATH \"/\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: AUTH_CALLBACK_ROUTE_PATH \"/auth/callback\"",
@@ -39,6 +39,7 @@
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_AUTOMATIONS_ROUTE_PATH \"/automations\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_AUTOMATION_DETAIL_ROUTE_PATH \"/automations/:projectId/:automationId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_PROJECT_COMPOSE_ROUTE_PATH \"/projects/:projectId\"",
+        "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_PROJECT_SETTINGS_ROUTE_PATH \"/projects/:projectId/settings\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_AUTOMATIONS_ROUTE_PATH \"/tools/automations\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_AUTOMATION_BROWSE_ROUTE_PATH \"/tools/automations/browse\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_AUTOMATION_DETAIL_ROUTE_PATH \"/tools/automations/:projectId/:automationId\"",
@@ -46,18 +47,23 @@
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_PREFIX_ROUTE_PATH \"/tools\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_SKILL_DETAIL_ROUTE_PATH \"/extensions/skills/installed/:skillId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_SPLAT_ROUTE_PATH \"/tools/*\"",
+        "app-route: packages/client-core/src/routes/route-paths.ts: PLUGINS_ROUTE_PATH \"/plugins\"",
+        "app-route: packages/client-core/src/routes/route-paths.ts: PLUGIN_DETAIL_ROUTE_PATH \"/plugins/:pluginId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: PLUGIN_PANEL_ROUTE_PATH \"/plugins/:pluginId/:panelPath/*\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: PROJECTLESS_ARCHIVED_ROUTE_PATH \"/archived\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: PROJECTLESS_THREAD_DETAIL_ROUTE_PATH \"/threads/:threadId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: PROJECT_ARCHIVED_ROUTE_PATH \"/projects/:projectId/archived\"",
-        "app-route: packages/client-core/src/routes/route-paths.ts: PROJECT_SETTINGS_ROUTE_PATH \"/projects/:projectId/settings\"",
+        "app-route: packages/client-core/src/routes/route-paths.ts: REGISTRY_SKILLS_ROUTE_PATH \"/skills/registry\"",
+        "app-route: packages/client-core/src/routes/route-paths.ts: REGISTRY_SKILL_DETAIL_ROUTE_PATH \"/skills/registry/:registrySkillId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: ROOT_COMPOSE_ROUTE_PATH APP_ROOT_ROUTE_PATH",
         "app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_MACHINE_ROUTE_PATH \"/settings/machines/:hostId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_PLUGINS_ROUTE_PATH \"/settings/plugins\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_PLUGIN_ROUTE_PATH \"/settings/plugins/:pluginId\"",
+        "app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_PROJECT_ROUTE_PATH \"/settings/projects/:projectId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_ROUTE_PATH \"/settings\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_SECTION_ROUTE_PATH \"/settings/:section\"",
-        "app-route: packages/client-core/src/routes/route-paths.ts: SKILLS_ROUTE_PATH TOOLS_SKILLS_ROUTE_PATH",
+        "app-route: packages/client-core/src/routes/route-paths.ts: SKILLS_ROUTE_PATH \"/skills\"",
+        "app-route: packages/client-core/src/routes/route-paths.ts: SKILL_DETAIL_ROUTE_PATH \"/skills/library/:skillId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: THREAD_DETAIL_ROUTE_PATH \"/projects/:projectId/threads/:threadId\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: TOOLS_PLUGINS_ROUTE_PATH \"/extensions/plugins\"",
         "app-route: packages/client-core/src/routes/route-paths.ts: TOOLS_PLUGIN_BROWSE_ROUTE_PATH \"/extensions/plugins/browse\"",
@@ -73,8 +79,8 @@
       "recipes": [
         "features/cloud-gateway.md"
       ],
-      "sourceFiles": 15,
-      "sourceDigest": "b21e4dde4f89fde9f8b77d7969e72a465fb85407393e00a6c33bd5b0e3280a42",
+      "sourceFiles": 16,
+      "sourceDigest": "6e53c1628fa88fe01e6738398c32e8b4b1471918b952a7a1a9ad4c9c98fa0b2e",
       "declarations": []
     },
     "app:demo-server": {
@@ -82,23 +88,32 @@
         "features/developer-fixtures.md"
       ],
       "sourceFiles": 11,
-      "sourceDigest": "f25b01bad3754c1483d9e1c6967961cfb0f0762d12cd1aa4df1cc46da1392f9b",
+      "sourceDigest": "1e0c8105e6dcce81514373d5c170a84e8f8f36e4287d425d3a5490cc5b54e80e",
       "declarations": []
     },
     "app:desktop": {
       "recipes": [
         "features/desktop.md"
       ],
-      "sourceFiles": 65,
-      "sourceDigest": "4dc5c79edb9e9380d39a4e713fdbcad1c58c7c784bfa90db2e205f01a65851b7",
-      "declarations": []
+      "sourceFiles": 85,
+      "sourceDigest": "b4cfd820cd530a2cabcf1db22591bf136e074bf46e70b5d1443e334090971a94",
+      "declarations": [
+        "cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Browser.close",
+        "cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Input.dispatchMouseEvent",
+        "cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Page.captureScreenshot",
+        "cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Runtime.enable",
+        "cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Runtime.evaluate",
+        "cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Target.attachToTarget",
+        "cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Target.closeTarget",
+        "cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Target.getTargets"
+      ]
     },
     "app:mobile": {
       "recipes": [
         "features/mobile.md"
       ],
-      "sourceFiles": 208,
-      "sourceDigest": "313f8e6a7a79da3ddc6889683576133ca0b5b95f1fb7fb25d570784ab6d7c01e",
+      "sourceFiles": 179,
+      "sourceDigest": "1a3afcd997723ba99e9ac22a0e65f5db6a1a0e73f85d4918ad7217ece0703464",
       "declarations": [
         "app-route: apps/mobile/src/lib/shell/shell-links.ts: SHELL_ROUTE_PATH \"/webview\""
       ]
@@ -107,8 +122,8 @@
       "recipes": [
         "features/hosted-web.md"
       ],
-      "sourceFiles": 86,
-      "sourceDigest": "4ff0375d75e37c9de556c5f22ced1f098760cba78b06d34d72afed2a9f89bbfa",
+      "sourceFiles": 88,
+      "sourceDigest": "1d51997c82923f5641ad0708b8540f6185ca4cf9f646e544754bb50708842aad",
       "declarations": [
         "web-route: apps/web/src/routes/[.]well-known.apple-app-site-association.tsx: /.well-known/apple-app-site-association",
         "web-route: apps/web/src/routes/[.]well-known.assetlinks[.]json.tsx: /.well-known/assetlinks.json",
@@ -122,6 +137,7 @@
         "web-route: apps/web/src/routes/blog_.$slug.tsx: /blog_/$slug",
         "web-route: apps/web/src/routes/changelog.tsx: /changelog",
         "web-route: apps/web/src/routes/dashboard.tsx: /dashboard",
+        "web-route: apps/web/src/routes/download.linux.tsx: /download/linux",
         "web-route: apps/web/src/routes/download.macos.tsx: /download/macos",
         "web-route: apps/web/src/routes/index.tsx: /",
         "web-route: apps/web/src/routes/marketplace.v1.$.tsx: /marketplace/v1/$",
@@ -137,27 +153,51 @@
         "features/compatibility-api.md"
       ],
       "sourceFiles": 10,
-      "sourceDigest": "4e1a504ae3d99bf68f5f59d242a918a40950b9674fe78daf2d8dc14103d30320",
+      "sourceDigest": "444b7b1e0a23bce65729ba91094ac1a4c63e98d0783a027a29f7afab67f75162",
       "declarations": []
+    },
+    "cli:browser": {
+      "recipes": [
+        "features/workspace-panels.md"
+      ],
+      "sourceFiles": 1,
+      "sourceDigest": "472856e1bd8e73bc83134f0facc95b91d968ed4b74775e6a2b814da039ea9333",
+      "declarations": [
+        "cli-command: apps/cli/src/commands/browser.ts: ${name} <tabId>",
+        "cli-command: apps/cli/src/commands/browser.ts: acquire <tabIds...>",
+        "cli-command: apps/cli/src/commands/browser.ts: browser",
+        "cli-command: apps/cli/src/commands/browser.ts: capture <tabId>",
+        "cli-command: apps/cli/src/commands/browser.ts: connection <leaseId>",
+        "cli-command: apps/cli/src/commands/browser.ts: create",
+        "cli-command: apps/cli/src/commands/browser.ts: import-cookies",
+        "cli-command: apps/cli/src/commands/browser.ts: import-sources",
+        "cli-command: apps/cli/src/commands/browser.ts: instances",
+        "cli-command: apps/cli/src/commands/browser.ts: release <leaseId>",
+        "cli-command: apps/cli/src/commands/browser.ts: tabs",
+        "cli-command: apps/cli/src/commands/browser.ts: watch"
+      ]
     },
     "cli:environment": {
       "recipes": [
         "features/projects-environments.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "e7599c7acd1e1f49e38a80326f5bcd5b58f0a9189005592af64f41e2ee5a3238",
+      "sourceDigest": "cdf6316d1e76e90f1a8627b36f6e85d813e728da3c5cd8a87ec3f8c50d090451",
       "declarations": [
         "cli-command: apps/cli/src/commands/environment.ts: archive-threads <id>",
         "cli-command: apps/cli/src/commands/environment.ts: branches <id>",
         "cli-command: apps/cli/src/commands/environment.ts: commit <id>",
+        "cli-command: apps/cli/src/commands/environment.ts: delete <id>",
         "cli-command: apps/cli/src/commands/environment.ts: diff <id>",
         "cli-command: apps/cli/src/commands/environment.ts: diff-file <id>",
         "cli-command: apps/cli/src/commands/environment.ts: diff-files <id>",
         "cli-command: apps/cli/src/commands/environment.ts: diff-patch <id>",
         "cli-command: apps/cli/src/commands/environment.ts: draft <id>",
         "cli-command: apps/cli/src/commands/environment.ts: environment",
+        "cli-command: apps/cli/src/commands/environment.ts: list",
         "cli-command: apps/cli/src/commands/environment.ts: merge <id>",
         "cli-command: apps/cli/src/commands/environment.ts: paths <id>",
+        "cli-command: apps/cli/src/commands/environment.ts: providers",
         "cli-command: apps/cli/src/commands/environment.ts: pull-request",
         "cli-command: apps/cli/src/commands/environment.ts: ready <id>",
         "cli-command: apps/cli/src/commands/environment.ts: show <id>",
@@ -170,7 +210,7 @@
         "features/projects-environments.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "9517264cf4e0757d29eed4dcb50fd35edbd8cfc00989af7a32b32934426e44dc",
+      "sourceDigest": "a2866c2ece76e65c486e4793c42f4084de90ec7e349634e3c48d5fb25832f6e4",
       "declarations": []
     },
     "cli:file": {
@@ -178,7 +218,7 @@
         "features/workspace-panels.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "8dafeee0fd3ce257a7010235321925b6c6399eefe65b7173c459503c47e03c73",
+      "sourceDigest": "79336d250afea4b9bf197474b624ec3184b74c31feaf336b241d32fec25ea806",
       "declarations": [
         "cli-command: apps/cli/src/commands/file.ts: file",
         "cli-command: apps/cli/src/commands/file.ts: list <path>",
@@ -205,7 +245,7 @@
         "features/compatibility-api.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "624db038200de5e3e2c5661e7def8686e9d02e8e0f3e515be23934d0934ed2e4",
+      "sourceDigest": "24cfaa0f9ed53972aa8fa9f4110ca96db9b330aec116a0d95f7a62d9e1403cc6",
       "declarations": []
     },
     "cli:machine": {
@@ -213,18 +253,64 @@
         "features/hosts-updates.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "315b10935e2d47b7e373ebaccd7357e47cdc34405349c2e584e2305133bbe068",
+      "sourceDigest": "67e5312075043720015da8835984a4d76004f2e388a339b221fa9e8723355ff2",
       "declarations": [
+        "cli-command: apps/cli/src/commands/machine.ts: create",
+        "cli-command: apps/cli/src/commands/machine.ts: enroll",
         "cli-command: apps/cli/src/commands/machine.ts: install <id-or-name> <provider>",
         "cli-command: apps/cli/src/commands/machine.ts: join-code",
         "cli-command: apps/cli/src/commands/machine.ts: list",
         "cli-command: apps/cli/src/commands/machine.ts: machine",
         "cli-command: apps/cli/src/commands/machine.ts: provider-cli",
+        "cli-command: apps/cli/src/commands/machine.ts: providers",
+        "cli-command: apps/cli/src/commands/machine.ts: reconcile <id-or-name>",
         "cli-command: apps/cli/src/commands/machine.ts: remove <id-or-name>",
         "cli-command: apps/cli/src/commands/machine.ts: rename <id-or-name> <name>",
+        "cli-command: apps/cli/src/commands/machine.ts: resume <id-or-name>",
+        "cli-command: apps/cli/src/commands/machine.ts: retry-cleanup <id-or-name>",
         "cli-command: apps/cli/src/commands/machine.ts: retry-update <id-or-name>",
         "cli-command: apps/cli/src/commands/machine.ts: show <id-or-name>",
-        "cli-command: apps/cli/src/commands/machine.ts: status <id-or-name>"
+        "cli-command: apps/cli/src/commands/machine.ts: status <id-or-name>",
+        "cli-command: apps/cli/src/commands/machine.ts: suspend <id-or-name>"
+      ]
+    },
+    "cli:machine-enrollment": {
+      "recipes": [
+        "features/hosts-updates.md"
+      ],
+      "sourceFiles": 1,
+      "sourceDigest": "72b662faa2506ca18d50904514d484dbfbcf3ceaa94138c5e836c976a29fbe0a",
+      "declarations": []
+    },
+    "cli:machine-environment": {
+      "recipes": [
+        "features/hosts-updates.md"
+      ],
+      "sourceFiles": 1,
+      "sourceDigest": "97a7685ec74deef50110dcf364cef233e7f14f689445556d177931f0f4f7a871",
+      "declarations": [
+        "cli-command: apps/cli/src/commands/machine-environment.ts: env",
+        "cli-command: apps/cli/src/commands/machine-environment.ts: list",
+        "cli-command: apps/cli/src/commands/machine-environment.ts: set <NAME>",
+        "cli-command: apps/cli/src/commands/machine-environment.ts: unset <NAME>"
+      ]
+    },
+    "cli:maintenance": {
+      "recipes": [
+        "features/hosts-updates.md"
+      ],
+      "sourceFiles": 1,
+      "sourceDigest": "25e249243edf64ffb59433036ce88bef6d3a454cd8c2be8e007c58ec46e979bc",
+      "declarations": [
+        "cli-command: apps/cli/src/commands/maintenance.ts: acquire",
+        "cli-command: apps/cli/src/commands/maintenance.ts: identity",
+        "cli-command: apps/cli/src/commands/maintenance.ts: maintenance",
+        "cli-command: apps/cli/src/commands/maintenance.ts: recover <operation-id>",
+        "cli-command: apps/cli/src/commands/maintenance.ts: release <operation-id>",
+        "cli-command: apps/cli/src/commands/maintenance.ts: renew <operation-id>",
+        "cli-command: apps/cli/src/commands/maintenance.ts: seal <operation-id>",
+        "cli-command: apps/cli/src/commands/maintenance.ts: status",
+        "cli-command: apps/cli/src/commands/maintenance.ts: transition <operation-id> <expected-phase> <phase>"
       ]
     },
     "cli:manager": {
@@ -256,14 +342,17 @@
         "features/extensions.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "89437b955879c9b73efe75166a301602f24fcb863d219134d11316e9de0cf5c6",
+      "sourceDigest": "4604dbbd53a5282fa63b2a34cecfa911364d781bee83371b16a82778645406eb",
       "declarations": [
         "cli-command: apps/cli/src/commands/plugin.ts: ${name} <id>",
         "cli-command: apps/cli/src/commands/plugin.ts: build [path]",
+        "cli-command: apps/cli/src/commands/plugin.ts: call <plugin-id> <method>",
         "cli-command: apps/cli/src/commands/plugin.ts: config <id> [action] [key] [value]",
         "cli-command: apps/cli/src/commands/plugin.ts: dev [path]",
+        "cli-command: apps/cli/src/commands/plugin.ts: inspect <plugin-id> [method]",
         "cli-command: apps/cli/src/commands/plugin.ts: install <source>",
         "cli-command: apps/cli/src/commands/plugin.ts: list",
+        "cli-command: apps/cli/src/commands/plugin.ts: list [plugin-id]",
         "cli-command: apps/cli/src/commands/plugin.ts: logs <id>",
         "cli-command: apps/cli/src/commands/plugin.ts: migrate [path]",
         "cli-command: apps/cli/src/commands/plugin.ts: new <name>",
@@ -271,6 +360,7 @@
         "cli-command: apps/cli/src/commands/plugin.ts: plugin",
         "cli-command: apps/cli/src/commands/plugin.ts: reload [id]",
         "cli-command: apps/cli/src/commands/plugin.ts: remove <id>",
+        "cli-command: apps/cli/src/commands/plugin.ts: rpc",
         "cli-command: apps/cli/src/commands/plugin.ts: run <id> [args...]",
         "cli-command: apps/cli/src/commands/plugin.ts: search <query>",
         "cli-command: apps/cli/src/commands/plugin.ts: source <id>",
@@ -284,7 +374,7 @@
         "features/projects-environments.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "71aa5f4116864508a36f8fd1857f0c40526835f68eee75c8d6f67a31b625022c",
+      "sourceDigest": "86b52dcb341f96059688755610617fc6c05f3502e82dc69b6655e18053094a9d",
       "declarations": [
         "cli-command: apps/cli/src/commands/project.ts: add <projectId>",
         "cli-command: apps/cli/src/commands/project.ts: attachment",
@@ -313,7 +403,7 @@
         "features/composer.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "64201194f2bbad49ecb00a52619131729a3f1f631f82ac24da0fd2c79d8ff3a5",
+      "sourceDigest": "40e2f7f102300cbe63e6e2a15a1f84c99c0693250e2c2d15cfb2b4925ac69e4e",
       "declarations": [
         "cli-command: apps/cli/src/commands/provider.ts: list",
         "cli-command: apps/cli/src/commands/provider.ts: models [providerId]",
@@ -325,19 +415,24 @@
         "features/settings.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "100eec546197ba7130d1bb5165d914e8e4def4ee8ee27832a25be897b48da0aa",
+      "sourceDigest": "32fdc602f61f78e81641de1fd664a76dd5ae8bb8f7e5ad0237a7b0a81cc2de16",
       "declarations": [
         "cli-command: apps/cli/src/commands/settings.ts: ai-services",
+        "cli-command: apps/cli/src/commands/settings.ts: completed-turns [providerId] [display]",
         "cli-command: apps/cli/src/commands/settings.ts: experiment <key> <value>",
         "cli-command: apps/cli/src/commands/settings.ts: general <key> <value>",
+        "cli-command: apps/cli/src/commands/settings.ts: get <key>",
         "cli-command: apps/cli/src/commands/settings.ts: hints <value>",
         "cli-command: apps/cli/src/commands/settings.ts: keyboard",
         "cli-command: apps/cli/src/commands/settings.ts: list",
         "cli-command: apps/cli/src/commands/settings.ts: reload",
+        "cli-command: apps/cli/src/commands/settings.ts: reset <key>",
         "cli-command: apps/cli/src/commands/settings.ts: reset [command]",
         "cli-command: apps/cli/src/commands/settings.ts: set <command> <shortcut>",
+        "cli-command: apps/cli/src/commands/settings.ts: set <key> <value>",
         "cli-command: apps/cli/src/commands/settings.ts: settings",
         "cli-command: apps/cli/src/commands/settings.ts: show",
+        "cli-command: apps/cli/src/commands/settings.ts: ui",
         "cli-command: apps/cli/src/commands/settings.ts: usage",
         "cli-command: apps/cli/src/commands/settings.ts: version"
       ]
@@ -347,7 +442,7 @@
         "features/extensions.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "ed6005caa4ff82a56e962d46db7189a5d3c6a35cec8e85be6e72c410d2e59c42",
+      "sourceDigest": "ef10a4c4f5884bb4fca02c16c535d7fcfa27e4c479313c2db361e0ea8586eb78",
       "declarations": [
         "cli-command: apps/cli/src/commands/skill.ts: cli-skills-status",
         "cli-command: apps/cli/src/commands/skill.ts: delete <skill-id>",
@@ -378,7 +473,7 @@
         "features/workspace-panels.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "76706609914259b4d1b15a22b36bfa9aa65c204385b2de298dc18dec8740ef7b",
+      "sourceDigest": "65afc1737faeb658e9267ca8ca256803e411b11f546f1c05e0db5b1af95c719f",
       "declarations": [
         "cli-command: apps/cli/src/commands/terminal.ts: attach <terminalId>",
         "cli-command: apps/cli/src/commands/terminal.ts: close <terminalId>",
@@ -399,7 +494,7 @@
         "features/settings.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "fb07752bb23870c7b981a7522d26065dd1dda634496cacb82c9174d9eebe315c",
+      "sourceDigest": "6e207dbe694853dab437ebab0a6fee08afacd658a36a98a754a244a6cab2064e",
       "declarations": [
         "cli-command: apps/cli/src/commands/theme.ts: dir",
         "cli-command: apps/cli/src/commands/theme.ts: favicon",
@@ -407,7 +502,7 @@
         "cli-command: apps/cli/src/commands/theme.ts: reset",
         "cli-command: apps/cli/src/commands/theme.ts: set <color>",
         "cli-command: apps/cli/src/commands/theme.ts: set <id>",
-        "cli-command: apps/cli/src/commands/theme.ts: show",
+        "cli-command: apps/cli/src/commands/theme.ts: show [id]",
         "cli-command: apps/cli/src/commands/theme.ts: theme"
       ]
     },
@@ -420,29 +515,23 @@
         "features/workspace-panels.md",
         "features/composer.md"
       ],
-      "sourceFiles": 15,
-      "sourceDigest": "65d1791aa744c70c8508f687b09070b3c933b6662eaf4bdee0a7d390a0977471",
+      "sourceFiles": 16,
+      "sourceDigest": "e52fec540b1058cb2e5c283697d982dc75fa3e871ab549769e75d3d9b3be0b00",
       "declarations": [
+        "cli-command: apps/cli/src/commands/thread/actions.ts: ${name} [id]",
         "cli-command: apps/cli/src/commands/thread/actions.ts: archive [id]",
-        "cli-command: apps/cli/src/commands/thread/actions.ts: cancel-plan [id]",
-        "cli-command: apps/cli/src/commands/thread/actions.ts: clear [id]",
-        "cli-command: apps/cli/src/commands/thread/actions.ts: clear-goal [id]",
-        "cli-command: apps/cli/src/commands/thread/actions.ts: compact [id]",
         "cli-command: apps/cli/src/commands/thread/actions.ts: delete <id>",
         "cli-command: apps/cli/src/commands/thread/actions.ts: edit-message [id]",
-        "cli-command: apps/cli/src/commands/thread/actions.ts: pin [id]",
         "cli-command: apps/cli/src/commands/thread/actions.ts: retry [id]",
-        "cli-command: apps/cli/src/commands/thread/actions.ts: stop [id]",
         "cli-command: apps/cli/src/commands/thread/actions.ts: tell <id> <message>",
         "cli-command: apps/cli/src/commands/thread/actions.ts: unarchive [id]",
-        "cli-command: apps/cli/src/commands/thread/actions.ts: unpin [id]",
         "cli-command: apps/cli/src/commands/thread/actions.ts: update [id]",
+        "cli-command: apps/cli/src/commands/thread/context.ts: context [id]",
         "cli-command: apps/cli/src/commands/thread/count.ts: count",
         "cli-command: apps/cli/src/commands/thread/fork.ts: fork <source-thread-id>",
         "cli-command: apps/cli/src/commands/thread/index.ts: thread",
+        "cli-command: apps/cli/src/commands/thread/interactions.ts: ${name} <interactionId> [id]",
         "cli-command: apps/cli/src/commands/thread/interactions.ts: answer <interactionId> [id]",
-        "cli-command: apps/cli/src/commands/thread/interactions.ts: approve <interactionId> [id]",
-        "cli-command: apps/cli/src/commands/thread/interactions.ts: deny <interactionId> [id]",
         "cli-command: apps/cli/src/commands/thread/interactions.ts: grant <interactionId> [id]",
         "cli-command: apps/cli/src/commands/thread/interactions.ts: interactions",
         "cli-command: apps/cli/src/commands/thread/interactions.ts: list [id]",
@@ -483,7 +572,7 @@
         "features/hosts-updates.md"
       ],
       "sourceFiles": 1,
-      "sourceDigest": "a6c8a08d1b58b76ffbf515113ac06fad5ac58e3d0e07b71854d321c697b46069",
+      "sourceDigest": "fef0641f53a0668c99cfa65b8ad4966176c3dec14fda7386199e0f343f1bbd70",
       "declarations": [
         "cli-command: apps/cli/src/commands/updates.ts: apply",
         "cli-command: apps/cli/src/commands/updates.ts: status",
@@ -524,8 +613,8 @@
         "features/compatibility-api.md",
         "features/responsive-accessibility.md"
       ],
-      "sourceFiles": 71,
-      "sourceDigest": "492b58e9fa054fc1962230c14697bcd970ea02d6150a871b160b10a4d398475a",
+      "sourceFiles": 78,
+      "sourceDigest": "8d1c1f8010381b1b9ed88aaff35ff906ac2052565575b727e7f451268b1221a4",
       "declarations": []
     },
     "plugin-sdk-and-guide": {
@@ -534,16 +623,16 @@
         "features/plugin-plugin-api-docs.md",
         "features/developer-fixtures.md"
       ],
-      "sourceFiles": 39,
-      "sourceDigest": "f82d5ef0cce9607e29f20109481b7ae9f0ec13bc83526cc97df0beb237fbe7f1",
+      "sourceFiles": 42,
+      "sourceDigest": "b802709820ff991bea60dd362e56c737a75efbe9211b124296d7e7656615c54f",
       "declarations": []
     },
     "plugin:account-pool": {
       "recipes": [
         "features/plugin-account-pool.md"
       ],
-      "sourceFiles": 22,
-      "sourceDigest": "8600c451a5266755082e10ebe32f3190f0f8805ebaad6c276e89baf92f05e9a3",
+      "sourceFiles": 29,
+      "sourceDigest": "911b2256690f0beb2b62577a6511307328ab33a3db9d1864b2bf42e2220f775d",
       "declarations": [
         "cli-name-candidate: plugins/account-pool/src/cli.ts: account-add",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: account-disable",
@@ -552,11 +641,15 @@
         "cli-name-candidate: plugins/account-pool/src/cli.ts: account-login-complete",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: account-login-poll",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: account-priority",
+        "cli-name-candidate: plugins/account-pool/src/cli.ts: account-refresh",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: account-remove",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: account-reorder",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: bypass",
+        "cli-name-candidate: plugins/account-pool/src/cli.ts: cache-miss-clear",
+        "cli-name-candidate: plugins/account-pool/src/cli.ts: cache-miss-list",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: config",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: config-set",
+        "cli-name-candidate: plugins/account-pool/src/cli.ts: parent",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: pool",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: routing",
         "cli-name-candidate: plugins/account-pool/src/cli.ts: status",
@@ -569,7 +662,7 @@
         "features/plugin-ask-user-question.md"
       ],
       "sourceFiles": 9,
-      "sourceDigest": "f8423b4d561042e25ed1708a51525075640eab5e2d96346f6abcd40a2ae5fb75",
+      "sourceDigest": "bbed133a9af78c5c5ca774aedb76d8d62e39a5ca76d3242991b9330c806cd847",
       "declarations": [
         "plugin-slot: plugins/ask-user-question/app.tsx: pendingInteraction"
       ]
@@ -579,7 +672,7 @@
         "features/plugin-automations.md"
       ],
       "sourceFiles": 25,
-      "sourceDigest": "27d8b354e4a74ab053b02a3c3d9eeb638fc9801b2a02083ea378c90b23a41938",
+      "sourceDigest": "7e19b02d6b42a808f3e1944332336d8046990f85c39aa054763635139a090ec2",
       "declarations": [
         "cli-name-candidate: plugins/automations/src/cli.ts: automation",
         "cli-name-candidate: plugins/automations/src/cli.ts: create",
@@ -594,12 +687,30 @@
         "plugin-slot: plugins/automations/app.tsx: navPanel"
       ]
     },
+    "plugin:bb-guide": {
+      "recipes": [
+        "features/plugin-bb-guide.md"
+      ],
+      "sourceFiles": 5,
+      "sourceDigest": "767b03e17ffbd69ecc3ac98bb267b8be8ef652dc106d9ae58a9b113818ede343",
+      "declarations": []
+    },
+    "plugin:browser-automation": {
+      "recipes": [
+        "features/plugin-browser-automation.md"
+      ],
+      "sourceFiles": 15,
+      "sourceDigest": "6cd84892095e3940e67b9f87df859174a4e3f19a56eabeb88e80d0ce091ad1a6",
+      "declarations": [
+        "cli-name-candidate: plugins/browser-automation/server.ts: browser-automation"
+      ]
+    },
     "plugin:concurrency-limit": {
       "recipes": [
         "features/plugin-concurrency-limit.md"
       ],
       "sourceFiles": 8,
-      "sourceDigest": "d1a12cb68032b67bbac275491645d8f920b415f54031eebaa61042ce30994a17",
+      "sourceDigest": "8a9b6b6e8b84721c2c2b96273e5ca83ad8a14c516e2ca3953741afb89cda0ac9",
       "declarations": [
         "cli-name-candidate: plugins/concurrency-limit/server.ts: concurrency-limit",
         "cli-name-candidate: plugins/concurrency-limit/server.ts: global",
@@ -612,8 +723,8 @@
       "recipes": [
         "features/plugin-connect.md"
       ],
-      "sourceFiles": 16,
-      "sourceDigest": "abe8c24e7a8ea3a1a92d07554a96fe809c9f6198f91787ff5fd9501c16d8c488",
+      "sourceFiles": 17,
+      "sourceDigest": "fcd14250b0faaeb4b4e090198cae1c33626dc3f6321d5a2fcecb84e76c5e5679",
       "declarations": [
         "cli-name-candidate: plugins/connect/src/cli.ts: connect",
         "cli-name-candidate: plugins/connect/src/cli.ts: expose",
@@ -631,7 +742,7 @@
         "features/plugin-custom-instructions.md"
       ],
       "sourceFiles": 4,
-      "sourceDigest": "214bd50b473b65f672a4e26f112a09ace33d0d61816cf31fc117f2fe7cc304ed",
+      "sourceDigest": "d9020619cea539086babc09f8fa2e4ad0706172b926746fedd8f01057def5251",
       "declarations": [
         "cli-name-candidate: plugins/custom-instructions/server.ts: clear",
         "cli-name-candidate: plugins/custom-instructions/server.ts: get",
@@ -644,7 +755,7 @@
         "features/plugin-docs.md"
       ],
       "sourceFiles": 6,
-      "sourceDigest": "c1bae1392b9e4ab52051ac642e0604efffa116321710e02b4de576c4a9fd8f02",
+      "sourceDigest": "94bfb8a788f7d13d395e62fe5428b922367fd6760627f679cbfe5b4992a38bc1",
       "declarations": [
         "cli-name-candidate: plugins/docs/server.ts: docs",
         "cli-name-candidate: plugins/docs/server.ts: list",
@@ -665,12 +776,69 @@
         "plugin-slot: plugins/docs/app.tsx: threadPanelAction"
       ]
     },
+    "plugin:drafts": {
+      "recipes": [
+        "features/plugin-drafts.md"
+      ],
+      "sourceFiles": 5,
+      "sourceDigest": "b781c955b2b624e22fa238c7903315093258e28133bb4062a87f2727b5e7382f",
+      "declarations": []
+    },
+    "plugin:environment-git-worktree": {
+      "recipes": [
+        "features/plugin-environment-git-worktree.md"
+      ],
+      "sourceFiles": 12,
+      "sourceDigest": "64c7113ebd45a2f3509cd49e09787f9783a38e556c137fab3a880c4876ca88eb",
+      "declarations": [
+        "plugin-slot: plugins/environment-git-worktree/app.tsx: experimental_environmentProviderInputs"
+      ]
+    },
+    "plugin:environment-modal-sandbox": {
+      "recipes": [
+        "features/plugin-environment-modal-sandbox.md"
+      ],
+      "sourceFiles": 22,
+      "sourceDigest": "c9e153587e18f8558fbeb69b0bc8fccabbbcaf3e7299a24adbd8d669dcfba4d7",
+      "declarations": [
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: account-inspect",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: image-build",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: image-reset",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: image-set",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: image-show",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: machine-inspect",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: modal",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: sandbox-exec",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: sandbox-run",
+        "cli-name-candidate: plugins/environment-modal-sandbox/account.ts: sandbox-stop",
+        "plugin-slot: plugins/environment-modal-sandbox/app.tsx: experimental_machineProviderInputs",
+        "plugin-slot: plugins/environment-modal-sandbox/app.tsx: settingsSection"
+      ]
+    },
+    "plugin:environment-personal-workspace": {
+      "recipes": [
+        "features/plugin-environment-personal-workspace.md"
+      ],
+      "sourceFiles": 8,
+      "sourceDigest": "3ed3f42fffb84cec47088ab779c0f1dd1dd24e7f069265d251a20a04c0328b71",
+      "declarations": []
+    },
+    "plugin:environment-project-checkout": {
+      "recipes": [
+        "features/plugin-environment-project-checkout.md"
+      ],
+      "sourceFiles": 10,
+      "sourceDigest": "d766581171d00805c9fc923e0a666b4986750637983a76f06e1a22331c38e0f2",
+      "declarations": [
+        "plugin-slot: plugins/environment-project-checkout/app.tsx: experimental_environmentProviderInputs"
+      ]
+    },
     "plugin:github": {
       "recipes": [
         "features/plugin-github.md"
       ],
       "sourceFiles": 8,
-      "sourceDigest": "77df010743c50ef4ffc5c3c5320de5339541a9bd44a8a5806f7dff72d98629f0",
+      "sourceDigest": "deab1a46d0318e2c0588d07ede61579728ae09c8ef51ef0a492a9005b1b7eb01",
       "declarations": [
         "cli-name-candidate: plugins/github/server.ts: GhUnavailableError",
         "cli-name-candidate: plugins/github/server.ts: NeedsConfigurationError",
@@ -688,7 +856,7 @@
         "features/plugin-inline-vis.md"
       ],
       "sourceFiles": 5,
-      "sourceDigest": "4f87bce2ac8bcd17910c49316f15cb8e733a8f19e603be4b86866f82b6588c9d",
+      "sourceDigest": "85672827c3044a2b7bb8e4e0873b1c62d48b585215ea53d67e08789c326f2a28",
       "declarations": [
         "plugin-slot: plugins/inline-vis/app.tsx: messageDirective"
       ]
@@ -698,7 +866,7 @@
         "features/plugin-keep-awake.md"
       ],
       "sourceFiles": 7,
-      "sourceDigest": "9292b6a97b8c1744e2fd3060036d9bde4a998bdbeb9dd0e6fa47d5f3f2628c42",
+      "sourceDigest": "56ca986daf814e6f3e7623de4a35dd493e97a28176f6df8b5a48d1fd8a666b05",
       "declarations": [
         "cli-name-candidate: plugins/keep-awake/server.ts: disable",
         "cli-name-candidate: plugins/keep-awake/server.ts: enable",
@@ -712,8 +880,8 @@
       "recipes": [
         "features/plugin-memory.md"
       ],
-      "sourceFiles": 5,
-      "sourceDigest": "360385ef1cd9d95bc261c1a4aecaab997cd136939190f304d0aaba538f8b8861",
+      "sourceFiles": 6,
+      "sourceDigest": "b3a2bed7a37e6fdd9bb63a3c38203d6b9119b244694c437f987dfb95c2863aca",
       "declarations": [
         "cli-name-candidate: plugins/memory/server.ts: add",
         "cli-name-candidate: plugins/memory/server.ts: catalog",
@@ -731,9 +899,8 @@
         "features/plugin-monaco-editor.md"
       ],
       "sourceFiles": 15,
-      "sourceDigest": "2d021f75a871bb04f93b0e5cefe556ac63a9f1fb64fa47c951c3bded6fabdcf4",
+      "sourceDigest": "69e3c9d78fc93f2069dd59906a0219ea3f737a26aed2232c68307cdc847e7a77",
       "declarations": [
-        "plugin-slot: plugins/monaco-editor/app.tsx: commandPaletteAction",
         "plugin-slot: plugins/monaco-editor/app.tsx: fileOpener"
       ]
     },
@@ -742,7 +909,7 @@
         "features/plugin-pdf-preview.md"
       ],
       "sourceFiles": 6,
-      "sourceDigest": "82b89a3fbfb9ad443e72137f8f4f8280b8b01170fdfc4eb5dad5fa62e789183e",
+      "sourceDigest": "d515a1a46f3815341fd40ac5c7ebd10ee050d898133840a403194196d2aa0dab",
       "declarations": [
         "plugin-slot: plugins/pdf-preview/app.tsx: fileOpener"
       ]
@@ -752,7 +919,7 @@
         "features/plugin-plugin-api-docs.md"
       ],
       "sourceFiles": 4,
-      "sourceDigest": "d6f9ea3a7ed24a01483f156c18d093c93d0697636f0b462a283abc1828e408c0",
+      "sourceDigest": "2ca16ef3af02687fb57ff28a74cc8fc1cdcd0d48f9ddae283915db7e3f5671fc",
       "declarations": [
         "plugin-slot: plugins/plugin-api-docs/app.tsx: navPanel"
       ]
@@ -762,7 +929,7 @@
         "features/plugin-plugin-api-tester.md"
       ],
       "sourceFiles": 5,
-      "sourceDigest": "258f4708bcc4c7134259fd1cdb97299f88f6f2e8cb48cd1d64d722ce619f8d1e",
+      "sourceDigest": "5eb53dd1b274afcca37514d89b63eebdae73e5235161a7cbb9b5436af4e32c11",
       "declarations": [
         "plugin-slot: plugins/plugin-api-tester/app.tsx: navPanel"
       ]
@@ -771,40 +938,42 @@
       "recipes": [
         "features/plugin-provider-acp.md"
       ],
-      "sourceFiles": 20,
-      "sourceDigest": "9017803476281e4e8f7ce5a8fe757de6c29300d5474210ac6be5158f65cbb8d7",
+      "sourceFiles": 22,
+      "sourceDigest": "7c264c422e2245043c60c95498d3cc478f3c2de5020aaa9f254eb274d923a562",
       "declarations": []
     },
     "plugin:provider-claude-code": {
       "recipes": [
         "features/plugin-provider-claude-code.md"
       ],
-      "sourceFiles": 48,
-      "sourceDigest": "f6e98e504541b69aeb765b2ab162a8b0625376de33d578c16e57478c4b2a1548",
+      "sourceFiles": 50,
+      "sourceDigest": "6e89b5d13adfd43dd73b85ee0403039fc8fa01f086b5b3485703e015ab4c6aae",
       "declarations": []
     },
     "plugin:provider-codex": {
       "recipes": [
         "features/plugin-provider-codex.md"
       ],
-      "sourceFiles": 260,
-      "sourceDigest": "66a413b773d8fe298889e9583496afd67c505648b924b736d5c710c4c6baa606",
+      "sourceFiles": 263,
+      "sourceDigest": "a5602ba4e2e0a2887a9e62ccd2c44f95e8de00ad99a76330594154afa48aa9b3",
       "declarations": []
     },
     "plugin:provider-pi": {
       "recipes": [
         "features/plugin-provider-pi.md"
       ],
-      "sourceFiles": 25,
-      "sourceDigest": "5d8769340905f8abc94d1d6d30ca7f142a2046faf479c37f7d5821e48f0e8eb7",
-      "declarations": []
+      "sourceFiles": 29,
+      "sourceDigest": "b4ce03b3ae022f98681e0a80ec3d96736ee4a7ae4d22d51aa378fe4133b64b4f",
+      "declarations": [
+        "plugin-slot: plugins/provider-pi/app.tsx: pendingInteraction"
+      ]
     },
     "plugin:provider-retry": {
       "recipes": [
         "features/plugin-provider-retry.md"
       ],
       "sourceFiles": 7,
-      "sourceDigest": "46a2eecb0409dccc505e79a2d3d933a492c14e0ccecec4c3a4302994275d036f",
+      "sourceDigest": "df21cb3f4f4f335d5b1010c7d7f08c89ee62586b25ac8a25ac08b1c7fdd64ad6",
       "declarations": [
         "cli-name-candidate: plugins/provider-retry/src/cli.ts: cancel",
         "cli-name-candidate: plugins/provider-retry/src/cli.ts: provider-retry",
@@ -816,16 +985,18 @@
       "recipes": [
         "features/plugin-provider-usage.md"
       ],
-      "sourceFiles": 6,
-      "sourceDigest": "32e1676c71e81079585cb6d67187cde8eb7253897c3208a1b1038a6294cb3606",
-      "declarations": []
+      "sourceFiles": 11,
+      "sourceDigest": "c0bf027cc72abbada2682bd60ff38db79325c65f0f9a82dd3ea78c3511dad985",
+      "declarations": [
+        "plugin-slot: plugins/provider-usage/app.tsx: settingsSection"
+      ]
     },
     "plugin:push-notifications": {
       "recipes": [
         "features/plugin-push-notifications.md"
       ],
       "sourceFiles": 9,
-      "sourceDigest": "2c50ec551459f6f71155089bffd2bee3447893993f6ee0544a221df45d5cf161",
+      "sourceDigest": "06703a472f6c3f3ef986bc19375034acd55140f117fa9bc2e319a3ea4500d96c",
       "declarations": [
         "cli-name-candidate: plugins/push-notifications/server.ts: add",
         "cli-name-candidate: plugins/push-notifications/server.ts: list",
@@ -842,7 +1013,7 @@
         "features/plugin-scheduled-send.md"
       ],
       "sourceFiles": 6,
-      "sourceDigest": "7a54a9edb503943c2bb74ee23c4bf8422298df156257bfa2d5ff3d968ef4a056",
+      "sourceDigest": "c34a0c2fc3fdd4231b8cf677c7fb1e79102a46c6cb9f44f4ed4ab0f77f283b62",
       "declarations": []
     },
     "plugin:secrets": {
@@ -850,7 +1021,7 @@
         "features/plugin-secrets.md"
       ],
       "sourceFiles": 6,
-      "sourceDigest": "40918e9e1bbb3f2892101c4af289e5eeae10c944e939850f6d4a51605a26858a",
+      "sourceDigest": "edad9090e6f842aeac191aed8d09ddf2576f635e72d4eacf75726da004c9ae6c",
       "declarations": [
         "cli-name-candidate: plugins/secrets/src/server.ts: request",
         "cli-name-candidate: plugins/secrets/src/server.ts: secret",
@@ -862,7 +1033,7 @@
         "features/plugin-side-chat.md"
       ],
       "sourceFiles": 5,
-      "sourceDigest": "a83c92107acea753d5204b7b1d79642bfb8b801603fec5196737d148a063a379",
+      "sourceDigest": "6e512c49f9172febed3210a3bf1108b83d9b06358ae4c4235b2b9b72803caad8",
       "declarations": [
         "plugin-slot: plugins/side-chat/app.tsx: messageAction",
         "plugin-slot: plugins/side-chat/app.tsx: threadPanelAction"
@@ -872,8 +1043,8 @@
       "recipes": [
         "features/plugin-tasks.md"
       ],
-      "sourceFiles": 71,
-      "sourceDigest": "b8b1b834a4f80f554c3dffd7ee72257e6c00888260b69f55fda4e5062d9f60ff",
+      "sourceFiles": 75,
+      "sourceDigest": "1c245437784de472a2607d84cef50c60fc9790e273db37f1dd219a6b89729998",
       "declarations": [
         "cli-name-candidate: plugins/tasks/cli/index.ts: attach",
         "cli-name-candidate: plugins/tasks/cli/index.ts: attachment",
@@ -902,7 +1073,7 @@
         "features/plugin-theme-preview.md"
       ],
       "sourceFiles": 9,
-      "sourceDigest": "74131fdab0cd10e6f75512d759b4bca9d785afb27637f33e9f5c311ce892a47c",
+      "sourceDigest": "2a36206c3c9006acf4555f3d2058f26b200f8fb23a3aa9d59d83453e2d0ecfc8",
       "declarations": [
         "plugin-slot: plugins/theme-preview/app.tsx: navPanel"
       ]
@@ -911,8 +1082,8 @@
       "recipes": [
         "features/plugin-workflows.md"
       ],
-      "sourceFiles": 22,
-      "sourceDigest": "409da08f601e14c42c32ed56f93a9baa5c97e264ac04f2f9bde8cc65eb471aa4",
+      "sourceFiles": 23,
+      "sourceDigest": "3dbb73441fdc3d986f1639e82b1d366135dfa233ed835be5fe27957d3799d333",
       "declarations": [
         "cli-name-candidate: plugins/workflows/src/cli.ts: history",
         "cli-name-candidate: plugins/workflows/src/cli.ts: list",
@@ -942,9 +1113,22 @@
         "features/compatibility-api.md",
         "features/responsive-accessibility.md"
       ],
-      "sourceFiles": 45,
-      "sourceDigest": "54c112e23858ede903978d48eda6f762d3a1ec7b5fd79a0e16b5b2b922851ab3",
+      "sourceFiles": 50,
+      "sourceDigest": "a57acc39c97675ae66c00e53ba9cf84ffc71bbb3ca97217a291b3c5ee0b8a8d9",
       "declarations": [
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/acquire post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/capture post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/close post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/connection post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/create post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/import-cookies post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/import-sources post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/instances post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/release post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/reveal post",
+        "api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/tabs post",
+        "api-route: packages/server-contract/src/public-api.ts: /environments get",
+        "api-route: packages/server-contract/src/public-api.ts: /environments/:id delete",
         "api-route: packages/server-contract/src/public-api.ts: /environments/:id get",
         "api-route: packages/server-contract/src/public-api.ts: /environments/:id patch",
         "api-route: packages/server-contract/src/public-api.ts: /environments/:id/actions post",
@@ -967,18 +1151,27 @@
         "api-route: packages/server-contract/src/public-api.ts: /files/remove post",
         "api-route: packages/server-contract/src/public-api.ts: /files/write post",
         "api-route: packages/server-contract/src/public-api.ts: /hosts get",
+        "api-route: packages/server-contract/src/public-api.ts: /hosts post",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id delete",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id get",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id patch",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/clone-default-path get",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/directory get",
+        "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/enrollment-command get",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/paths/exist post",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/permission-ceiling patch",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/pick-folder post",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/provider-clis/install post",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/provider-clis/status get",
+        "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/reconcile post",
+        "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/resume post",
+        "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/retry-cleanup post",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/retry-update post",
+        "api-route: packages/server-contract/src/public-api.ts: /hosts/:id/suspend post",
         "api-route: packages/server-contract/src/public-api.ts: /hosts/join-codes post",
+        "api-route: packages/server-contract/src/public-api.ts: /preferences/ui get",
+        "api-route: packages/server-contract/src/public-api.ts: /preferences/ui/:key delete",
+        "api-route: packages/server-contract/src/public-api.ts: /preferences/ui/:key put",
         "api-route: packages/server-contract/src/public-api.ts: /projects get",
         "api-route: packages/server-contract/src/public-api.ts: /projects post",
         "api-route: packages/server-contract/src/public-api.ts: /projects/:id delete",
@@ -1009,14 +1202,19 @@
         "api-route: packages/server-contract/src/public-api.ts: /settings/experiments put",
         "api-route: packages/server-contract/src/public-api.ts: /settings/general put",
         "api-route: packages/server-contract/src/public-api.ts: /settings/keyboard put",
+        "api-route: packages/server-contract/src/public-api.ts: /settings/machine-environment get",
+        "api-route: packages/server-contract/src/public-api.ts: /settings/machine-environment put",
         "api-route: packages/server-contract/src/public-api.ts: /settings/themes get",
+        "api-route: packages/server-contract/src/public-api.ts: /settings/themes/:id get",
         "api-route: packages/server-contract/src/public-api.ts: /sidebar-bootstrap get",
         "api-route: packages/server-contract/src/public-api.ts: /system/attention get",
         "api-route: packages/server-contract/src/public-api.ts: /system/cli-skills get",
         "api-route: packages/server-contract/src/public-api.ts: /system/cli-skills/install post",
         "api-route: packages/server-contract/src/public-api.ts: /system/config get",
         "api-route: packages/server-contract/src/public-api.ts: /system/config/reload post",
+        "api-route: packages/server-contract/src/public-api.ts: /system/environment-providers get",
         "api-route: packages/server-contract/src/public-api.ts: /system/execution-options get",
+        "api-route: packages/server-contract/src/public-api.ts: /system/machine-providers get",
         "api-route: packages/server-contract/src/public-api.ts: /system/providers get",
         "api-route: packages/server-contract/src/public-api.ts: /system/providers/:id/logo get",
         "api-route: packages/server-contract/src/public-api.ts: /system/providers/state get",
@@ -1040,10 +1238,10 @@
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id delete",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id get",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id patch",
-        "api-route: packages/server-contract/src/public-api.ts: /threads/:id/archive post",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/archive-all post",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/child-summary get",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/compact post",
+        "api-route: packages/server-contract/src/public-api.ts: /threads/:id/context get",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/context/clear post",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/conversation-outline get",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/default-execution-options get",
@@ -1064,6 +1262,8 @@
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/pin post",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/pin-order patch",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/plan/cancel post",
+        "api-route: packages/server-contract/src/public-api.ts: /threads/:id/plugin-metadata get",
+        "api-route: packages/server-contract/src/public-api.ts: /threads/:id/plugin-metadata patch",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/prompt-history get",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/queued-messages get",
         "api-route: packages/server-contract/src/public-api.ts: /threads/:id/queued-messages post",
@@ -1111,8 +1311,8 @@
         "features/compatibility-api.md",
         "features/responsive-accessibility.md"
       ],
-      "sourceFiles": 312,
-      "sourceDigest": "0c946a571487ecfe34d134e1461edf6d833ed0823c14cd4eb18ad15f09bf83e8",
+      "sourceFiles": 366,
+      "sourceDigest": "3f514c89bd191213cbc7ff8ee1bf679ea0bdb00e6616eb4dc35ac4bddcae2d13",
       "declarations": []
     },
     "settings-and-actions": {
@@ -1131,7 +1331,7 @@
         "features/responsive-accessibility.md"
       ],
       "sourceFiles": 4,
-      "sourceDigest": "4657983af2a69ce368aaf0b35a2cddb7df041e13ed287ac13a0a326df7a362f0",
+      "sourceDigest": "f4f306a60b2a41f35cc3b27d5271574a7de0dc7e22741875539c92ec907573ba",
       "declarations": [
         "app-action: apps/app/src/lib/app-command-metadata.ts: app.back",
         "app-action: apps/app/src/lib/app-command-metadata.ts: browser.find",
@@ -1172,6 +1372,7 @@
         "app-action: apps/app/src/lib/app-command-metadata.ts: workspace.openPreferred",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: appearance",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: archived",
+        "setting-or-key: apps/app/src/components/settings/settings-sections.ts: browser",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: community",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: experiments",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: files",
@@ -1183,10 +1384,10 @@
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: machines",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: marketplaces",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: plugins",
+        "setting-or-key: apps/app/src/components/settings/settings-sections.ts: projects",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: providers",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: sectionId",
         "setting-or-key: apps/app/src/components/settings/settings-sections.ts: updates",
-        "setting-or-key: apps/app/src/components/settings/settings-sections.ts: usage",
         "setting-or-key: apps/app/src/lib/app-command-metadata.ts: command",
         "setting-or-key: apps/app/src/lib/app-command-metadata.ts: commandId",
         "setting-or-key: apps/app/src/lib/app-command-metadata.ts: commands",
@@ -1194,17 +1395,23 @@
         "setting-or-key: apps/app/src/lib/app-command-metadata.ts: id",
         "setting-or-key: apps/app/src/lib/app-command-metadata.ts: label",
         "setting-or-key: apps/app/src/lib/app-command-metadata.ts: paletteVisible",
+        "setting-or-key: packages/domain/src/app-settings.ts: defaultMachineAccess",
         "setting-or-key: packages/domain/src/app-settings.ts: defaultProviderId",
+        "setting-or-key: packages/domain/src/app-settings.ts: machineGitCredentialsEnabled",
+        "setting-or-key: packages/domain/src/app-settings.ts: machineServerUrl",
         "setting-or-key: packages/domain/src/app-settings.ts: managedBranchPrefix",
         "setting-or-key: packages/domain/src/app-settings.ts: message",
+        "setting-or-key: packages/domain/src/app-settings.ts: providerCompletedTurnDisplay",
         "setting-or-key: packages/domain/src/app-settings.ts: providerOrder",
+        "setting-or-key: packages/domain/src/app-settings.ts: showDiagnosticEvents",
         "setting-or-key: packages/domain/src/app-settings.ts: showKeyboardHints",
         "setting-or-key: packages/domain/src/app-settings.ts: showUnhandledProviderEvents",
         "setting-or-key: packages/domain/src/app-settings.ts: steerActiveThreadOnEnter",
         "setting-or-key: packages/domain/src/app-settings.ts: streamerMode",
+        "setting-or-key: packages/domain/src/app-settings.ts: telemetryEnabled",
         "setting-or-key: packages/domain/src/experiments.ts: changelogPreview",
-        "setting-or-key: packages/domain/src/experiments.ts: editMessages",
         "setting-or-key: packages/domain/src/experiments.ts: mobileApp",
+        "setting-or-key: packages/domain/src/experiments.ts: multiMachinePicker",
         "setting-or-key: packages/domain/src/experiments.ts: sidebarProgressiveDisclosure",
         "setting-or-key: packages/domain/src/experiments.ts: timelineWindowing"
       ]

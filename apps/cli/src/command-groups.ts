@@ -26,6 +26,11 @@ function group<Module>(
 
 export const CORE_COMMAND_GROUPS: readonly CommandGroup[] = [
   group(
+    "maintenance",
+    () => import("./commands/maintenance.js"),
+    (m) => (program) => m.registerMaintenanceCommands(program),
+  ),
+  group(
     "browser",
     () => import("./commands/browser.js"),
     (m) => (program, deps) => m.registerBrowserCommands(program, deps.getUrl),

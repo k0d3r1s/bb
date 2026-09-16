@@ -41,6 +41,7 @@ import {
   encodeReuseValue,
   encodeProviderValue,
   parseEnvironmentValue,
+  PROJECT_DEFAULT_VALUE,
 } from "@/components/pickers/environment-picker-value";
 import { providerInputsControlRequired } from "@/components/pickers/environment-provider-inputs";
 import { useMachineProviderInputs } from "@/components/pickers/machine-provider-inputs";
@@ -91,6 +92,7 @@ import {
   getProjectStoredPromptAttachmentPaths,
   isPromptDraftEmpty,
   promptDraftToInput,
+  PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID,
   type PromptDraftAttachment,
   type PromptDraftState,
 } from "@bb/client-core";
@@ -887,11 +889,22 @@ export function NewThreadComposer({
     },
     [changeEnvironment],
   );
+  const handleSelectProjectDefault = useCallback(() => {
+    changeEnvironment(PROJECT_DEFAULT_VALUE, null);
+  }, [changeEnvironment]);
   const handleSelectHost = useCallback(
     (hostId: string) => {
+      const hostProviders = environmentProvidersByHostId.get(hostId) ?? [];
+      const anchorProvider =
+        parsedEnvironment?.type === "project-default"
+          ? ((environmentProviders ?? []).find(
+              (candidate) =>
+                candidate.id === PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID,
+            ) ?? null)
+          : (selectedEnvironmentProvider ?? null);
       const provider = resolveHostEnvironmentProvider({
-        currentProvider: selectedEnvironmentProvider ?? null,
-        providers: environmentProvidersByHostId.get(hostId) ?? [],
+        currentProvider: anchorProvider,
+        providers: hostProviders,
       });
       if (provider === null) return;
       changeEnvironment(encodeProviderValue(provider.id), {
@@ -901,7 +914,9 @@ export function NewThreadComposer({
     },
     [
       changeEnvironment,
+      environmentProviders,
       environmentProvidersByHostId,
+      parsedEnvironment,
       selectedEnvironmentProvider,
     ],
   );
@@ -1639,6 +1654,7 @@ export function NewThreadComposer({
               inputsControlProviderIds,
               onSelectProvider: handleSelectProvider,
               onSelectHost: handleSelectHost,
+              onSelectProjectDefault: handleSelectProjectDefault,
               ...(!isProjectless && options.onRequestMachineSetup
                 ? { onRequestMachineSetup: options.onRequestMachineSetup }
                 : {}),
@@ -1765,6 +1781,7 @@ export function NewThreadComposer({
       handleReasoningChange,
       handleSelectProvider,
       handleSelectHost,
+      handleSelectProjectDefault,
       handleServiceTierChange,
       handleSubmit,
       handleWorktreeChange,

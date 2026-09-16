@@ -1,0 +1,39 @@
+{
+  "name": "bb-plugin-shared-runtime",
+  "version": "0.1.0",
+  "description": "One shared, write-confined container runtime per repository for every BB managed worktree, declared by a committed .bb-runtime.json manifest.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "bb-shared-runtime": "./bin/bb-shared-runtime.mjs"
+  },
+  "files": [
+    "server.ts",
+    "src",
+    "bin",
+    "assets",
+    "native",
+    "scripts",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/",
+    "build": "bb plugin build"
+  },
+  "engines": {
+    "bb": ">=0.35.0",
+    "bbPluginSdk": ">=0.4.3"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.4.47"
+  },
+  "bb": {
+    "name": "Shared Runtime",
+    "description": "Typed, project-confined shared container runtime for BB worktrees, driven by each repository's .bb-runtime.json",
+    "branding": {
+      "icon": "Container"
+    },
+    "server": "server.ts",
+    "skills": []
+  }
+}

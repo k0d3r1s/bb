@@ -30,6 +30,24 @@ const execFileAsync = promisify(execFile);
 const pluginSdkRoot = resolve(process.cwd(), "../plugin-sdk");
 const dependencyRequire = createRequire(join(pluginSdkRoot, "package.json"));
 
+const NPM_SCRIPT_POLICY_ENVIRONMENT_KEYS = [
+  "npm_config_allow_scripts",
+  "npm_config_ignore_scripts",
+  "npm_config_foreground_scripts",
+];
+
+async function isolatedNpmEnv(configRoot: string): Promise<NodeJS.ProcessEnv> {
+  await mkdir(configRoot, { recursive: true });
+  const userconfig = join(configRoot, "npmrc");
+  await writeFile(userconfig, "");
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    npm_config_userconfig: userconfig,
+  };
+  for (const key of NPM_SCRIPT_POLICY_ENVIRONMENT_KEYS) delete env[key];
+  return env;
+}
+
 const EXTERNAL_DEPENDENCIES = [
   "@hugeicons/core-free-icons",
   "@hugeicons/react",
@@ -253,6 +271,7 @@ async function packPluginSdk(packDir: string): Promise<string> {
     ["pack", "--silent", "--ignore-scripts", "--pack-destination", packDir],
     {
       cwd: pluginSdkRoot,
+      env: await isolatedNpmEnv(join(packDir, "npm-config")),
     },
   );
   const tarballs = (await readdir(packDir)).filter((name) =>
@@ -279,7 +298,10 @@ async function installPackedSdk(
       "--prefer-offline",
       tarball,
     ],
-    { cwd: targetDir },
+    {
+      cwd: targetDir,
+      env: await isolatedNpmEnv(join(targetDir, ".npm-config")),
+    },
   );
 }
 

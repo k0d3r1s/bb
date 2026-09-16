@@ -29,9 +29,10 @@ import type { HostSharedPortCoordinator } from "../../ws/host-shared-ports.js";
 import type { ProviderRegistryService } from "../providers/provider-registry.js";
 import type { PluginHostArtifactRegistry } from "./plugin-host-artifact-registry.js";
 
-type PluginServiceState = "running" | "backoff" | "stopped";
+type PluginServiceState = "running" | "backoff" | "quiesced" | "stopped";
 
 export interface ServiceRuntime {
+  admission: import("@bb/db").WorkAdmissionToken | null;
   record: PluginBackgroundServiceRecord;
   state: PluginServiceState;
   controller: AbortController | null;

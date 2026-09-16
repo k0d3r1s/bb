@@ -36,3 +36,8 @@ Modal connection and machine commands are documented in [modal-sandboxes](../plu
 `--environment-provider`; a composition rejects separate machine selectors.
 
 Modal image debugging uses `bb modal image build`, `bb modal sandbox run`, `bb modal sandbox exec ID [--json] -- COMMAND...`, and `bb modal sandbox stop ID`. Debug compute expires after 30 minutes and skips BB enrollment and project setup. See the plugin skill for output limits and typed RPC equivalents.
+
+Headless Linux ARM64 deployment and the local-only `bb maintenance` command
+family are documented in [linux-arm64-vps.md](linux-arm64-vps.md). Keep that
+guide, `bb guide maintenance`, and the bb-cli command index aligned whenever
+maintenance flags, TTL bounds, phases, paths, or recovery behavior change.

@@ -1,0 +1,9 @@
+{
+  "scopes": [
+    {
+      "name": "aerones",
+      "paths": ["~/workspace/aerones"],
+      "skills": ["aerones-*"]
+    }
+  ]
+}

@@ -2,11 +2,12 @@ import {
   createBbDesktopVersionFeedFileName,
   type BbDesktopVersionFeedPlatform,
 } from "@bb/desktop-contract";
+import { resolveDesktopBuildSettings } from "../scripts/desktop-release-channel.mjs";
 
 type DesktopReleaseChannel = "latest" | "nightly";
 
 interface DesktopReleaseInfo {
-  applicationName: "bb" | "bb Nightly";
+  applicationName: "bb" | "bb Nightly" | "bb Local";
   channel: DesktopReleaseChannel;
   iconFileName: "icon.png" | "icon-nightly.png";
   releaseTag: "desktop-latest" | "desktop-nightly";
@@ -15,12 +16,13 @@ interface DesktopReleaseInfo {
 
 export function createDesktopReleaseInfo(
   channel: DesktopReleaseChannel,
+  localBuild = false,
 ): DesktopReleaseInfo {
   const nightly = channel === "nightly";
   const releaseTag = nightly ? "desktop-nightly" : "desktop-latest";
 
   return {
-    applicationName: nightly ? "bb Nightly" : "bb",
+    applicationName: localBuild ? "bb Local" : nightly ? "bb Nightly" : "bb",
     channel,
     iconFileName: nightly ? "icon-nightly.png" : "icon.png",
     releaseTag,
@@ -28,26 +30,12 @@ export function createDesktopReleaseInfo(
   };
 }
 
-function resolveBuiltDesktopReleaseChannel(
-  rawChannel: string | undefined,
-): DesktopReleaseChannel {
-  if (rawChannel === undefined || rawChannel.length === 0) {
-    return "latest";
-  }
-  if (rawChannel === "latest" || rawChannel === "nightly") {
-    return rawChannel;
-  }
-
-  throw new Error(
-    `Built desktop release channel must be latest or nightly, got ${String(rawChannel)}.`,
-  );
-}
-
-export const DESKTOP_RELEASE_CHANNEL = resolveBuiltDesktopReleaseChannel(
-  process.env.BB_DESKTOP_RELEASE_CHANNEL,
-);
+const DESKTOP_BUILD_SETTINGS = resolveDesktopBuildSettings(process.env);
+export const DESKTOP_RELEASE_CHANNEL = DESKTOP_BUILD_SETTINGS.releaseChannel;
+const DESKTOP_LOCAL_BUILD = DESKTOP_BUILD_SETTINGS.localBuild;
 export const DESKTOP_RELEASE_INFO = createDesktopReleaseInfo(
   DESKTOP_RELEASE_CHANNEL,
+  DESKTOP_LOCAL_BUILD,
 );
 const DESKTOP_UPDATE_RELEASE_BASE_URL =
   DESKTOP_RELEASE_INFO.updateReleaseBaseUrl;
@@ -84,6 +72,9 @@ interface ResolveDesktopUpdateSupportArgs {
 export function resolveDesktopUpdateSupport(
   args: ResolveDesktopUpdateSupportArgs,
 ): DesktopUpdateSupport {
+  if (resolveDesktopBuildSettings(args.env).localBuild) {
+    return { autoUpdate: false, versionCheck: false };
+  }
   if (args.platform === "macos") {
     return { autoUpdate: true, versionCheck: true };
   }

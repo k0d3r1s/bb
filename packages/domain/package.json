@@ -24,6 +24,11 @@
       "types": "./src/thread-visibility.ts",
       "default": "./src/thread-visibility.ts"
     },
+    "./thread-worktree-promotion": {
+      "source": "./src/thread-worktree-promotion.ts",
+      "types": "./src/thread-worktree-promotion.ts",
+      "default": "./src/thread-worktree-promotion.ts"
+    },
     "./utf16": {
       "source": "./src/utf16.ts",
       "types": "./src/utf16.ts",

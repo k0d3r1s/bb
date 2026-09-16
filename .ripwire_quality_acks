@@ -1,0 +1,10 @@
+# ripwire quality acks v1 — written by --quality-ack; a finding stays suppressed until it worsens past its acked magnitude
+# format: ack <kind> <16-hex-key> <ackNow> [cid=<16-hex-content-id>] [by=<scope that acked it>] <reason to end of line> — one per line, kept SORTED by (kind,key) on every write (merge-friendly)
+ack duplication a5b3ca8f4685da12 103 One-off in-memory service test setup intentionally mirrors established fixture boilerplate; sharing it would couple unrelated test domains
+ack short-horizon-churn 4cb162b25f504aa4 4 cid=5ea211ed3ae3fe5e Intentional focal edits for durable lazy-worktree promotion plus reviewed accessibility and race fixes
+ack short-horizon-churn 8e132afb3c002ecc 4 cid=5eea708eb897d49e Intentional focal edits for durable lazy-worktree promotion plus reviewed accessibility and race fixes
+ack short-horizon-churn 94935213c8f44fa9 6 cid=9d9c608be1ce677c Intentional focal edits for durable lazy-worktree promotion plus reviewed accessibility and race fixes
+ack short-horizon-churn 9a89d59b23e55399 6 cid=e8beacfac9170765 Intentional focal edits for durable lazy-worktree promotion plus reviewed accessibility and race fixes
+ack short-horizon-churn ad0bcace084e64d8 4 cid=7c24e0d3341c8a19 Intentional focal edits for durable lazy-worktree promotion plus reviewed accessibility and race fixes
+ack short-horizon-churn df112af8ee85b022 2 cid=86cec4dfeca77657 Intentional focal edits for durable lazy-worktree promotion plus reviewed accessibility and race fixes
+ack short-horizon-churn ef092a62051068f1 4 cid=5cc445e7c3bd6311 Intentional focal edits for durable lazy-worktree promotion plus reviewed accessibility and race fixes

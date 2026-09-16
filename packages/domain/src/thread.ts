@@ -15,6 +15,7 @@ import {
 import { threadStatusSchema, threadStatusValues } from "./thread-status.js";
 import { threadOriginKindSchema } from "./thread-origin-kind.js";
 import { threadVisibilitySchema } from "./thread-visibility.js";
+import { threadWorktreePromotionSchema } from "./thread-worktree-promotion.js";
 export { threadStatusSchema, threadStatusValues } from "./thread-status.js";
 export type { ThreadStatus } from "./thread-status.js";
 export {
@@ -405,6 +406,7 @@ export const threadSchema = z.object({
   originKind: threadOriginKindSchema.nullable(),
   originPluginId: z.string().nullable(),
   visibility: threadVisibilitySchema,
+  worktreePromotion: threadWorktreePromotionSchema,
   archivedAt: z.number().nullable(),
   pinnedAt: z.number().nullable(),
   deletedAt: z.number().nullable(),

@@ -12,6 +12,21 @@ Environments determine where threads run. Multiple threads can share an environm
 The first-party choices are Project checkout (the project's existing directory),
 Worktree (a fresh Git worktree), and Personal workspace (a projectless workspace).
 
+A thread that takes bb's project default starts in the project's existing
+checkout so agents can use checkout-local read-only tooling, and is instructed to
+ask bb for a managed worktree before its first project mutation; bb queues the
+continuation in that worktree. This is agent coordination, not a filesystem write
+barrier. Use `bb thread spawn --new-environment worktree ...` when isolation must
+exist from the first command. Lazy promotion refuses dirty, detached, unborn, or
+mid-operation checkouts rather than continuing from different code.
+
+Promotion is only ever armed for that implicit default. Naming an environment
+already says where the work belongs, so `--environment`, `--environment-provider`,
+and the app's Project checkout entry all keep the thread where you put it. Use
+`bb thread spawn --environment-provider project-checkout` to choose the checkout
+from the CLI. If a user asks mid-thread to stay in the checkout, the agent records
+it with `bb_keep_checkout`, which holds for the rest of the thread.
+
 Making your repo work with bb:
 
   If the default environment plugin is disabled or missing, creation fails

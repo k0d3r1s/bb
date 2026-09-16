@@ -1,6 +1,6 @@
 # Machines, daemon lifecycle, and updates
 
-Status: **2026-09-05: 2 passed, 6 partial/blocked**. See [the audit](../MAINTENANCE.md) and [per-recipe ledger](../validation-2026-09-05.json).
+Status: **2026-09-05: 2 passed, 6 partial/blocked; 2 later recipes not run**. See [the audit](../MAINTENANCE.md) and [per-recipe ledger](../validation-2026-09-05.json).
 
 ## Setup and entry points
 
@@ -15,10 +15,13 @@ command’s `--help` before mutation. Use fresh browser snapshots for controls.
 
 - `apps/app/src/views/MachineSettingsView.tsx`
 - `apps/app/src/components/promptbox/banner/ThreadMachineStatus.tsx`
+- `apps/cli/src/commands/maintenance.ts`
 - `apps/cli/src/commands/machine.ts`
 - `apps/cli/src/commands/updates.ts`
 - `apps/host-daemon/src/server-connection.ts`
+- `apps/server/src/admin-server.ts`
 - `apps/server/src/services/machines/provider-orchestration.ts`
+- `apps/server/src/services/system/work-quiesce.ts`
 
 ## Feature recipes
 
@@ -32,6 +35,7 @@ command’s `--help` before mutation. Use fresh browser snapshots for controls.
 | Protocol mismatch and automatic update | Use the documented QA setup with a deliberately older disposable daemon; inspect rejected protocol and retry-update. | Mismatch initiates the expected update or actionable failure; incompatible payloads are not accepted in a reconnect loop. |
 | Provider CLI installation | Inspect machine provider-cli status; install/update a chosen provider on the disposable host. | Version and health refresh on that host; failure does not claim installation. |
 | Updates status and apply | Compare updates status and Settings → Updates; apply only available fixture-host updates. | Per-host/per-provider outcomes are reported; absent updates produce a truthful no-op. |
+| Maintenance quiescing and recovery | On an isolated server and daemon, inspect identity/status, acquire maintenance, renew and seal it, transition through restart, then release; separately interrupt an owned operation and recover it by ID. | New durable writes stop before the drain completes, admitted work settles, daemon work is refused while frozen, ownership and phases survive restart, and only the current owner or valid recovery flow can release the operation. |
 | Remove host | Revoke the disposable host with machine remove; try reconnecting it with its old enrollment. | Revoked host cannot reconnect; unrelated hosts and projects are unaffected. |
 
 ## Evidence and cleanup

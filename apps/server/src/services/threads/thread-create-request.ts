@@ -3,6 +3,7 @@ import type {
   PromptInput,
   ThreadOriginKind,
   ThreadVisibility,
+  ThreadWorktreePromotion,
 } from "@bb/domain";
 import type {
   CreateThreadEnvironmentArgs,
@@ -53,4 +54,5 @@ export interface ThreadCreateServiceRequest extends Omit<
   providerId: string;
   titleFallback: string | null;
   visibility: ThreadVisibility;
+  worktreePromotion: ThreadWorktreePromotion;
 }

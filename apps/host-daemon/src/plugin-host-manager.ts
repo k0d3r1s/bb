@@ -239,6 +239,10 @@ export class PluginHostManager {
 
   constructor(private readonly options: PluginHostManagerOptions) {}
 
+  getActiveCallCount(): number {
+    return this.activeCalls.size;
+  }
+
   async call(command: PluginHostCallCommand): Promise<PluginHostCallResult> {
     if (this.shuttingDown) {
       throw new Error("host plugin manager is shutting down");

@@ -314,32 +314,49 @@ describe("git semver tag resolution", () => {
       cwd: repo,
     });
     await run("git", ["config", "user.name", "Test"], { cwd: repo });
+    await run("git", ["config", "commit.gpgsign", "false"], { cwd: repo });
+    await run("git", ["config", "tag.gpgsign", "false"], { cwd: repo });
+    await run("git", ["commit", "--allow-empty", "-qm", "v1.0.0"], {
+      cwd: repo,
+    });
+    await run("git", ["commit", "--allow-empty", "-qm", "v1.1.0"], {
+      cwd: repo,
+    });
+    await run("git", ["commit", "--allow-empty", "-qm", "v2.0.0"], {
+      cwd: repo,
+    });
+    const [v1Commit, v11Commit, v2Commit] = (
+      await run("git", ["rev-list", "--reverse", "HEAD"], { cwd: repo })
+    ).stdout
+      .trim()
+      .split("\n");
+    if (!v1Commit || !v11Commit || !v2Commit) {
+      throw new Error("Failed to create Git tag fixture commits");
+    }
     const commitOf = new Map<string, string>();
-    const releases: Array<{ tag: string; annotated: boolean }> = [
-      { tag: "v1.0.0", annotated: false },
-      { tag: "v1.1.0", annotated: true },
-      { tag: "v1.2.0-beta.1", annotated: false },
-      { tag: "v2.0.0", annotated: true },
-      { tag: "v1.2", annotated: false },
-      { tag: "release-3", annotated: false },
-      { tag: "notes/v0.9.0", annotated: false },
-      { tag: "notes/v1.0.0", annotated: true },
+    const releases: Array<{
+      tag: string;
+      annotated: boolean;
+      commit: string;
+    }> = [
+      { tag: "v1.0.0", annotated: false, commit: v1Commit },
+      { tag: "v1.1.0", annotated: true, commit: v11Commit },
+      { tag: "v1.2.0-beta.1", annotated: false, commit: v11Commit },
+      { tag: "v2.0.0", annotated: true, commit: v2Commit },
+      { tag: "v1.2", annotated: false, commit: v11Commit },
+      { tag: "release-3", annotated: false, commit: v2Commit },
+      { tag: "notes/v0.9.0", annotated: false, commit: v1Commit },
+      { tag: "notes/v1.0.0", annotated: true, commit: v11Commit },
     ];
     for (const release of releases) {
-      await writeFile(join(repo, "file.txt"), release.tag);
-      await run("git", ["add", "."], { cwd: repo });
-      await run("git", ["commit", "-qm", release.tag], { cwd: repo });
       await run(
         "git",
         release.annotated
-          ? ["tag", "-a", release.tag, "-m", release.tag]
-          : ["tag", release.tag],
+          ? ["tag", "-a", release.tag, "-m", release.tag, release.commit]
+          : ["tag", release.tag, release.commit],
         { cwd: repo },
       );
-      commitOf.set(
-        release.tag,
-        (await run("git", ["rev-parse", "HEAD"], { cwd: repo })).stdout.trim(),
-      );
+      commitOf.set(release.tag, release.commit);
     }
     return { repo, commitOf };
   }

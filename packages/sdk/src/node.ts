@@ -95,6 +95,12 @@ export {
 };
 export { BbHttpError, BbRequestTimeoutError } from "./response.js";
 export {
+  createNodeAdminClient,
+  NodeAdminHttpError,
+  type CreateNodeAdminClientOptions,
+  type NodeAdminClient,
+} from "./node-admin.js";
+export {
   pluginMutationResponseSchema,
   type PluginMutationResponse,
 } from "./areas/plugins.js";

@@ -312,10 +312,21 @@ function dropThreadConversationOutlinesTable(db: DbConnection): void {
   db.$client.prepare("DROP TABLE IF EXISTS thread_conversation_outlines").run();
 }
 
+function dropWorkQuiesceSchema(db: DbConnection): void {
+  for (const table of [
+    "work_quiesce_resolutions",
+    "work_quiesce",
+    "work_admissions",
+  ]) {
+    db.$client.prepare(`DROP TABLE IF EXISTS ${table}`).run();
+  }
+}
+
 function dropRewindAddedTables(db: DbConnection): void {
   rewindEnvironmentRowFactsMigration(db);
   rewindEnvironmentProvidersMigration(db);
   dropThreadConversationOutlinesTable(db);
+  dropWorkQuiesceSchema(db);
   db.$client.prepare("DROP TABLE IF EXISTS thread_tabs").run();
   db.$client.prepare("DROP TABLE IF EXISTS automation_runs").run();
   db.$client.prepare("DROP TABLE IF EXISTS automations").run();
@@ -409,8 +420,15 @@ const branchLocalThreadSearchRowidFtsMigrationWhen = 1781403656071;
 const rowidThreadSearchMigrationHash =
   "025358fe89253aec7f5bd970dc3eb88d0e834f0d58fb9d75329a5d39899340f4";
 const legacyExperimentsMigrationWhen = 1781299832942;
-const environmentProvisioningMigrationWhen = 1789075667774;
 const machineProvidersMigrationWhen = 1789081162875;
+const branchLocalWorkQuiesceMigrationWhen = 1789145421512;
+const branchLocalWorkQuiesceMigrationHash =
+  "f162a056f845a9e712b63f50351f0651858c5659c6c2fc05cd063f49c15ca87f";
+const rebasedBranchLocalWorkQuiesceMigrationWhen = 1789371340185;
+const branchLocalWorktreePromotionMigrationWhen = 1789372194462;
+const branchLocalWorktreePromotionMigrationHash =
+  "dbdda013c3b84e828babc97fcebe1761bea42507c6cf8dabcb6dc8b4b392f07d";
+const threadStorageDeletedAtMigrationWhen = 1789421366079;
 const eventLargeValuesMigrationWhen = 1781403656069;
 const eventLargeValuesRestoreMigrationWhen = 1781557200000;
 const cleanupModeDropMigrationWhen = 1781557300000;
@@ -425,6 +443,7 @@ const pendingInteractionsMigrationWhen = 1783626227375;
 const permissionModesMigrationWhen = 1784311522462;
 const branchLocalThreadTabsMigrationWhen = 1783633750817;
 const eventParentToolCallMigrationWhen = 1787181956957;
+const startupOwnershipMigrationWhen = 1789075667774;
 const eventParentToolCallPreJsonValidMigrationHash =
   "79d39e7b68d1db8ba02614fe4cc227cc0c154d77c7183f2e37ed2d8475412993";
 const eventLargeValuesPreOptimizationHash =
@@ -682,9 +701,7 @@ function dropEventToolNameColumn(db: DbConnection): void {
   dropThreadConversationOutlinesTable(db);
   db.$client.exec("DROP INDEX IF EXISTS events_delegating_item_lookup_idx");
   db.$client.exec("DROP INDEX IF EXISTS events_plan_steps_thread_sequence_idx");
-  // The same rewind also rewinds the later deferred-message table (0108).
   db.$client.prepare("DROP TABLE IF EXISTS deferred_thread_messages").run();
-  // Generated columns are omitted from table_info but included in table_xinfo.
   const columns = db.$client
     .prepare<[], TableInfoRow>("PRAGMA table_xinfo(events)")
     .all();
@@ -722,21 +739,8 @@ function dropMarketplaceStatsColumn(db: DbConnection): void {
   }
 }
 
-/**
- * Undo migration 0110, the dispatch-queue rework.
- *
- * 0110 adds the queue's wait columns (schedule, typed wait, wait holder,
- * payload kind and its retry reference), the system-notice and failure-reason
- * sidecars, their two partial indexes, and the thread's pending start
- * context.
- * A rewind that clears its journal row must remove all of them before the
- * replay's ADDs hit a table that already has them.
- *
- * The table 0110 DROPs (`deferred_thread_messages`, added by 0108) needs
- * nothing here. Every rewind that clears 0110's journal row also clears
- * 0108's, so the replay recreates the table before 0110 drops it again.
- */
 function rewindEnvironmentProvisioningMigration(db: DbConnection): void {
+  dropWorkQuiesceSchema(db);
   db.$client.exec("DROP TRIGGER IF EXISTS threads_lifecycle_owner_insert");
   db.$client.exec("DROP TRIGGER IF EXISTS threads_lifecycle_owner_immutable");
   db.$client.exec("DROP INDEX IF EXISTS threads_lifecycle_owner_idx");
@@ -778,11 +782,12 @@ function rewindEnvironmentProvisioningMigration(db: DbConnection): void {
     db.$client.exec(
       "ALTER TABLE threads RENAME COLUMN startup_context TO pending_start_context",
     );
+  if (threadColumns.some((column) => column.name === "worktree_promotion"))
+    db.$client.exec("ALTER TABLE threads DROP COLUMN worktree_promotion");
 }
 
 function dropQueueReworkSchema(db: DbConnection): void {
   rewindEnvironmentProvisioningMigration(db);
-  // Indexes first: SQLite refuses to drop a column an existing index names.
   for (const index of [
     "queued_thread_messages_due_idx",
     "queued_thread_messages_wait_holder_idx",
@@ -1113,6 +1118,7 @@ function dropPost0023Tables(db: DbConnection): void {
   ]) {
     db.$client.prepare(`DROP TABLE IF EXISTS ${table}`).run();
   }
+  dropWorkQuiesceSchema(db);
 
   dropThreadSectionSchema(db);
 }
@@ -5682,6 +5688,48 @@ describe("migrate", () => {
   });
 });
 
+describe("work quiesce migration validation", () => {
+  it("rejects a same-named index with the wrong columns", () => {
+    const db = createMigratedConnection();
+    try {
+      db.$client.exec(
+        "DROP INDEX work_admissions_state_idx; CREATE INDEX work_admissions_state_idx ON work_admissions(host_id)",
+      );
+      expect(() => migrate(db)).toThrow(
+        "Work quiesce migration left required indexes invalid",
+      );
+    } finally {
+      closeConnection(db);
+    }
+  });
+
+  it("rejects replay-compatible tables without required constraints", () => {
+    const db = createMigratedConnection();
+    try {
+      db.$client.exec(`
+        DROP TABLE work_admissions;
+        CREATE TABLE work_admissions (
+          id text PRIMARY KEY NOT NULL,
+          command_type text NOT NULL,
+          transport text NOT NULL,
+          host_id text,
+          context_json text DEFAULT '{}' NOT NULL,
+          state text NOT NULL,
+          created_at integer NOT NULL,
+          settled_at integer
+        );
+        CREATE INDEX work_admissions_state_idx ON work_admissions(state);
+        CREATE INDEX work_admissions_host_id_idx ON work_admissions(host_id);
+      `);
+      expect(() => migrate(db)).toThrow(
+        "Work quiesce migration left required constraints missing",
+      );
+    } finally {
+      closeConnection(db);
+    }
+  });
+});
+
 describe("environment providers migration", () => {
   const environmentProvidersMigrationWhen = 1788386943764;
 
@@ -6056,6 +6104,96 @@ describe("environment providers migration", () => {
 });
 
 describe("machine providers migration", () => {
+  it("repairs a branch-local work quiesce migration that skipped machine providers", () => {
+    const db = createMigratedConnection();
+    try {
+      db.$client
+        .prepare("ALTER TABLE threads DROP COLUMN worktree_promotion")
+        .run();
+      rewindMachineProvidersMigration(db);
+      db.$client
+        .prepare<InsertMigrationParameters>(
+          `
+            INSERT INTO __drizzle_migrations (hash, created_at)
+            VALUES (?, ?)
+          `,
+        )
+        .run(
+          branchLocalWorkQuiesceMigrationHash,
+          branchLocalWorkQuiesceMigrationWhen,
+        );
+
+      expect(() => migrate(db)).not.toThrow();
+      expect(readAppliedMigrationCreatedAts(db)).not.toContain(
+        branchLocalWorkQuiesceMigrationWhen,
+      );
+      expect(readAppliedMigrationCreatedAts(db)).toContain(
+        machineProvidersMigrationWhen,
+      );
+      expect(readLatestAppliedMigrationCreatedAt(db)).toBe(latestMigrationWhen);
+      expect(readTableNames(db)).toEqual(
+        expect.arrayContaining([
+          "environment_hook_operations",
+          "provider_model_catalogs",
+          "thread_plugin_metadata",
+          "work_admissions",
+        ]),
+      );
+    } finally {
+      closeConnection(db);
+    }
+  });
+
+  it("renumbers branch-local work quiesce and worktree promotion migrations onto upstream history", () => {
+    const db = createMigratedConnection();
+    try {
+      db.$client
+        .prepare("ALTER TABLE threads DROP COLUMN storage_deleted_at")
+        .run();
+      db.$client
+        .prepare<[number]>(
+          "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+        )
+        .run(threadStorageDeletedAtMigrationWhen);
+      for (const [hash, when] of [
+        [
+          branchLocalWorkQuiesceMigrationHash,
+          rebasedBranchLocalWorkQuiesceMigrationWhen,
+        ],
+        [
+          branchLocalWorktreePromotionMigrationHash,
+          branchLocalWorktreePromotionMigrationWhen,
+        ],
+      ] as const) {
+        db.$client
+          .prepare<InsertMigrationParameters>(
+            `
+              INSERT INTO __drizzle_migrations (hash, created_at)
+              VALUES (?, ?)
+            `,
+          )
+          .run(hash, when);
+      }
+
+      expect(() => migrate(db)).not.toThrow();
+      const applied = readAppliedMigrationCreatedAts(db);
+      expect(applied).not.toContain(rebasedBranchLocalWorkQuiesceMigrationWhen);
+      expect(applied).not.toContain(branchLocalWorktreePromotionMigrationWhen);
+      expect(applied).toContain(threadStorageDeletedAtMigrationWhen);
+      expect(readLatestAppliedMigrationCreatedAt(db)).toBe(latestMigrationWhen);
+      expect(
+        db.$client
+          .prepare<[], TableInfoRow>("PRAGMA table_info(threads)")
+          .all()
+          .map((column) => column.name),
+      ).toEqual(
+        expect.arrayContaining(["storage_deleted_at", "worktree_promotion"]),
+      );
+    } finally {
+      closeConnection(db);
+    }
+  });
+
   it("backfills server access for machines with a legacy access identity", () => {
     const db = createConnection(":memory:");
     try {
@@ -6112,12 +6250,11 @@ describe("environment and thread startup ownership migration", () => {
           "utf8",
         ).split("--> statement-breakpoint")[0]!;
         db.$client.exec(legacySchema);
-        db.$client.exec("DROP TABLE IF EXISTS environment_hook_operations");
         db.$client
-          .prepare<[number]>(
+          .prepare<DeleteMigrationParameters>(
             "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
           )
-          .run(environmentProvisioningMigrationWhen);
+          .run(startupOwnershipMigrationWhen);
         db.$client.exec(`
         INSERT INTO hosts (id, name, type, created_at, updated_at) VALUES ('host_ownership', 'test', 'persistent', 1, 1);
         INSERT INTO projects (id, name, created_at, updated_at) VALUES ('proj_ownership', 'test', 1, 1);

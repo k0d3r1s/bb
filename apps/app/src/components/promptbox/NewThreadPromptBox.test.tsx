@@ -324,7 +324,9 @@ describe("EnvironmentSlot", () => {
         worktree={makeWorktree()}
       />,
     );
-    expect(screen.getByRole("button", { name: "Environment" })).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+    ).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Machine" })).toBeNull();
     rerender(
       <EnvironmentSlot
@@ -336,7 +338,9 @@ describe("EnvironmentSlot", () => {
         worktree={makeWorktree()}
       />,
     );
-    expect(screen.queryByRole("button", { name: "Environment" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Environment(?:$|:)/u }),
+    ).toBeNull();
     expect(screen.getByRole("button", { name: "Machine" })).not.toBeNull();
   });
 
@@ -350,7 +354,9 @@ describe("EnvironmentSlot", () => {
     );
 
     expect(screen.getByRole("button", { name: "Machine" })).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Environment" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Environment(?:$|:)/u }),
+    ).toBeNull();
   });
 
   it("omits project-only providers from the projectless picker", () => {
@@ -366,7 +372,9 @@ describe("EnvironmentSlot", () => {
     );
 
     expect(screen.getByRole("button", { name: "Machine" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Environment" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Environment(?:$|:)/u }),
+    ).toBeNull();
     expect(screen.queryByText("Modal sandbox")).toBeNull();
   });
 
@@ -382,7 +390,9 @@ describe("EnvironmentSlot", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Machine" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Environment" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Environment(?:$|:)/u }),
+    ).toBeNull();
   });
 
   it("shows the reused environment instead of the machine slot when a thread reuses one", () => {
@@ -400,7 +410,9 @@ describe("EnvironmentSlot", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Machine" })).toBeNull();
-    const triggers = screen.getAllByRole("button", { name: "Environment" });
+    const triggers = screen.getAllByRole("button", {
+      name: /^Environment(?:$|:)/u,
+    });
     expect(triggers).toHaveLength(2);
     expect(triggers[0]?.textContent).toContain("Reuse");
     expect(triggers[1]?.textContent).toContain("Scratch space");
@@ -428,7 +440,9 @@ describe("EnvironmentSlot", () => {
         />
       </QueryClientProvider>,
     );
-    const trigger = screen.getAllByRole("button", { name: "Environment" })[0];
+    const trigger = screen.getAllByRole("button", {
+      name: /^Environment(?:$|:)/u,
+    })[0];
     fireEvent.click(trigger!);
     expect(screen.getByRole("dialog", { name: "Environment" })).toBeTruthy();
 
@@ -443,7 +457,7 @@ describe("EnvironmentSlot", () => {
     );
 
     expect(screen.getByRole("dialog", { name: "Environment" })).toBeTruthy();
-    expect(document.querySelector('button[aria-label="Environment"]')).toBe(
+    expect(document.querySelector('button[aria-label^="Environment:"]')).toBe(
       trigger,
     );
   });
@@ -463,7 +477,9 @@ describe("EnvironmentSlot", () => {
         />
       </QueryClientProvider>,
     );
-    const trigger = screen.getByRole("button", { name: "Environment" });
+    const trigger = screen.getByRole("button", {
+      name: /^Environment(?:$|:)/u,
+    });
     fireEvent.click(trigger);
     expect(screen.getByRole("dialog", { name: "Environment" })).toBeTruthy();
 
@@ -478,11 +494,13 @@ describe("EnvironmentSlot", () => {
     );
 
     expect(screen.getByRole("dialog", { name: "Environment" })).toBeTruthy();
-    expect(document.querySelector('button[aria-label="Environment"]')).toBe(
+    expect(document.querySelector('button[aria-label^="Environment:"]')).toBe(
       trigger,
     );
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("button", { name: "Environment" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Environment(?:$|:)/u }),
+    ).toBeNull();
     expect(screen.getByRole("button", { name: "Machine" })).toBeTruthy();
   });
 });

@@ -6,6 +6,31 @@ with its own branch. Worktrees let bb work on multiple things in parallel
 without touching your main checkout, and they make it easy to throw away
 whatever the agent does without affecting the rest of your work.
 
+A thread that takes bb's default — the **Checkout, then worktree** entry in the
+environment picker — starts in the project's existing checkout so the agent can
+use checkout-local indexes and other read-only tooling. The agent is instructed
+to ask bb for a managed worktree before its first project mutation, and bb
+queues continuation in that worktree. This coordination is not a filesystem
+write barrier: select **Worktree** when isolation must exist from the first
+command. Promotion refuses a dirty, detached, unborn, or mid-operation checkout
+rather than silently continuing from different code.
+
+## Working in the checkout instead
+
+Promotion is armed only for that default. Any deliberate placement keeps the
+thread where you put it:
+
+- Pick **Project checkout** in the environment picker, and the thread stays in
+  your checkout for its whole life.
+- Pass `bb thread spawn --environment-provider project-checkout` to choose the
+  checkout explicitly from the CLI.
+- Ask mid-thread — "work in the checkout", "skip the worktree", or decline one
+  the agent offers. The agent records it with `bb_keep_checkout` and bb stops
+  raising it for the rest of the thread, rather than re-asking every turn.
+
+A thread already running in a worktree cannot be moved back this way; use
+`update_environment_directory` to point it at a different directory.
+
 You can pair a worktree with a **`.worktreeinclude` file** that lists the local
 files each new worktree needs, and with a **setup script** that bb runs the
 first time the worktree is created — useful for installing dependencies,
@@ -34,7 +59,7 @@ default. Disabling it in Settings → Installed plugins leaves existing worktree
 but stops bb from making new ones: a thread that asks for one waits until the
 plugin is running again.
 
-## Start a thread in a worktree
+## Start a thread in a worktree immediately
 
 In the app, pick **Worktree** in the environment picker when starting
 a thread.

@@ -13,7 +13,7 @@ has been exercised or that every behavior has been understood.
 
 ## app-and-shared-ui
 
-998 source files. Recipes: [navigation](features/navigation.md), [projects-environments](features/projects-environments.md), [composer](features/composer.md), [execution-controls](features/execution-controls.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [settings](features/settings.md), [extensions](features/extensions.md), [hosts-updates](features/hosts-updates.md), [compatibility-api](features/compatibility-api.md), [responsive-accessibility](features/responsive-accessibility.md).
+1094 source files. Recipes: [navigation](features/navigation.md), [projects-environments](features/projects-environments.md), [composer](features/composer.md), [execution-controls](features/execution-controls.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [settings](features/settings.md), [extensions](features/extensions.md), [hosts-updates](features/hosts-updates.md), [compatibility-api](features/compatibility-api.md), [responsive-accessibility](features/responsive-accessibility.md).
 
 ## app-routes
 
@@ -28,6 +28,7 @@ has been exercised or that every behavior has been understood.
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_AUTOMATIONS_ROUTE_PATH "/automations"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_AUTOMATION_DETAIL_ROUTE_PATH "/automations/:projectId/:automationId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_PROJECT_COMPOSE_ROUTE_PATH "/projects/:projectId"`
+- `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_PROJECT_SETTINGS_ROUTE_PATH "/projects/:projectId/settings"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_AUTOMATIONS_ROUTE_PATH "/tools/automations"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_AUTOMATION_BROWSE_ROUTE_PATH "/tools/automations/browse"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_AUTOMATION_DETAIL_ROUTE_PATH "/tools/automations/:projectId/:automationId"`
@@ -35,18 +36,23 @@ has been exercised or that every behavior has been understood.
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_PREFIX_ROUTE_PATH "/tools"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_SKILL_DETAIL_ROUTE_PATH "/extensions/skills/installed/:skillId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: LEGACY_TOOLS_SPLAT_ROUTE_PATH "/tools/*"`
+- `app-route: packages/client-core/src/routes/route-paths.ts: PLUGINS_ROUTE_PATH "/plugins"`
+- `app-route: packages/client-core/src/routes/route-paths.ts: PLUGIN_DETAIL_ROUTE_PATH "/plugins/:pluginId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: PLUGIN_PANEL_ROUTE_PATH "/plugins/:pluginId/:panelPath/*"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: PROJECTLESS_ARCHIVED_ROUTE_PATH "/archived"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: PROJECTLESS_THREAD_DETAIL_ROUTE_PATH "/threads/:threadId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: PROJECT_ARCHIVED_ROUTE_PATH "/projects/:projectId/archived"`
-- `app-route: packages/client-core/src/routes/route-paths.ts: PROJECT_SETTINGS_ROUTE_PATH "/projects/:projectId/settings"`
+- `app-route: packages/client-core/src/routes/route-paths.ts: REGISTRY_SKILLS_ROUTE_PATH "/skills/registry"`
+- `app-route: packages/client-core/src/routes/route-paths.ts: REGISTRY_SKILL_DETAIL_ROUTE_PATH "/skills/registry/:registrySkillId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: ROOT_COMPOSE_ROUTE_PATH APP_ROOT_ROUTE_PATH`
 - `app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_MACHINE_ROUTE_PATH "/settings/machines/:hostId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_PLUGINS_ROUTE_PATH "/settings/plugins"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_PLUGIN_ROUTE_PATH "/settings/plugins/:pluginId"`
+- `app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_PROJECT_ROUTE_PATH "/settings/projects/:projectId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_ROUTE_PATH "/settings"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: SETTINGS_SECTION_ROUTE_PATH "/settings/:section"`
-- `app-route: packages/client-core/src/routes/route-paths.ts: SKILLS_ROUTE_PATH TOOLS_SKILLS_ROUTE_PATH`
+- `app-route: packages/client-core/src/routes/route-paths.ts: SKILLS_ROUTE_PATH "/skills"`
+- `app-route: packages/client-core/src/routes/route-paths.ts: SKILL_DETAIL_ROUTE_PATH "/skills/library/:skillId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: THREAD_DETAIL_ROUTE_PATH "/projects/:projectId/threads/:threadId"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: TOOLS_PLUGINS_ROUTE_PATH "/extensions/plugins"`
 - `app-route: packages/client-core/src/routes/route-paths.ts: TOOLS_PLUGIN_BROWSE_ROUTE_PATH "/extensions/plugins/browse"`
@@ -59,7 +65,7 @@ has been exercised or that every behavior has been understood.
 
 ## app:connect
 
-15 source files. Recipes: [cloud-gateway](features/cloud-gateway.md).
+16 source files. Recipes: [cloud-gateway](features/cloud-gateway.md).
 
 ## app:demo-server
 
@@ -67,17 +73,26 @@ has been exercised or that every behavior has been understood.
 
 ## app:desktop
 
-65 source files. Recipes: [desktop](features/desktop.md).
+85 source files. Recipes: [desktop](features/desktop.md).
+
+- `cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Browser.close`
+- `cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Input.dispatchMouseEvent`
+- `cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Page.captureScreenshot`
+- `cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Runtime.enable`
+- `cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Runtime.evaluate`
+- `cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Target.attachToTarget`
+- `cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Target.closeTarget`
+- `cli-command: apps/desktop/test/fixtures/browser-cdp-smoke.ts: Target.getTargets`
 
 ## app:mobile
 
-208 source files. Recipes: [mobile](features/mobile.md).
+179 source files. Recipes: [mobile](features/mobile.md).
 
 - `app-route: apps/mobile/src/lib/shell/shell-links.ts: SHELL_ROUTE_PATH "/webview"`
 
 ## app:web
 
-86 source files. Recipes: [hosted-web](features/hosted-web.md).
+88 source files. Recipes: [hosted-web](features/hosted-web.md).
 
 - `web-route: apps/web/src/routes/[.]well-known.apple-app-site-association.tsx: /.well-known/apple-app-site-association`
 - `web-route: apps/web/src/routes/[.]well-known.assetlinks[.]json.tsx: /.well-known/assetlinks.json`
@@ -91,6 +106,7 @@ has been exercised or that every behavior has been understood.
 - `web-route: apps/web/src/routes/blog_.$slug.tsx: /blog_/$slug`
 - `web-route: apps/web/src/routes/changelog.tsx: /changelog`
 - `web-route: apps/web/src/routes/dashboard.tsx: /dashboard`
+- `web-route: apps/web/src/routes/download.linux.tsx: /download/linux`
 - `web-route: apps/web/src/routes/download.macos.tsx: /download/macos`
 - `web-route: apps/web/src/routes/index.tsx: /`
 - `web-route: apps/web/src/routes/marketplace.v1.$.tsx: /marketplace/v1/$`
@@ -104,6 +120,23 @@ has been exercised or that every behavior has been understood.
 
 10 source files. Recipes: [compatibility-api](features/compatibility-api.md).
 
+## cli:browser
+
+1 source files. Recipes: [workspace-panels](features/workspace-panels.md).
+
+- `cli-command: apps/cli/src/commands/browser.ts: ${name} <tabId>`
+- `cli-command: apps/cli/src/commands/browser.ts: acquire <tabIds...>`
+- `cli-command: apps/cli/src/commands/browser.ts: browser`
+- `cli-command: apps/cli/src/commands/browser.ts: capture <tabId>`
+- `cli-command: apps/cli/src/commands/browser.ts: connection <leaseId>`
+- `cli-command: apps/cli/src/commands/browser.ts: create`
+- `cli-command: apps/cli/src/commands/browser.ts: import-cookies`
+- `cli-command: apps/cli/src/commands/browser.ts: import-sources`
+- `cli-command: apps/cli/src/commands/browser.ts: instances`
+- `cli-command: apps/cli/src/commands/browser.ts: release <leaseId>`
+- `cli-command: apps/cli/src/commands/browser.ts: tabs`
+- `cli-command: apps/cli/src/commands/browser.ts: watch`
+
 ## cli:environment
 
 1 source files. Recipes: [projects-environments](features/projects-environments.md).
@@ -111,14 +144,17 @@ has been exercised or that every behavior has been understood.
 - `cli-command: apps/cli/src/commands/environment.ts: archive-threads <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: branches <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: commit <id>`
+- `cli-command: apps/cli/src/commands/environment.ts: delete <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: diff <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: diff-file <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: diff-files <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: diff-patch <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: draft <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: environment`
+- `cli-command: apps/cli/src/commands/environment.ts: list`
 - `cli-command: apps/cli/src/commands/environment.ts: merge <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: paths <id>`
+- `cli-command: apps/cli/src/commands/environment.ts: providers`
 - `cli-command: apps/cli/src/commands/environment.ts: pull-request`
 - `cli-command: apps/cli/src/commands/environment.ts: ready <id>`
 - `cli-command: apps/cli/src/commands/environment.ts: show <id>`
@@ -156,16 +192,50 @@ has been exercised or that every behavior has been understood.
 
 1 source files. Recipes: [hosts-updates](features/hosts-updates.md).
 
+- `cli-command: apps/cli/src/commands/machine.ts: create`
+- `cli-command: apps/cli/src/commands/machine.ts: enroll`
 - `cli-command: apps/cli/src/commands/machine.ts: install <id-or-name> <provider>`
 - `cli-command: apps/cli/src/commands/machine.ts: join-code`
 - `cli-command: apps/cli/src/commands/machine.ts: list`
 - `cli-command: apps/cli/src/commands/machine.ts: machine`
 - `cli-command: apps/cli/src/commands/machine.ts: provider-cli`
+- `cli-command: apps/cli/src/commands/machine.ts: providers`
+- `cli-command: apps/cli/src/commands/machine.ts: reconcile <id-or-name>`
 - `cli-command: apps/cli/src/commands/machine.ts: remove <id-or-name>`
 - `cli-command: apps/cli/src/commands/machine.ts: rename <id-or-name> <name>`
+- `cli-command: apps/cli/src/commands/machine.ts: resume <id-or-name>`
+- `cli-command: apps/cli/src/commands/machine.ts: retry-cleanup <id-or-name>`
 - `cli-command: apps/cli/src/commands/machine.ts: retry-update <id-or-name>`
 - `cli-command: apps/cli/src/commands/machine.ts: show <id-or-name>`
 - `cli-command: apps/cli/src/commands/machine.ts: status <id-or-name>`
+- `cli-command: apps/cli/src/commands/machine.ts: suspend <id-or-name>`
+
+## cli:machine-enrollment
+
+1 source files. Recipes: [hosts-updates](features/hosts-updates.md).
+
+## cli:machine-environment
+
+1 source files. Recipes: [hosts-updates](features/hosts-updates.md).
+
+- `cli-command: apps/cli/src/commands/machine-environment.ts: env`
+- `cli-command: apps/cli/src/commands/machine-environment.ts: list`
+- `cli-command: apps/cli/src/commands/machine-environment.ts: set <NAME>`
+- `cli-command: apps/cli/src/commands/machine-environment.ts: unset <NAME>`
+
+## cli:maintenance
+
+1 source files. Recipes: [hosts-updates](features/hosts-updates.md).
+
+- `cli-command: apps/cli/src/commands/maintenance.ts: acquire`
+- `cli-command: apps/cli/src/commands/maintenance.ts: identity`
+- `cli-command: apps/cli/src/commands/maintenance.ts: maintenance`
+- `cli-command: apps/cli/src/commands/maintenance.ts: recover <operation-id>`
+- `cli-command: apps/cli/src/commands/maintenance.ts: release <operation-id>`
+- `cli-command: apps/cli/src/commands/maintenance.ts: renew <operation-id>`
+- `cli-command: apps/cli/src/commands/maintenance.ts: seal <operation-id>`
+- `cli-command: apps/cli/src/commands/maintenance.ts: status`
+- `cli-command: apps/cli/src/commands/maintenance.ts: transition <operation-id> <expected-phase> <phase>`
 
 ## cli:manager
 
@@ -189,10 +259,13 @@ has been exercised or that every behavior has been understood.
 
 - `cli-command: apps/cli/src/commands/plugin.ts: ${name} <id>`
 - `cli-command: apps/cli/src/commands/plugin.ts: build [path]`
+- `cli-command: apps/cli/src/commands/plugin.ts: call <plugin-id> <method>`
 - `cli-command: apps/cli/src/commands/plugin.ts: config <id> [action] [key] [value]`
 - `cli-command: apps/cli/src/commands/plugin.ts: dev [path]`
+- `cli-command: apps/cli/src/commands/plugin.ts: inspect <plugin-id> [method]`
 - `cli-command: apps/cli/src/commands/plugin.ts: install <source>`
 - `cli-command: apps/cli/src/commands/plugin.ts: list`
+- `cli-command: apps/cli/src/commands/plugin.ts: list [plugin-id]`
 - `cli-command: apps/cli/src/commands/plugin.ts: logs <id>`
 - `cli-command: apps/cli/src/commands/plugin.ts: migrate [path]`
 - `cli-command: apps/cli/src/commands/plugin.ts: new <name>`
@@ -200,6 +273,7 @@ has been exercised or that every behavior has been understood.
 - `cli-command: apps/cli/src/commands/plugin.ts: plugin`
 - `cli-command: apps/cli/src/commands/plugin.ts: reload [id]`
 - `cli-command: apps/cli/src/commands/plugin.ts: remove <id>`
+- `cli-command: apps/cli/src/commands/plugin.ts: rpc`
 - `cli-command: apps/cli/src/commands/plugin.ts: run <id> [args...]`
 - `cli-command: apps/cli/src/commands/plugin.ts: search <query>`
 - `cli-command: apps/cli/src/commands/plugin.ts: source <id>`
@@ -245,16 +319,21 @@ has been exercised or that every behavior has been understood.
 1 source files. Recipes: [settings](features/settings.md).
 
 - `cli-command: apps/cli/src/commands/settings.ts: ai-services`
+- `cli-command: apps/cli/src/commands/settings.ts: completed-turns [providerId] [display]`
 - `cli-command: apps/cli/src/commands/settings.ts: experiment <key> <value>`
 - `cli-command: apps/cli/src/commands/settings.ts: general <key> <value>`
+- `cli-command: apps/cli/src/commands/settings.ts: get <key>`
 - `cli-command: apps/cli/src/commands/settings.ts: hints <value>`
 - `cli-command: apps/cli/src/commands/settings.ts: keyboard`
 - `cli-command: apps/cli/src/commands/settings.ts: list`
 - `cli-command: apps/cli/src/commands/settings.ts: reload`
+- `cli-command: apps/cli/src/commands/settings.ts: reset <key>`
 - `cli-command: apps/cli/src/commands/settings.ts: reset [command]`
 - `cli-command: apps/cli/src/commands/settings.ts: set <command> <shortcut>`
+- `cli-command: apps/cli/src/commands/settings.ts: set <key> <value>`
 - `cli-command: apps/cli/src/commands/settings.ts: settings`
 - `cli-command: apps/cli/src/commands/settings.ts: show`
+- `cli-command: apps/cli/src/commands/settings.ts: ui`
 - `cli-command: apps/cli/src/commands/settings.ts: usage`
 - `cli-command: apps/cli/src/commands/settings.ts: version`
 
@@ -308,33 +387,27 @@ has been exercised or that every behavior has been understood.
 - `cli-command: apps/cli/src/commands/theme.ts: reset`
 - `cli-command: apps/cli/src/commands/theme.ts: set <color>`
 - `cli-command: apps/cli/src/commands/theme.ts: set <id>`
-- `cli-command: apps/cli/src/commands/theme.ts: show`
+- `cli-command: apps/cli/src/commands/theme.ts: show [id]`
 - `cli-command: apps/cli/src/commands/theme.ts: theme`
 
 ## cli:thread
 
-15 source files. Recipes: [execution-controls](features/execution-controls.md), [navigation](features/navigation.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [composer](features/composer.md).
+16 source files. Recipes: [execution-controls](features/execution-controls.md), [navigation](features/navigation.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [composer](features/composer.md).
 
+- `cli-command: apps/cli/src/commands/thread/actions.ts: ${name} [id]`
 - `cli-command: apps/cli/src/commands/thread/actions.ts: archive [id]`
-- `cli-command: apps/cli/src/commands/thread/actions.ts: cancel-plan [id]`
-- `cli-command: apps/cli/src/commands/thread/actions.ts: clear [id]`
-- `cli-command: apps/cli/src/commands/thread/actions.ts: clear-goal [id]`
-- `cli-command: apps/cli/src/commands/thread/actions.ts: compact [id]`
 - `cli-command: apps/cli/src/commands/thread/actions.ts: delete <id>`
 - `cli-command: apps/cli/src/commands/thread/actions.ts: edit-message [id]`
-- `cli-command: apps/cli/src/commands/thread/actions.ts: pin [id]`
 - `cli-command: apps/cli/src/commands/thread/actions.ts: retry [id]`
-- `cli-command: apps/cli/src/commands/thread/actions.ts: stop [id]`
 - `cli-command: apps/cli/src/commands/thread/actions.ts: tell <id> <message>`
 - `cli-command: apps/cli/src/commands/thread/actions.ts: unarchive [id]`
-- `cli-command: apps/cli/src/commands/thread/actions.ts: unpin [id]`
 - `cli-command: apps/cli/src/commands/thread/actions.ts: update [id]`
+- `cli-command: apps/cli/src/commands/thread/context.ts: context [id]`
 - `cli-command: apps/cli/src/commands/thread/count.ts: count`
 - `cli-command: apps/cli/src/commands/thread/fork.ts: fork <source-thread-id>`
 - `cli-command: apps/cli/src/commands/thread/index.ts: thread`
+- `cli-command: apps/cli/src/commands/thread/interactions.ts: ${name} <interactionId> [id]`
 - `cli-command: apps/cli/src/commands/thread/interactions.ts: answer <interactionId> [id]`
-- `cli-command: apps/cli/src/commands/thread/interactions.ts: approve <interactionId> [id]`
-- `cli-command: apps/cli/src/commands/thread/interactions.ts: deny <interactionId> [id]`
 - `cli-command: apps/cli/src/commands/thread/interactions.ts: grant <interactionId> [id]`
 - `cli-command: apps/cli/src/commands/thread/interactions.ts: interactions`
 - `cli-command: apps/cli/src/commands/thread/interactions.ts: list [id]`
@@ -390,15 +463,15 @@ has been exercised or that every behavior has been understood.
 
 ## domain-contracts
 
-71 source files. Recipes: [navigation](features/navigation.md), [projects-environments](features/projects-environments.md), [composer](features/composer.md), [execution-controls](features/execution-controls.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [settings](features/settings.md), [extensions](features/extensions.md), [hosts-updates](features/hosts-updates.md), [compatibility-api](features/compatibility-api.md), [responsive-accessibility](features/responsive-accessibility.md).
+78 source files. Recipes: [navigation](features/navigation.md), [projects-environments](features/projects-environments.md), [composer](features/composer.md), [execution-controls](features/execution-controls.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [settings](features/settings.md), [extensions](features/extensions.md), [hosts-updates](features/hosts-updates.md), [compatibility-api](features/compatibility-api.md), [responsive-accessibility](features/responsive-accessibility.md).
 
 ## plugin-sdk-and-guide
 
-39 source files. Recipes: [extensions](features/extensions.md), [plugin-plugin-api-docs](features/plugin-plugin-api-docs.md), [developer-fixtures](features/developer-fixtures.md).
+42 source files. Recipes: [extensions](features/extensions.md), [plugin-plugin-api-docs](features/plugin-plugin-api-docs.md), [developer-fixtures](features/developer-fixtures.md).
 
 ## plugin:account-pool
 
-22 source files. Recipes: [plugin-account-pool](features/plugin-account-pool.md).
+29 source files. Recipes: [plugin-account-pool](features/plugin-account-pool.md).
 
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: account-add`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: account-disable`
@@ -407,11 +480,15 @@ has been exercised or that every behavior has been understood.
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: account-login-complete`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: account-login-poll`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: account-priority`
+- `cli-name-candidate: plugins/account-pool/src/cli.ts: account-refresh`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: account-remove`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: account-reorder`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: bypass`
+- `cli-name-candidate: plugins/account-pool/src/cli.ts: cache-miss-clear`
+- `cli-name-candidate: plugins/account-pool/src/cli.ts: cache-miss-list`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: config`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: config-set`
+- `cli-name-candidate: plugins/account-pool/src/cli.ts: parent`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: pool`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: routing`
 - `cli-name-candidate: plugins/account-pool/src/cli.ts: status`
@@ -440,6 +517,16 @@ has been exercised or that every behavior has been understood.
 - `cli-name-candidate: plugins/automations/src/cli.ts: update`
 - `plugin-slot: plugins/automations/app.tsx: navPanel`
 
+## plugin:bb-guide
+
+5 source files. Recipes: [plugin-bb-guide](features/plugin-bb-guide.md).
+
+## plugin:browser-automation
+
+15 source files. Recipes: [plugin-browser-automation](features/plugin-browser-automation.md).
+
+- `cli-name-candidate: plugins/browser-automation/server.ts: browser-automation`
+
 ## plugin:concurrency-limit
 
 8 source files. Recipes: [plugin-concurrency-limit](features/plugin-concurrency-limit.md).
@@ -452,7 +539,7 @@ has been exercised or that every behavior has been understood.
 
 ## plugin:connect
 
-16 source files. Recipes: [plugin-connect](features/plugin-connect.md).
+17 source files. Recipes: [plugin-connect](features/plugin-connect.md).
 
 - `cli-name-candidate: plugins/connect/src/cli.ts: connect`
 - `cli-name-candidate: plugins/connect/src/cli.ts: expose`
@@ -495,6 +582,43 @@ has been exercised or that every behavior has been understood.
 - `plugin-slot: plugins/docs/app.tsx: navPanel`
 - `plugin-slot: plugins/docs/app.tsx: threadPanelAction`
 
+## plugin:drafts
+
+5 source files. Recipes: [plugin-drafts](features/plugin-drafts.md).
+
+## plugin:environment-git-worktree
+
+12 source files. Recipes: [plugin-environment-git-worktree](features/plugin-environment-git-worktree.md).
+
+- `plugin-slot: plugins/environment-git-worktree/app.tsx: experimental_environmentProviderInputs`
+
+## plugin:environment-modal-sandbox
+
+22 source files. Recipes: [plugin-environment-modal-sandbox](features/plugin-environment-modal-sandbox.md).
+
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: account-inspect`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: image-build`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: image-reset`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: image-set`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: image-show`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: machine-inspect`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: modal`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: sandbox-exec`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: sandbox-run`
+- `cli-name-candidate: plugins/environment-modal-sandbox/account.ts: sandbox-stop`
+- `plugin-slot: plugins/environment-modal-sandbox/app.tsx: experimental_machineProviderInputs`
+- `plugin-slot: plugins/environment-modal-sandbox/app.tsx: settingsSection`
+
+## plugin:environment-personal-workspace
+
+8 source files. Recipes: [plugin-environment-personal-workspace](features/plugin-environment-personal-workspace.md).
+
+## plugin:environment-project-checkout
+
+10 source files. Recipes: [plugin-environment-project-checkout](features/plugin-environment-project-checkout.md).
+
+- `plugin-slot: plugins/environment-project-checkout/app.tsx: experimental_environmentProviderInputs`
+
 ## plugin:github
 
 8 source files. Recipes: [plugin-github](features/plugin-github.md).
@@ -528,7 +652,7 @@ has been exercised or that every behavior has been understood.
 
 ## plugin:memory
 
-5 source files. Recipes: [plugin-memory](features/plugin-memory.md).
+6 source files. Recipes: [plugin-memory](features/plugin-memory.md).
 
 - `cli-name-candidate: plugins/memory/server.ts: add`
 - `cli-name-candidate: plugins/memory/server.ts: catalog`
@@ -544,7 +668,6 @@ has been exercised or that every behavior has been understood.
 
 15 source files. Recipes: [plugin-monaco-editor](features/plugin-monaco-editor.md).
 
-- `plugin-slot: plugins/monaco-editor/app.tsx: commandPaletteAction`
 - `plugin-slot: plugins/monaco-editor/app.tsx: fileOpener`
 
 ## plugin:pdf-preview
@@ -567,19 +690,21 @@ has been exercised or that every behavior has been understood.
 
 ## plugin:provider-acp
 
-20 source files. Recipes: [plugin-provider-acp](features/plugin-provider-acp.md).
+22 source files. Recipes: [plugin-provider-acp](features/plugin-provider-acp.md).
 
 ## plugin:provider-claude-code
 
-48 source files. Recipes: [plugin-provider-claude-code](features/plugin-provider-claude-code.md).
+50 source files. Recipes: [plugin-provider-claude-code](features/plugin-provider-claude-code.md).
 
 ## plugin:provider-codex
 
-260 source files. Recipes: [plugin-provider-codex](features/plugin-provider-codex.md).
+263 source files. Recipes: [plugin-provider-codex](features/plugin-provider-codex.md).
 
 ## plugin:provider-pi
 
-25 source files. Recipes: [plugin-provider-pi](features/plugin-provider-pi.md).
+29 source files. Recipes: [plugin-provider-pi](features/plugin-provider-pi.md).
+
+- `plugin-slot: plugins/provider-pi/app.tsx: pendingInteraction`
 
 ## plugin:provider-retry
 
@@ -592,7 +717,9 @@ has been exercised or that every behavior has been understood.
 
 ## plugin:provider-usage
 
-6 source files. Recipes: [plugin-provider-usage](features/plugin-provider-usage.md).
+11 source files. Recipes: [plugin-provider-usage](features/plugin-provider-usage.md).
+
+- `plugin-slot: plugins/provider-usage/app.tsx: settingsSection`
 
 ## plugin:push-notifications
 
@@ -628,7 +755,7 @@ has been exercised or that every behavior has been understood.
 
 ## plugin:tasks
 
-71 source files. Recipes: [plugin-tasks](features/plugin-tasks.md).
+75 source files. Recipes: [plugin-tasks](features/plugin-tasks.md).
 
 - `cli-name-candidate: plugins/tasks/cli/index.ts: attach`
 - `cli-name-candidate: plugins/tasks/cli/index.ts: attachment`
@@ -659,7 +786,7 @@ has been exercised or that every behavior has been understood.
 
 ## plugin:workflows
 
-22 source files. Recipes: [plugin-workflows](features/plugin-workflows.md).
+23 source files. Recipes: [plugin-workflows](features/plugin-workflows.md).
 
 - `cli-name-candidate: plugins/workflows/src/cli.ts: history`
 - `cli-name-candidate: plugins/workflows/src/cli.ts: list`
@@ -675,8 +802,21 @@ has been exercised or that every behavior has been understood.
 
 ## public-api-and-sdk
 
-45 source files. Recipes: [navigation](features/navigation.md), [projects-environments](features/projects-environments.md), [composer](features/composer.md), [execution-controls](features/execution-controls.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [settings](features/settings.md), [extensions](features/extensions.md), [hosts-updates](features/hosts-updates.md), [compatibility-api](features/compatibility-api.md), [responsive-accessibility](features/responsive-accessibility.md).
+50 source files. Recipes: [navigation](features/navigation.md), [projects-environments](features/projects-environments.md), [composer](features/composer.md), [execution-controls](features/execution-controls.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [settings](features/settings.md), [extensions](features/extensions.md), [hosts-updates](features/hosts-updates.md), [compatibility-api](features/compatibility-api.md), [responsive-accessibility](features/responsive-accessibility.md).
 
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/acquire post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/capture post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/close post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/connection post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/create post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/import-cookies post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/import-sources post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/instances post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/release post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/reveal post`
+- `api-route: packages/server-contract/src/public-api.ts: /desktop-browsers/tabs post`
+- `api-route: packages/server-contract/src/public-api.ts: /environments get`
+- `api-route: packages/server-contract/src/public-api.ts: /environments/:id delete`
 - `api-route: packages/server-contract/src/public-api.ts: /environments/:id get`
 - `api-route: packages/server-contract/src/public-api.ts: /environments/:id patch`
 - `api-route: packages/server-contract/src/public-api.ts: /environments/:id/actions post`
@@ -699,18 +839,27 @@ has been exercised or that every behavior has been understood.
 - `api-route: packages/server-contract/src/public-api.ts: /files/remove post`
 - `api-route: packages/server-contract/src/public-api.ts: /files/write post`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts get`
+- `api-route: packages/server-contract/src/public-api.ts: /hosts post`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id delete`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id get`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id patch`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/clone-default-path get`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/directory get`
+- `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/enrollment-command get`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/paths/exist post`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/permission-ceiling patch`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/pick-folder post`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/provider-clis/install post`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/provider-clis/status get`
+- `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/reconcile post`
+- `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/resume post`
+- `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/retry-cleanup post`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/retry-update post`
+- `api-route: packages/server-contract/src/public-api.ts: /hosts/:id/suspend post`
 - `api-route: packages/server-contract/src/public-api.ts: /hosts/join-codes post`
+- `api-route: packages/server-contract/src/public-api.ts: /preferences/ui get`
+- `api-route: packages/server-contract/src/public-api.ts: /preferences/ui/:key delete`
+- `api-route: packages/server-contract/src/public-api.ts: /preferences/ui/:key put`
 - `api-route: packages/server-contract/src/public-api.ts: /projects get`
 - `api-route: packages/server-contract/src/public-api.ts: /projects post`
 - `api-route: packages/server-contract/src/public-api.ts: /projects/:id delete`
@@ -741,14 +890,19 @@ has been exercised or that every behavior has been understood.
 - `api-route: packages/server-contract/src/public-api.ts: /settings/experiments put`
 - `api-route: packages/server-contract/src/public-api.ts: /settings/general put`
 - `api-route: packages/server-contract/src/public-api.ts: /settings/keyboard put`
+- `api-route: packages/server-contract/src/public-api.ts: /settings/machine-environment get`
+- `api-route: packages/server-contract/src/public-api.ts: /settings/machine-environment put`
 - `api-route: packages/server-contract/src/public-api.ts: /settings/themes get`
+- `api-route: packages/server-contract/src/public-api.ts: /settings/themes/:id get`
 - `api-route: packages/server-contract/src/public-api.ts: /sidebar-bootstrap get`
 - `api-route: packages/server-contract/src/public-api.ts: /system/attention get`
 - `api-route: packages/server-contract/src/public-api.ts: /system/cli-skills get`
 - `api-route: packages/server-contract/src/public-api.ts: /system/cli-skills/install post`
 - `api-route: packages/server-contract/src/public-api.ts: /system/config get`
 - `api-route: packages/server-contract/src/public-api.ts: /system/config/reload post`
+- `api-route: packages/server-contract/src/public-api.ts: /system/environment-providers get`
 - `api-route: packages/server-contract/src/public-api.ts: /system/execution-options get`
+- `api-route: packages/server-contract/src/public-api.ts: /system/machine-providers get`
 - `api-route: packages/server-contract/src/public-api.ts: /system/providers get`
 - `api-route: packages/server-contract/src/public-api.ts: /system/providers/:id/logo get`
 - `api-route: packages/server-contract/src/public-api.ts: /system/providers/state get`
@@ -772,10 +926,10 @@ has been exercised or that every behavior has been understood.
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id delete`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id get`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id patch`
-- `api-route: packages/server-contract/src/public-api.ts: /threads/:id/archive post`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/archive-all post`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/child-summary get`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/compact post`
+- `api-route: packages/server-contract/src/public-api.ts: /threads/:id/context get`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/context/clear post`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/conversation-outline get`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/default-execution-options get`
@@ -796,6 +950,8 @@ has been exercised or that every behavior has been understood.
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/pin post`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/pin-order patch`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/plan/cancel post`
+- `api-route: packages/server-contract/src/public-api.ts: /threads/:id/plugin-metadata get`
+- `api-route: packages/server-contract/src/public-api.ts: /threads/:id/plugin-metadata patch`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/prompt-history get`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/queued-messages get`
 - `api-route: packages/server-contract/src/public-api.ts: /threads/:id/queued-messages post`
@@ -829,7 +985,7 @@ has been exercised or that every behavior has been understood.
 
 ## server-and-daemon
 
-312 source files. Recipes: [navigation](features/navigation.md), [projects-environments](features/projects-environments.md), [composer](features/composer.md), [execution-controls](features/execution-controls.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [settings](features/settings.md), [extensions](features/extensions.md), [hosts-updates](features/hosts-updates.md), [compatibility-api](features/compatibility-api.md), [responsive-accessibility](features/responsive-accessibility.md).
+366 source files. Recipes: [navigation](features/navigation.md), [projects-environments](features/projects-environments.md), [composer](features/composer.md), [execution-controls](features/execution-controls.md), [interactions](features/interactions.md), [timeline](features/timeline.md), [workspace-panels](features/workspace-panels.md), [settings](features/settings.md), [extensions](features/extensions.md), [hosts-updates](features/hosts-updates.md), [compatibility-api](features/compatibility-api.md), [responsive-accessibility](features/responsive-accessibility.md).
 
 ## settings-and-actions
 
@@ -874,6 +1030,7 @@ has been exercised or that every behavior has been understood.
 - `app-action: apps/app/src/lib/app-command-metadata.ts: workspace.openPreferred`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: appearance`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: archived`
+- `setting-or-key: apps/app/src/components/settings/settings-sections.ts: browser`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: community`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: experiments`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: files`
@@ -885,10 +1042,10 @@ has been exercised or that every behavior has been understood.
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: machines`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: marketplaces`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: plugins`
+- `setting-or-key: apps/app/src/components/settings/settings-sections.ts: projects`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: providers`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: sectionId`
 - `setting-or-key: apps/app/src/components/settings/settings-sections.ts: updates`
-- `setting-or-key: apps/app/src/components/settings/settings-sections.ts: usage`
 - `setting-or-key: apps/app/src/lib/app-command-metadata.ts: command`
 - `setting-or-key: apps/app/src/lib/app-command-metadata.ts: commandId`
 - `setting-or-key: apps/app/src/lib/app-command-metadata.ts: commands`
@@ -896,16 +1053,22 @@ has been exercised or that every behavior has been understood.
 - `setting-or-key: apps/app/src/lib/app-command-metadata.ts: id`
 - `setting-or-key: apps/app/src/lib/app-command-metadata.ts: label`
 - `setting-or-key: apps/app/src/lib/app-command-metadata.ts: paletteVisible`
+- `setting-or-key: packages/domain/src/app-settings.ts: defaultMachineAccess`
 - `setting-or-key: packages/domain/src/app-settings.ts: defaultProviderId`
+- `setting-or-key: packages/domain/src/app-settings.ts: machineGitCredentialsEnabled`
+- `setting-or-key: packages/domain/src/app-settings.ts: machineServerUrl`
 - `setting-or-key: packages/domain/src/app-settings.ts: managedBranchPrefix`
 - `setting-or-key: packages/domain/src/app-settings.ts: message`
+- `setting-or-key: packages/domain/src/app-settings.ts: providerCompletedTurnDisplay`
 - `setting-or-key: packages/domain/src/app-settings.ts: providerOrder`
+- `setting-or-key: packages/domain/src/app-settings.ts: showDiagnosticEvents`
 - `setting-or-key: packages/domain/src/app-settings.ts: showKeyboardHints`
 - `setting-or-key: packages/domain/src/app-settings.ts: showUnhandledProviderEvents`
 - `setting-or-key: packages/domain/src/app-settings.ts: steerActiveThreadOnEnter`
 - `setting-or-key: packages/domain/src/app-settings.ts: streamerMode`
+- `setting-or-key: packages/domain/src/app-settings.ts: telemetryEnabled`
 - `setting-or-key: packages/domain/src/experiments.ts: changelogPreview`
-- `setting-or-key: packages/domain/src/experiments.ts: editMessages`
 - `setting-or-key: packages/domain/src/experiments.ts: mobileApp`
+- `setting-or-key: packages/domain/src/experiments.ts: multiMachinePicker`
 - `setting-or-key: packages/domain/src/experiments.ts: sidebarProgressiveDisclosure`
 - `setting-or-key: packages/domain/src/experiments.ts: timelineWindowing`

@@ -2,6 +2,7 @@ import {
   claimNextQueuedThreadMessageGroup,
   claimQueuedThreadMessageGroup,
   createQueuedThreadMessageInTransaction,
+  deleteQueuedThreadMessageInTransaction,
   deleteClaimedQueuedThreadMessageBatchInTransaction,
   getEnvironment,
   getHost,
@@ -12,6 +13,7 @@ import {
   isThreadQueueAutoSendPaused,
   releaseQueuedMessageClaim,
   releaseStaleQueuedMessageClaims,
+  listQueuedThreadMessages,
   type DbQueryConnection,
   type QueuedThreadMessageGroupClaimPolicy,
   type QueuedThreadMessageGroupEligibility,
@@ -52,6 +54,8 @@ import {
   buildExecutionOptions,
   prepareTurnSubmitCommandPayload,
 } from "./thread-commands.js";
+import { resolvePluginMentionContextInputs } from "../plugins/plugin-mentions.js";
+import { resolveThreadMentionContextInputs } from "./thread-mentions.js";
 import {
   prependDeferredFirstTurnContext,
   requireDeferredFirstTurnContextCurrent,
@@ -78,7 +82,6 @@ import {
 } from "./queue-waits.js";
 import { recordQueuedMessageDrainFailure } from "./queue-drain-failure.js";
 import {
-  appendPluginMentionContext,
   captureUserMessageSentTelemetry,
   ensureThreadQueueIsWritable,
   formatAgentThreadInput,
@@ -88,6 +91,7 @@ import { recordAcceptedPromptHistoryEntry } from "../prompt-history.js";
 import { requireThreadCommandEnvironment } from "./thread-command-environment.js";
 import { applyLoggedThreadLifecycleEventInTransaction } from "./lifecycle-outcome.js";
 import { buildThreadStatusChangeMetadata } from "./thread-runtime-display.js";
+import { isEnterWorktreeContinuationContent } from "./worktree-promotion.js";
 import {
   goneThreadEnvironmentDetails,
   threadEnvironmentUnavailableDetails,
@@ -238,6 +242,13 @@ export async function createQueuedMessageForThread(
           throw new ApiError(404, "thread_not_found", "Thread not found");
         }
         const { hasProviderSession } = admitQueuedMessage(tx, currentThread);
+        if (senderThreadId === null) {
+          for (const queuedMessage of listQueuedThreadMessages(tx, thread.id)) {
+            if (isEnterWorktreeContinuationContent(queuedMessage.content)) {
+              deleteQueuedThreadMessageInTransaction(tx, queuedMessage.id);
+            }
+          }
+        }
         const queuedMessage = createQueuedThreadMessageInTransaction(tx, {
           threadId: thread.id,
           content: payload.input,
@@ -478,10 +489,21 @@ async function sendClaimedQueuedMessageForIdleProviderThread(
     }),
   );
   let input = flattenPromptInputGroups(inputGroups);
-  ({ input, inputGroups } = await appendPluginMentionContext({
-    input,
-    inputGroups,
-  }));
+  const mentionContext = [
+    ...resolveThreadMentionContextInputs(deps.db, {
+      input,
+      currentThreadId: thread.id,
+    }),
+    ...(await resolvePluginMentionContextInputs(input)),
+  ];
+  if (mentionContext.length > 0) {
+    input = [...input, ...mentionContext];
+    const lastGroup = inputGroups[inputGroups.length - 1]!;
+    inputGroups = [
+      ...inputGroups.slice(0, -1),
+      [...lastGroup, ...mentionContext],
+    ];
+  }
   const deferredFirstTurnContext = resolveDeferredFirstTurnContext(
     deps.db,
     thread.id,

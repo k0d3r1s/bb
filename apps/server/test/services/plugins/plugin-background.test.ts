@@ -21,6 +21,7 @@ import {
 } from "../../../src/services/plugins/plugin-service.js";
 import { testLogger } from "../../helpers/test-app.js";
 import { createNoopTelemetryService } from "../../../src/services/system/telemetry.js";
+import { WorkQuiesceService } from "../../../src/services/system/work-quiesce.js";
 
 const logger = testLogger as unknown as Logger;
 
@@ -184,6 +185,164 @@ describe("plugin background services", () => {
       "bb-plugin-kept": 1,
     });
     expect(await service.resumeSuspendedPlugins()).toEqual([]);
+  });
+
+  it("defers service starts while sealed and resumes them after release", async () => {
+    const quiesce = new WorkQuiesceService({
+      db,
+      local: {
+        quiesce: () => service.quiesceBackgroundWork(),
+        release: () => service.resumeBackgroundWork(),
+      },
+      transport: {
+        listConnectedHostIds: () => [],
+        send: async () => {
+          throw new Error("no host barrier expected");
+        },
+      },
+    });
+    await quiesce.acquire({
+      operationId: "update-1",
+      ownerSecret: "owner-secret",
+      reason: "VPS update",
+      ttlMs: 60_000,
+    });
+    await quiesce.seal({
+      operationId: "update-1",
+      ownerSecret: "owner-secret",
+      candidateRelease: "candidate",
+      previousRelease: "previous",
+      allowActiveWork: false,
+    });
+    const rootDir = await writePlugin(workDir, {
+      name: "bb-plugin-quiesced-service",
+      serverSource: `
+        export default function plugin(bb: any) {
+          const g = globalThis as any;
+          g.__quiescedStarts = g.__quiescedStarts ?? 0;
+          bb.background.service("worker", {
+            start(signal: any) {
+              g.__quiescedStarts += 1;
+              return new Promise<void>((resolve) => {
+                signal.addEventListener("abort", () => resolve());
+              });
+            },
+          });
+        }
+      `,
+    });
+
+    const entry = await service.installPath(rootDir);
+    expect(globals.__quiescedStarts).toBe(0);
+    expect(entry.services).toEqual([{ name: "worker", state: "stopped" }]);
+
+    quiesce.transition({
+      operationId: "update-1",
+      ownerSecret: "owner-secret",
+      expectedPhase: "sealed",
+      phase: "activating",
+    });
+    quiesce.transition({
+      operationId: "update-1",
+      ownerSecret: "owner-secret",
+      expectedPhase: "activating",
+      phase: "verifying",
+    });
+    await quiesce.release({
+      operationId: "update-1",
+      ownerSecret: "owner-secret",
+      resolution: "completed",
+    });
+
+    expect(globals.__quiescedStarts).toBe(1);
+    expect(
+      service.list().find((plugin) => plugin.id === "quiesced-service")
+        ?.services,
+    ).toEqual([{ name: "worker", state: "running" }]);
+  });
+
+  it("reloads an existing service while sealed and starts the replacement after release", async () => {
+    const rootDir = await writePlugin(workDir, {
+      name: "bb-plugin-quiesced-reload",
+      serverSource: `
+        export default function plugin(bb: any) {
+          const g = globalThis as any;
+          g.__quiescedReloadStarts = g.__quiescedReloadStarts ?? 0;
+          g.__quiescedReloadAborts = g.__quiescedReloadAborts ?? 0;
+          bb.background.service("worker", {
+            start(signal: any) {
+              g.__quiescedReloadStarts += 1;
+              return new Promise<void>((resolve) => {
+                signal.addEventListener("abort", () => {
+                  g.__quiescedReloadAborts += 1;
+                  resolve();
+                });
+              });
+            },
+          });
+        }
+      `,
+    });
+    await service.installPath(rootDir);
+    const quiesce = new WorkQuiesceService({
+      db,
+      local: {
+        quiesce: () => service.quiesceBackgroundWork(),
+        release: () => service.resumeBackgroundWork(),
+      },
+      transport: {
+        listConnectedHostIds: () => [],
+        send: async () => {
+          throw new Error("no host barrier expected");
+        },
+      },
+    });
+
+    await quiesce.acquire({
+      operationId: "update-reload",
+      ownerSecret: "owner-secret",
+      reason: "VPS update",
+      ttlMs: 60_000,
+    });
+    await quiesce.seal({
+      operationId: "update-reload",
+      ownerSecret: "owner-secret",
+      candidateRelease: "candidate",
+      previousRelease: "previous",
+      allowActiveWork: false,
+    });
+    await service.reload("quiesced-reload");
+
+    expect(globals.__quiescedReloadStarts).toBe(1);
+    expect(globals.__quiescedReloadAborts).toBe(1);
+    expect(
+      service.list().find((plugin) => plugin.id === "quiesced-reload")
+        ?.services,
+    ).toEqual([{ name: "worker", state: "stopped" }]);
+
+    quiesce.transition({
+      operationId: "update-reload",
+      ownerSecret: "owner-secret",
+      expectedPhase: "sealed",
+      phase: "activating",
+    });
+    quiesce.transition({
+      operationId: "update-reload",
+      ownerSecret: "owner-secret",
+      expectedPhase: "activating",
+      phase: "verifying",
+    });
+    await quiesce.release({
+      operationId: "update-reload",
+      ownerSecret: "owner-secret",
+      resolution: "completed",
+    });
+
+    expect(globals.__quiescedReloadStarts).toBe(2);
+    expect(
+      service.list().find((plugin) => plugin.id === "quiesced-reload")
+        ?.services,
+    ).toEqual([{ name: "worker", state: "running" }]);
   });
 
   it("rejects new interactions while a plugin is disposing", async () => {
@@ -630,6 +789,67 @@ describe("plugin schedules", () => {
     service.setSchedulesPaused(false);
     await service.sweepDueSchedules(Date.now());
     expect(globals.__tickRuns).toBe(1);
+  });
+
+  it("leaves a due schedule unclaimed while work is sealed", async () => {
+    await installTicker();
+    const dueAt = Date.now() - 60_000;
+    setNextRunAt(db, "ticker", "tick", dueAt);
+    const quiesce = new WorkQuiesceService({
+      db,
+      local: {
+        quiesce: () => service.quiesceBackgroundWork(),
+        release: () => service.resumeBackgroundWork(),
+      },
+      transport: {
+        listConnectedHostIds: () => [],
+        send: async () => {
+          throw new Error("no host barrier expected");
+        },
+      },
+    });
+    await quiesce.acquire({
+      operationId: "update-schedule",
+      ownerSecret: "owner-secret",
+      reason: "VPS update",
+      ttlMs: 60_000,
+    });
+    await quiesce.seal({
+      operationId: "update-schedule",
+      ownerSecret: "owner-secret",
+      candidateRelease: "candidate",
+      previousRelease: "previous",
+      allowActiveWork: false,
+    });
+
+    await service.sweepDueSchedules(Date.now());
+
+    expect(globals.__tickRuns).toBe(0);
+    expect(listPluginSchedules(db, "ticker")[0]?.nextRunAt).toBe(dueAt);
+
+    quiesce.transition({
+      operationId: "update-schedule",
+      ownerSecret: "owner-secret",
+      expectedPhase: "sealed",
+      phase: "activating",
+    });
+    quiesce.transition({
+      operationId: "update-schedule",
+      ownerSecret: "owner-secret",
+      expectedPhase: "activating",
+      phase: "verifying",
+    });
+    await quiesce.release({
+      operationId: "update-schedule",
+      ownerSecret: "owner-secret",
+      resolution: "completed",
+    });
+    await service.sweepDueSchedules(Date.now());
+
+    expect(globals.__tickRuns).toBe(1);
+    expect(listPluginSchedules(db, "ticker")[0]?.nextRunAt).toBeGreaterThan(
+      dueAt,
+    );
   });
 
   it("claims with CAS: parallel sweeps run the fn exactly once", async () => {

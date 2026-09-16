@@ -36,6 +36,7 @@ import type {
   ThreadOriginKind,
   ThreadStatus,
   ThreadVisibility,
+  ThreadWorktreePromotion,
 } from "@bb/domain";
 import type { AppDeps } from "../../src/types.js";
 import { registerTestHostRpcCapture } from "./commands.js";
@@ -201,9 +202,11 @@ export function seedThread(
     originPluginId?: string | null;
     titleFallback?: string | null;
     visibility?: ThreadVisibility;
+    worktreePromotion?: ThreadWorktreePromotion;
   },
 ) {
   return createThread(deps.db, deps.hub, {
+    worktreePromotion: args.worktreePromotion ?? "armed",
     projectId: args.projectId,
     environmentId: args.environmentId ?? null,
     providerId: args.providerId ?? "codex",

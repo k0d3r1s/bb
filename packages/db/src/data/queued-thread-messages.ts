@@ -635,17 +635,40 @@ export function createQueuedThreadMessageInTransaction(
     .get();
 }
 
+function runImmediateQueueMutation<T>(
+  db: DbConnection,
+  notifier: DbNotifier,
+  operation: (tx: DbTransaction) => T,
+  threadIdForResult: (result: T) => string | null,
+): T {
+  const result = db.transaction(operation, { behavior: "immediate" });
+  const threadId = threadIdForResult(result);
+  if (threadId) notifier.notifyThread(threadId, ["queue-changed"]);
+  return result;
+}
+
 export function createQueuedThreadMessage(
   db: DbConnection,
   notifier: DbNotifier,
   input: CreateQueuedThreadMessageInput,
 ) {
-  const row = db.transaction(
+  return runImmediateQueueMutation(
+    db,
+    notifier,
     (tx) => createQueuedThreadMessageInTransaction(tx, input),
-    { behavior: "immediate" },
+    () => input.threadId,
   );
-  notifier.notifyThread(input.threadId, ["queue-changed"]);
-  return row;
+}
+
+export function deleteQueuedThreadMessageInTransaction(
+  tx: DbTransaction,
+  id: string,
+): QueuedThreadMessageRow | null {
+  const existing = getQueuedThreadMessage(tx, id);
+  if (!existing) return null;
+  clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing);
+  tx.delete(queuedThreadMessages).where(eq(queuedThreadMessages.id, id)).run();
+  return existing;
 }
 
 export function updateQueuedThreadMessage(
@@ -1971,19 +1994,11 @@ export function deleteQueuedThreadMessage(
   notifier: DbNotifier,
   id: string,
 ) {
-  const existing = db.transaction(
-    (tx) => {
-      const existing = getQueuedThreadMessage(tx, id);
-      if (!existing) return null;
-      clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing);
-      tx.delete(queuedThreadMessages)
-        .where(eq(queuedThreadMessages.id, id))
-        .run();
-      return existing;
-    },
-    { behavior: "immediate" },
+  const existing = runImmediateQueueMutation(
+    db,
+    notifier,
+    (tx) => deleteQueuedThreadMessageInTransaction(tx, id),
+    (result) => result?.threadId ?? null,
   );
-  if (!existing) return false;
-  notifier.notifyThread(existing.threadId, ["queue-changed"]);
-  return true;
+  return existing !== null;
 }

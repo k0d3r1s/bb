@@ -3,7 +3,8 @@ import {
   typedRoutes,
   type HostDaemonInternalSchema,
 } from "@bb/host-daemon-contract";
-import type { ToolCallResponse } from "@bb/domain";
+import type { Thread, ToolCallResponse } from "@bb/domain";
+import type { EnvironmentRow } from "@bb/db";
 import type { Hono } from "hono";
 import type { AppDeps } from "../types.js";
 import { ApiError } from "../errors.js";
@@ -13,7 +14,11 @@ import {
   invokePluginAgentTool,
 } from "../services/plugins/plugin-agent-contributions.js";
 import {
+  ENTER_WORKTREE_TOOL_NAME,
+  handleEnterWorktreeToolCall,
+  handleKeepCheckoutToolCall,
   handleUpdateEnvironmentDirectoryToolCall,
+  KEEP_CHECKOUT_TOOL_NAME,
   UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME,
 } from "../services/threads/thread-environment-directory.js";
 import { requireAuthenticatedDaemonSession } from "./session-state.js";
@@ -47,6 +52,28 @@ function streamToolCallResponse(
   });
 }
 
+async function invokeEnvironmentTool(
+  deps: AppDeps,
+  tool: string,
+  input: unknown,
+  args: {
+    currentEnvironment: EnvironmentRow;
+    thread: Thread;
+    turnId: string;
+  },
+): Promise<ToolCallResponse | null> {
+  if (tool === UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME) {
+    return handleUpdateEnvironmentDirectoryToolCall(deps, { ...args, input });
+  }
+  if (tool === ENTER_WORKTREE_TOOL_NAME) {
+    return handleEnterWorktreeToolCall(deps, { ...args, input });
+  }
+  if (tool === KEEP_CHECKOUT_TOOL_NAME) {
+    return handleKeepCheckoutToolCall(deps, { ...args, input });
+  }
+  return null;
+}
+
 export function registerInternalToolCallRoutes(app: Hono, deps: AppDeps): void {
   const { post } = typedRoutes<HostDaemonInternalSchema>(app, {
     onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
@@ -73,15 +100,18 @@ export function registerInternalToolCallRoutes(app: Hono, deps: AppDeps): void {
         );
       }
 
-      if (payload.tool === UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME) {
-        return context.json(
-          await handleUpdateEnvironmentDirectoryToolCall(deps, {
-            currentEnvironment: environment,
-            input: payload.arguments,
-            thread,
-            turnId: payload.turnId,
-          }),
-        );
+      const environmentToolResponse = await invokeEnvironmentTool(
+        deps,
+        payload.tool,
+        payload.arguments,
+        {
+          currentEnvironment: environment,
+          thread,
+          turnId: payload.turnId,
+        },
+      );
+      if (environmentToolResponse) {
+        return context.json(environmentToolResponse);
       }
 
       const pluginTool = findPluginAgentTool(payload.tool);

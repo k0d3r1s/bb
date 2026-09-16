@@ -66,6 +66,8 @@ import {
 } from "../lib/lifecycle-api-errors.js";
 import { validatePromptAttachmentReferences } from "../projects/attachments.js";
 import { resolvePluginMentionContextInputs } from "../plugins/plugin-mentions.js";
+import { resolveThreadMentionContextInputs } from "./thread-mentions.js";
+import { requireWorkAdmissionOpen } from "../system/work-admission.js";
 import { clearThreadContext } from "./thread-context-clear.js";
 import { withThreadSendGuard } from "./thread-context-mutation-guard.js";
 import {
@@ -508,10 +510,23 @@ async function sendThreadMessageWithoutContextClear(
             senderThreadId,
           })
         : payload.input;
-  ({ input, inputGroups } = await appendPluginMentionContext({
-    input,
-    ...(inputGroups !== undefined ? { inputGroups } : {}),
-  }));
+  const mentionContext = [
+    ...resolveThreadMentionContextInputs(deps.db, {
+      input,
+      currentThreadId: thread.id,
+    }),
+    ...(await resolvePluginMentionContextInputs(input)),
+  ];
+  if (mentionContext.length > 0) {
+    input = [...input, ...mentionContext];
+    if (inputGroups !== undefined && inputGroups.length > 0) {
+      const lastGroup = inputGroups[inputGroups.length - 1]!;
+      inputGroups = [
+        ...inputGroups.slice(0, -1),
+        [...lastGroup, ...mentionContext],
+      ];
+    }
+  }
   const deferredFirstTurnContext = resolveDeferredFirstTurnContext(
     deps.db,
     thread.id,
@@ -523,6 +538,7 @@ async function sendThreadMessageWithoutContextClear(
   const beforeAppendInTransaction: SendThreadMessageTransactionPreflight = ({
     tx,
   }) => {
+    requireWorkAdmissionOpen(tx);
     args.beforeAppendInTransaction?.({ tx });
     if (deferredFirstTurnContext) {
       requireDeferredFirstTurnContextCurrent(tx, {

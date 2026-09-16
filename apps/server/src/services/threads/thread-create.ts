@@ -30,10 +30,9 @@ import {
   resolveProjectExecutionDefaultsForCreate,
 } from "./project-execution-defaults.js";
 import { validatePromptAttachmentReferences } from "../projects/attachments.js";
-import {
-  appendPluginMentionContext,
-  captureUserMessageSentTelemetry,
-} from "./thread-send.js";
+import { captureUserMessageSentTelemetry } from "./thread-send.js";
+import { resolvePluginMentionContextInputs } from "../plugins/plugin-mentions.js";
+import { resolveThreadMentionContextInputs } from "./thread-mentions.js";
 import {
   attemptDispatch,
   hostIdForEnvironmentIntent,
@@ -57,6 +56,7 @@ import {
 import {
   buildProviderThreadExecutionDefaults,
   resolveCreateThreadEnvironment,
+  resolveCreateThreadWorktreePromotion,
 } from "./thread-default-policy.js";
 import { assertValidParentThread } from "./thread-parent.js";
 import {
@@ -545,9 +545,16 @@ export async function createThreadFromRequest(
   }
   const pluginMetadata = resolveCreateThreadPluginMetadata(rawRequestInput);
   const requestInput = { ...rawRequestInput };
-  requestInput.input = (
-    await appendPluginMentionContext({ input: requestInput.input })
-  ).input;
+  const titleFallback = deriveTitleFallback(requestInput.input);
+  const mentionContext = [
+    ...resolveThreadMentionContextInputs(deps.db, {
+      input: requestInput.input,
+    }),
+    ...(await resolvePluginMentionContextInputs(requestInput.input)),
+  ];
+  if (mentionContext.length > 0) {
+    requestInput.input = [...requestInput.input, ...mentionContext];
+  }
   assertProjectWorkspaceCompatibility(project, requestInput);
   const originKind = requestInput.originKind ?? null;
   const sourceThreadId =
@@ -685,7 +692,11 @@ export async function createThreadFromRequest(
     }),
     environment: requestedEnvironment,
     providerId,
-    titleFallback: deriveTitleFallback(requestInput.input),
+    titleFallback,
+    worktreePromotion: resolveCreateThreadWorktreePromotion({
+      requestedEnvironment: requestInput.environment,
+      resolvedEnvironment: requestedEnvironment,
+    }),
   };
   const resolvedEnvironment =
     requestedEnvironment.type === "provider"

@@ -1,5 +1,7 @@
 import { serve } from "@hono/node-server";
-import { existsSync } from "node:fs";
+// oxlint-disable-next-line no-restricted-imports
+import { existsSync, realpathSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ServerConfig } from "@bb/config/server";
@@ -50,6 +52,10 @@ import {
   retireServerProcess as retireProcessWithDeadline,
   SERVER_RETIRE_FORCE_EXIT_MS,
 } from "./services/server-move/retire.js";
+import { hostDaemonCommandResultSchemaByType } from "@bb/host-daemon-contract";
+import { WorkQuiesceService } from "./services/system/work-quiesce.js";
+import { startAdminServer } from "./admin-server.js";
+import type { HostEnvironmentSync } from "./services/hosts/host-environment-sync.js";
 
 interface StartHttpListenerArgs {
   fetch: Parameters<typeof serve>[0]["fetch"];
@@ -123,6 +129,42 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
         })
       : null;
   const hub = new NotificationHub();
+  let pluginServiceForMaintenance: PluginService | undefined;
+  let hostEnvironmentSyncForMaintenance: HostEnvironmentSync | undefined;
+  const workQuiesce = new WorkQuiesceService({
+    db,
+    local: {
+      quiesce: async () => pluginServiceForMaintenance?.quiesceBackgroundWork(),
+      release: () => {
+        pluginServiceForMaintenance?.resumeBackgroundWork();
+        hostEnvironmentSyncForMaintenance?.resumeAfterQuiesce();
+      },
+    },
+    transport: {
+      listConnectedHostIds: () => hub.listConnectedHostIds(),
+      send: async (hostId, command) => {
+        const response = await hub.requestHostOnlineRpc({
+          hostId,
+          allowUndispatchable: true,
+          timeoutMs: 30_000,
+          message: {
+            type: "host-rpc.request",
+            requestId: `maintenance_${randomUUID()}`,
+            command,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`${response.errorCode}: ${response.errorMessage}`);
+        }
+        if (response.commandType !== command.type) {
+          throw new Error("host maintenance barrier result type mismatch");
+        }
+        return hostDaemonCommandResultSchemaByType[command.type].parse(
+          response.result,
+        );
+      },
+    },
+  });
   const watchInterests = new WatchInterestCoordinator({ db, hub });
   const sharedPorts = new HostSharedPortCoordinator({ db, hub });
   const workspaceReadCaches = new WorkspaceReadCaches({ hub });
@@ -233,6 +275,7 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     pluginCatalogService,
     pluginService,
     serverMove,
+    hostEnvironmentSync,
   } = createApp(
     {
       appVersion,
@@ -254,6 +297,7 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
       watchInterests,
       sharedPorts,
       workspaceReadCaches,
+      workQuiesce,
     },
     {
       serverMove: {
@@ -277,6 +321,8 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     },
     { sessions: serverImport.importedDaemonSessions },
   );
+  pluginServiceForMaintenance = pluginService;
+  hostEnvironmentSyncForMaintenance = hostEnvironmentSync;
   const eventLoopStallMonitor = startEventLoopStallMonitor({ logger });
 
   const sweepDeps = {
@@ -313,6 +359,12 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     );
   }
 
+  const adminServer = await startAdminServer({
+    connectedHostIds: () => hub.listConnectedHostIds(),
+    dataDir: serverConfig.BB_DATA_DIR,
+    releaseIdentity: realpathSync(process.cwd()),
+    service: workQuiesce,
+  });
   const server = startHttpListener({
     fetch: app.fetch,
     serverConfig,
@@ -393,6 +445,7 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
       });
       await closeWebSockets();
       await closeServer;
+      await adminServer.close();
     })();
     return shutdownPromise;
   };

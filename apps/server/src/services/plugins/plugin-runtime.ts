@@ -40,9 +40,12 @@ import { getPluginBuildToolchain } from "./build-toolchain.js";
 import { createNodeBbSdk, type BbSdk } from "@bb/sdk";
 import { experimental_aiServicesHostContract } from "@get-bb/plugin-sdk/ai-services";
 import {
+  admitExecutionStart,
   getInstalledPlugin,
   listInstalledPlugins,
+  markWorkAdmissionActive,
   prunePluginSchedules,
+  settleWorkAdmission,
   upsertPluginSchedule,
   type InstalledPluginRow,
 } from "@bb/db";
@@ -321,6 +324,7 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
   const disposingPluginIds = new Set<string>();
   const builtinSourceWatchers: FSWatcher[] = [];
   const ownedRootUrls = new Set<string>();
+  let backgroundWorkQuiesced = false;
 
   const statuses = new Map<
     string,
@@ -450,7 +454,22 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
   const serviceContext = new AsyncLocalStorage<ServiceInstance>();
 
   function runService(id: string, service: ServiceRuntime): void {
+    const admission = admitExecutionStart(deps.db, {
+      commandType: "plugin.service",
+      transport: "settled",
+      context: { pluginId: id, service: service.record.name },
+    });
+    if (admission.kind === "quiesced") {
+      service.state = "quiesced";
+      return;
+    }
+    if (!markWorkAdmissionActive(deps.db, admission.token)) {
+      settleWorkAdmission(deps.db, admission.token);
+      service.state = "quiesced";
+      return;
+    }
     const controller = new AbortController();
+    service.admission = admission.token;
     service.controller = controller;
     service.state = "running";
     service.startedAt = Date.now();
@@ -461,7 +480,12 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
       uncaughtError: undefined,
     };
     const current = serviceContext.run(instance, async () => {
-      await service.record.start(controller.signal);
+      try {
+        await service.record.start(controller.signal);
+      } finally {
+        settleWorkAdmission(deps.db, admission.token);
+        if (service.admission === admission.token) service.admission = null;
+      }
     });
     service.current = current;
     current.then(
@@ -526,6 +550,10 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
     service.controller = null;
     if (service.disposed) return;
     const name = service.record.name;
+    if (service.state === "quiesced") {
+      if (!backgroundWorkQuiesced) runService(id, service);
+      return;
+    }
     if (!outcome.crashed) {
       service.state = "stopped";
       logger.info(`[plugin:${id}] service ${name} stopped`);
@@ -607,6 +635,43 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
         }
       }
       service.state = "stopped";
+    }
+  }
+
+  async function quiesceBackgroundWork(): Promise<void> {
+    backgroundWorkQuiesced = true;
+    const running: Promise<void>[] = [];
+    for (const plugin of loaded.values()) {
+      for (const service of plugin.services) {
+        if (service.restartTimer !== null) {
+          clearTimeout(service.restartTimer);
+          service.restartTimer = null;
+          service.state = "quiesced";
+        }
+        if (service.current !== null) {
+          service.state = "quiesced";
+          service.controller?.abort();
+          running.push(service.current);
+        }
+      }
+    }
+    await Promise.all(
+      running.map((current) => settledWithin(current, serviceStopTimeoutMs)),
+    );
+  }
+
+  function resumeBackgroundWork(): void {
+    backgroundWorkQuiesced = false;
+    for (const [id, plugin] of loaded) {
+      for (const service of plugin.services) {
+        if (
+          service.state === "quiesced" &&
+          service.current === null &&
+          !service.disposed
+        ) {
+          runService(id, service);
+        }
+      }
     }
   }
 
@@ -1668,6 +1733,7 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
       manifest,
       handle,
       services: handle.backgroundServices.map((record) => ({
+        admission: null,
         record,
         state: "stopped" as const,
         controller: null,
@@ -1869,6 +1935,8 @@ export function createPluginRuntime(context: PluginRuntimeContext) {
     loadAll,
     loaded,
     loadOne,
+    quiesceBackgroundWork,
+    resumeBackgroundWork,
     brandingAssets,
     setDevBuildProblem,
     setLoadHold,

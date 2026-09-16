@@ -53,6 +53,7 @@ import { registerInternalHostRoutes } from "./internal/hosts.js";
 import { registerInternalInteractiveRequestRoutes } from "./internal/interactive-requests.js";
 import { registerInternalPluginHostArtifactRoutes } from "./internal/plugin-host-artifacts.js";
 import { registerInternalSessionRoutes } from "./internal/session.js";
+import type { HostEnvironmentSync } from "./services/hosts/host-environment-sync.js";
 import { registerInternalSkillRoutes } from "./internal/skills.js";
 import { registerInternalToolCallRoutes } from "./internal/tool-calls.js";
 import {
@@ -139,6 +140,7 @@ interface ServerApp {
   pluginService: PluginService;
   pluginCatalogService: PluginCatalogService;
   serverMove: ServerMoveCoordinator;
+  hostEnvironmentSync: HostEnvironmentSync;
 }
 
 interface CloseWebSocketServerArgs {
@@ -780,14 +782,19 @@ export function createApp(
 
   const internalApi = new Hono();
   registerInternalHostRoutes(internalApi, deps);
-  registerInternalSessionRoutes(internalApi, deps, pluginService, {
-    movedTo: () => serverMove.movedTo(),
-    pendingMoveId: () => pendingServerMove?.moveId ?? null,
-    sessionOpened: createManualServerImportCompletion({
-      deps,
-      pending: serverMoveOptions.manualImportPending,
-    }),
-  });
+  const hostEnvironmentSync = registerInternalSessionRoutes(
+    internalApi,
+    deps,
+    pluginService,
+    {
+      movedTo: () => serverMove.movedTo(),
+      pendingMoveId: () => pendingServerMove?.moveId ?? null,
+      sessionOpened: createManualServerImportCompletion({
+        deps,
+        pending: serverMoveOptions.manualImportPending,
+      }),
+    },
+  );
   registerInternalServerMoveRoutes(internalApi, deps, {
     pending: pendingServerMove,
     serverMove,
@@ -872,11 +879,17 @@ export function createApp(
         sessionId: context.req.query("sessionId") ?? null,
       });
       return {
-        onOpen: (_event, socket) =>
-          onDaemonSocketOpen(deps, {
+        onOpen: (_event, socket) => {
+          void onDaemonSocketOpen(deps, {
             ...websocketContext,
             socket,
-          }),
+          }).catch((error) => {
+            deps.logger.error(
+              { err: error, hostId: websocketContext.hostId },
+              "Daemon maintenance gate failed during registration",
+            );
+          });
+        },
         onMessage: (event, socket) =>
           onDaemonSocketMessage(
             deps,
@@ -912,5 +925,6 @@ export function createApp(
     pluginService,
     pluginCatalogService,
     serverMove,
+    hostEnvironmentSync,
   };
 }

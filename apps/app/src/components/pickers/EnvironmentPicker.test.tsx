@@ -147,9 +147,12 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
     expect(screen.queryByText(ephemeralHost.name)).toBeNull();
     expect(
       screen.getByRole("option", { name: "No host connected" }),
@@ -157,6 +160,55 @@ describe("EnvironmentPickerUI", () => {
     expect(
       screen.queryByRole("option", { name: /Project checkout/u }),
     ).toBeNull();
+  });
+
+  it("separates the implicit checkout promotion from an explicit checkout", () => {
+    const onSelectProjectDefault = vi.fn();
+    const onSelectProvider = vi.fn();
+    render(
+      <EnvironmentPickerUI
+        value="project-default"
+        sources={sources}
+        host={host}
+        isLocal
+        providers={[checkoutProvider]}
+        onSelectProjectDefault={onSelectProjectDefault}
+        onSelectProvider={onSelectProvider}
+        modal={false}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }).textContent,
+    ).toContain("Checkout, then worktree");
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
+    expect(
+      screen
+        .getByRole("option", { name: /Checkout, then worktree/u })
+        .getAttribute("aria-current"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("option", { name: /Project checkout/u })
+        .getAttribute("aria-current"),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: /Project checkout/u }));
+    expect(onSelectProvider).toHaveBeenCalledWith(checkoutProvider, host.id);
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("option", { name: /Checkout, then worktree/u }),
+    );
+    expect(onSelectProjectDefault).toHaveBeenCalledOnce();
   });
 
   it.each([false, true])(
@@ -179,7 +231,7 @@ describe("EnvironmentPickerUI", () => {
       };
       const { rerender } = render(<EnvironmentPickerUI {...props} isLoading />);
       const trigger = screen.getByRole("button", {
-        name: "Environment",
+        name: /^Environment(?:$|:)/u,
       });
       expect(trigger.getAttribute("aria-busy")).toBe("true");
       expect(
@@ -205,7 +257,7 @@ describe("EnvironmentPickerUI", () => {
       ).toBeNull();
       expect(
         screen
-          .getByRole("button", { name: "Environment" })
+          .getByRole("button", { name: /^Environment(?:$|:)/u })
           .getAttribute("aria-busy"),
       ).toBe("false");
       fireEvent.click(
@@ -238,7 +290,9 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    const trigger = screen.getByRole("button", { name: "Environment" });
+    const trigger = screen.getByRole("button", {
+      name: /^Environment(?:$|:)/u,
+    });
     expect(trigger.dataset.promptboxShrinkableControl).toBe("");
     expect(
       trigger.querySelector<HTMLElement>("[data-promptbox-compact-label]")
@@ -274,9 +328,12 @@ describe("EnvironmentPickerUI", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
     expect(
       screen.queryByRole("option", { name: /New branch workspace/u }),
     ).toBeNull();
@@ -314,9 +371,12 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
     expect(
       screen.getByRole("option", { name: /Project checkout/u }),
     ).toBeTruthy();
@@ -345,9 +405,12 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     const providerItem = screen.getByRole("option", {
       name: /Project checkout/u,
@@ -380,9 +443,12 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     expect(
       screen.getByRole("option", { name: /Project checkout/u }),
@@ -419,9 +485,12 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     const branchItem = screen.getByRole("option", {
       name: /New branch workspace/u,
@@ -455,9 +524,12 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     const providerItem = screen.getByRole("option", {
       name: /Docker container/u,
@@ -484,9 +556,12 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
     const disabledItem = screen.getByRole("option", {
       name: /Docker container/u,
     });
@@ -529,9 +604,12 @@ describe("EnvironmentPickerUI", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
     const item = screen.getByRole("option", { name: /Optional sandbox/u });
     expect(item.getAttribute("aria-disabled")).toBe("false");
     expect(screen.queryByText(PROVIDER_INPUTS_CONTROL_MISSING_REASON)).toBe(
@@ -614,9 +692,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
   }
 
   it("shows search starting at three machines", () => {
@@ -638,7 +719,9 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+    );
     expect(
       screen.queryByRole("combobox", { name: "Search machines" }),
     ).toBeNull();
@@ -885,9 +968,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     expect(screen.queryByText(ephemeralHost.name)).toBeNull();
     expect(screen.getByRole("option", { name: /Modal Sandbox/u })).toBeTruthy();
@@ -939,9 +1025,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     const checkoutItems = screen.getAllByRole("option", {
       name: /Project checkout/u,
@@ -982,9 +1071,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     expect(
       screen.getByText(
@@ -1013,9 +1105,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     const checkoutItems = screen.getAllByRole("option", {
       name: /Project checkout/u,
@@ -1049,9 +1144,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
           modal={false}
         />,
       );
-      fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-        button: 0,
-      });
+      fireEvent.click(
+        screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+        {
+          button: 0,
+        },
+      );
 
       const checkoutItems = screen.getAllByRole("option", {
         name: /Project checkout/u,
@@ -1079,9 +1177,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     expect(screen.queryByText("Not set up for this project")).toBeNull();
     fireEvent.click(screen.getByRole("option", { name: "dev-vm" }));
@@ -1122,9 +1223,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     expect(
       screen.getAllByRole("option", { name: /Host sandbox/u }),
@@ -1150,9 +1254,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     fireEvent.click(screen.getByRole("option", { name: "dev-vm" }));
     expect(screen.queryByText(/Set up on dev-vm/u)).toBeNull();
@@ -1197,9 +1304,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     const providerItems = screen.getAllByRole("option", {
       name: /New branch workspace/u,
@@ -1208,9 +1318,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
     fireEvent.click(providerItems[1]!);
     expect(onSelectProvider).toHaveBeenCalledWith(branchProvider, studio.id);
 
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
     const sandboxItems = screen.getAllByRole("option", {
       name: /Docker container/u,
     });
@@ -1287,9 +1400,12 @@ describe("EnvironmentPickerUI multi-machine menu", () => {
         modal={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Environment" }), {
-      button: 0,
-    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Environment(?:$|:)/u }),
+      {
+        button: 0,
+      },
+    );
 
     expect(
       screen.getByRole("option", { name: /Project checkout/u }),

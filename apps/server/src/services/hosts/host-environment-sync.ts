@@ -1,9 +1,11 @@
+import { isWorkAdmissionOpen } from "@bb/db";
 import type { AppDeps } from "../../types.js";
 import { resolveHostEnvironment } from "./host-environment.js";
 
 export class HostEnvironmentSync {
   private revision = 0;
   private readonly pending = new Map<string, number>();
+  private readonly quiescedHostIds = new Set<string>();
 
   constructor(
     private readonly deps: Pick<AppDeps, "db" | "hub"> & {
@@ -37,6 +39,12 @@ export class HostEnvironmentSync {
     return { revision, entries };
   }
 
+  resumeAfterQuiesce(): void {
+    const hostIds = [...this.quiescedHostIds];
+    this.quiescedHostIds.clear();
+    for (const hostId of hostIds) this.refresh(hostId);
+  }
+
   private refresh(hostId: string): void {
     const request = this.snapshot(hostId);
     const revision = this.revision;
@@ -45,6 +53,10 @@ export class HostEnvironmentSync {
       .then((environment) => {
         if (this.pending.get(hostId) !== revision) return;
         this.pending.delete(hostId);
+        if (!isWorkAdmissionOpen(this.deps.db)) {
+          this.quiescedHostIds.add(hostId);
+          return;
+        }
         this.deps.hub.sendDaemonMessage(hostId, {
           type: "machine-environment.replace",
           environment,

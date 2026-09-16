@@ -25,6 +25,7 @@ import type {
   ThreadSearchSourceKind,
   ThreadStatus,
   ThreadVisibility,
+  ThreadWorktreePromotion,
 } from "@bb/domain";
 import {
   evaluateThreadLifecycleEvent,
@@ -229,6 +230,60 @@ export function upsertThreadSearchSegments(
   }
 }
 
+export interface ThreadTranscriptSegment {
+  sourceKind: ThreadTranscriptSourceKind;
+  sourceSeq: number | null;
+  text: string;
+}
+
+export interface ListThreadTranscriptSegmentsArgs {
+  threadId: string;
+  limit: number;
+}
+
+export type ThreadTranscriptSourceKind = Extract<
+  ThreadSearchSourceKind,
+  "user_message" | "assistant_message" | "system_message"
+>;
+
+const THREAD_TRANSCRIPT_SOURCE_KINDS = [
+  "user_message",
+  "assistant_message",
+  "system_message",
+] as const satisfies readonly ThreadTranscriptSourceKind[];
+
+export function listThreadTranscriptSegments(
+  db: DbQueryConnection,
+  args: ListThreadTranscriptSegmentsArgs,
+): ThreadTranscriptSegment[] {
+  const rows = db
+    .select({
+      sourceKind: threadSearchSegments.sourceKind,
+      sourceSeq: threadSearchSegments.sourceSeq,
+      text: threadSearchSegments.text,
+    })
+    .from(threadSearchSegments)
+    .where(
+      and(
+        eq(threadSearchSegments.threadId, args.threadId),
+        inArray(threadSearchSegments.sourceKind, [
+          ...THREAD_TRANSCRIPT_SOURCE_KINDS,
+        ]),
+      ),
+    )
+    .orderBy(desc(threadSearchSegments.sourceSeq))
+    .limit(args.limit)
+    .all();
+
+  return rows
+    .map((row) => ({
+      sourceKind: row.sourceKind as ThreadTranscriptSourceKind,
+      sourceSeq: row.sourceSeq,
+      text: row.text,
+    }))
+    .reverse();
+}
+
 function upsertThreadTitleSearchSegments(
   db: ThreadWriteConnection,
   args: UpsertThreadTitleSearchSegmentsArgs,
@@ -269,6 +324,7 @@ export interface CreateThreadInput {
   originPluginId?: string | null;
   pluginMetadata?: { pluginId: string; metadata: JsonObject } | null;
   visibility?: ThreadVisibility;
+  worktreePromotion?: ThreadWorktreePromotion;
 }
 
 export class InvalidLifecycleOwnerError extends Error {
@@ -327,6 +383,9 @@ export function createThread(
           originKind,
           originPluginId: input.originPluginId ?? null,
           visibility,
+          ...(input.worktreePromotion !== undefined
+            ? { worktreePromotion: input.worktreePromotion }
+            : {}),
           lastReadAt: now,
           latestAttentionAt: now,
           createdAt: now,
@@ -379,6 +438,7 @@ export function getThread(db: ThreadWriteConnection, id: string) {
 export interface ThreadMentionRow {
   id: string;
   projectId: string;
+  status: ThreadStatus;
   title: string | null;
   titleFallback: string | null;
 }
@@ -394,6 +454,7 @@ export function listThreadMentionRowsByIds(
     .select({
       id: threads.id,
       projectId: threads.projectId,
+      status: threads.status,
       title: threads.title,
       titleFallback: threads.titleFallback,
     })
@@ -1715,19 +1776,13 @@ export interface UpdateThreadInput {
   parentThreadId?: string | null;
   title?: string | null;
   visibility?: ThreadVisibility;
+  worktreePromotion?: ThreadWorktreePromotion;
 }
 
-export function updateThread(
-  db: ThreadWriteConnection,
-  notifier: DbNotifier,
-  id: string,
+function threadUpdateChanges(
+  existing: typeof threads.$inferSelect,
   input: UpdateThreadInput,
-) {
-  const now = Date.now();
-  const existing = db.select().from(threads).where(eq(threads.id, id)).get();
-  if (!existing) {
-    return null;
-  }
+): ThreadChangeKind[] {
   const changes: ThreadChangeKind[] = [];
   if ("title" in input || "sectionId" in input) changes.push("title-changed");
   if ("lastReadAt" in input) changes.push("read-state-changed");
@@ -1741,23 +1796,46 @@ export function updateThread(
     changes.push("parent-changed");
   }
   if (
-    "environmentId" in input &&
-    input.environmentId !== existing.environmentId
+    ("environmentId" in input &&
+      input.environmentId !== existing.environmentId) ||
+    ("worktreePromotion" in input &&
+      input.worktreePromotion !== existing.worktreePromotion)
   ) {
     changes.push("environment-changed");
   }
+  return changes;
+}
 
+function threadUpdateSet(
+  input: UpdateThreadInput,
+  now: number,
+): Partial<typeof threads.$inferInsert> {
   const set: Partial<typeof threads.$inferInsert> = { updatedAt: now };
   if ("title" in input) set.title = input.title;
-  if ("sectionId" in input) {
-    set.sectionId = input.sectionId;
-  }
+  if ("sectionId" in input) set.sectionId = input.sectionId;
   if ("environmentId" in input) set.environmentId = input.environmentId;
-  if ("lastReadAt" in input) {
-    set.lastReadAt = input.lastReadAt;
-  }
+  if ("lastReadAt" in input) set.lastReadAt = input.lastReadAt;
   if ("parentThreadId" in input) set.parentThreadId = input.parentThreadId;
   if ("visibility" in input) set.visibility = input.visibility;
+  if ("worktreePromotion" in input) {
+    set.worktreePromotion = input.worktreePromotion;
+  }
+  return set;
+}
+
+export function updateThread(
+  db: ThreadWriteConnection,
+  notifier: DbNotifier,
+  id: string,
+  input: UpdateThreadInput,
+) {
+  const now = Date.now();
+  const existing = db.select().from(threads).where(eq(threads.id, id)).get();
+  if (!existing) {
+    return null;
+  }
+  const changes = threadUpdateChanges(existing, input);
+  const set = threadUpdateSet(input, now);
 
   const updated = db
     .update(threads)

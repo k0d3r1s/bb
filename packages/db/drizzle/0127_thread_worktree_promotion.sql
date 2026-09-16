@@ -1,0 +1,1 @@
+ALTER TABLE `threads` ADD `worktree_promotion` text DEFAULT 'declined' NOT NULL;

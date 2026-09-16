@@ -43,35 +43,37 @@ const toolOptionSchema = z.strictObject({
     ),
 });
 
-const toolQuestionSchema = z.strictObject({
-  question: z
-    .string()
-    .min(1)
-    .refine(nonBlank, "Questions cannot be blank")
-    .describe(
-      'The complete question to ask the user. Should be clear, specific, and end with a question mark. Example: "Which library should we use for date formatting?" If multiSelect is true, phrase it accordingly, e.g. "Which features do you want to enable?"',
-    ),
-  header: z
-    .string()
-    .min(1)
-    .refine(nonBlank, "Headers cannot be blank")
-    .describe(
-      'Very short label displayed as a chip/tag (max 12 chars). Examples: "Auth method", "Library", "Approach".',
-    ),
-  options: z
-    .array(toolOptionSchema)
-    .min(2, TOO_FEW_OPTIONS_MESSAGE)
-    .max(MAX_OPTIONS)
-    .describe(
-      "The available choices for this question. Must have 2-4 options. Each option should be a distinct, mutually exclusive choice (unless multiSelect is enabled). There should be no 'Other' option, that will be provided automatically.",
-    ),
-  multiSelect: z
-    .boolean()
-    .default(false)
-    .describe(
-      "Set to true to allow the user to select multiple options instead of just one. Use when choices are not mutually exclusive.",
-    ),
-});
+export const toolQuestionSchema = z
+  .strictObject({
+    question: z
+      .string()
+      .min(1)
+      .refine(nonBlank, "Questions cannot be blank")
+      .describe(
+        'The complete question to ask the user. Should be clear, specific, and end with a question mark. Example: "Which library should we use for date formatting?" If multiSelect is true, phrase it accordingly, e.g. "Which features do you want to enable?"',
+      ),
+    header: z
+      .string()
+      .min(1)
+      .refine(nonBlank, "Headers cannot be blank")
+      .describe(
+        'Very short label displayed as a chip/tag (max 12 chars). Examples: "Auth method", "Library", "Approach".',
+      ),
+    options: z
+      .array(toolOptionSchema)
+      .min(2, TOO_FEW_OPTIONS_MESSAGE)
+      .max(MAX_OPTIONS)
+      .describe(
+        "The available choices for this question. Must have 2-4 options. Each option should be a distinct, mutually exclusive choice (unless multiSelect is enabled). There should be no 'Other' option, that will be provided automatically.",
+      ),
+    multiSelect: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Set to true to allow the user to select multiple options instead of just one. Use when choices are not mutually exclusive.",
+      ),
+  })
+  .meta({ required: ["question", "header", "options", "multiSelect"] });
 
 export const toolInputSchema = z.strictObject({
   questions: z

@@ -36,6 +36,8 @@ BB_HOST_DAEMON_PORT only for an intentional non-default target.
   panes, terminals, inspection, and long-running commands.
 - Read references/failure-recovery.md when a thread fails, stops, or needs plan
   or goal recovery.
+- Read references/maintenance.md for local-only maintenance, Linux ARM64 VPS
+  updates, restart barriers, and retained-gate recovery.
 - Read references/theme-commands.md for palette and favicon commands. Read
   references/theming.md before you create or edit theme CSS.
 - Read references/plugins.md for plugin discovery, install, build, update,

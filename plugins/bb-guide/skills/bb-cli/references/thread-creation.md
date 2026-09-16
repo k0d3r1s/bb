@@ -7,6 +7,15 @@
   context variables. Omitted execution flags use remembered project defaults;
   without a remembered model, bb resolves the selected provider and its reported
   default model on the target machine.
+- A standard project's default environment starts in its shared checkout for
+  read-only exploration. The agent is instructed to promote to a managed
+  worktree before its first project mutation, and bb queues continuation there.
+  Use `--new-environment worktree` when isolation must exist before the first
+  command.
+- That promotion is armed only for the implicit default. `--environment` and
+  `--environment-provider` name a placement and keep the thread there. Use
+  `--environment-provider project-checkout` to choose the checkout; the agent
+  records a mid-thread request to stay put with `bb_keep_checkout`.
 - Select a target with `--environment`, `--new-environment`, `--base-branch`,
   or `--machine`. Select execution with `--provider`, `--model`,
   `--reasoning-level`, `--service-tier`, and `--permission-mode`.

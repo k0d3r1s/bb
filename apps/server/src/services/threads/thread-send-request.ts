@@ -7,6 +7,7 @@ import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { attemptDispatch } from "./dispatch-attempt.js";
 import { requireThreadCommandEnvironment } from "./thread-command-environment.js";
 import { sendThreadMessage } from "./thread-send.js";
+import { deleteEnterWorktreeContinuations } from "./worktree-promotion.js";
 
 interface AcceptThreadSendRequestArgs {
   payload: SendMessageRequest;
@@ -27,6 +28,10 @@ export async function acceptThreadSendRequest(
       thread: args.thread,
       trigger: "user",
     });
+    deleteEnterWorktreeContinuations(
+      { kind: "notifying", db: deps.db, hub: deps.hub },
+      args.thread.id,
+    );
     return { ok: true, delivery: "sent" };
   }
 
@@ -42,6 +47,10 @@ export async function acceptThreadSendRequest(
     trigger: "user",
   });
   if (outcome.kind === "dispatched") {
+    deleteEnterWorktreeContinuations(
+      { kind: "notifying", db: deps.db, hub: deps.hub },
+      args.thread.id,
+    );
     return { ok: true, delivery: "sent" };
   }
   return {

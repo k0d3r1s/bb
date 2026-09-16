@@ -87,6 +87,7 @@ export interface NewThreadEnvironmentConfig {
   multiMachinePickerEnabled?: boolean;
   onSelectProvider?: EnvironmentPickerUIProps["onSelectProvider"];
   onSelectHost?: EnvironmentPickerUIProps["onSelectHost"];
+  onSelectProjectDefault?: EnvironmentPickerUIProps["onSelectProjectDefault"];
 }
 
 export interface NewThreadWorktreeConfig {
@@ -434,6 +435,9 @@ export function EnvironmentSlot({
         multiMachinePickerEnabled={environment.multiMachinePickerEnabled}
         onSelectProvider={environment.onSelectProvider}
         onSelectHost={environment.onSelectHost}
+        {...(environment.onSelectProjectDefault !== undefined
+          ? { onSelectProjectDefault: environment.onSelectProjectDefault }
+          : {})}
         className="shrink-0"
         muted
       />

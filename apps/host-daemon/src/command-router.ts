@@ -8,10 +8,12 @@ import type {
   HostDaemonRpcCommand,
   HostDaemonRpcResultForCommand,
   HostDaemonCommandEnvironmentLane,
+  HostDaemonWorkActivitySnapshot,
 } from "@bb/host-daemon-contract";
 import { performance } from "node:perf_hooks";
 import {
   hostDaemonEnvironmentLaneForCommand,
+  hostDaemonQuiescePolicyForCommand,
   hostDaemonOnlineRpcResponseMessageSchema,
   isHostDaemonCommand,
   parseHostDaemonCommandResultForCommand,
@@ -24,12 +26,16 @@ import {
   getErrorCode,
   type CommandDispatchOptions,
 } from "./command-dispatch.js";
-import { isExpectedOnlineRpcFailureError } from "./command-dispatch-support.js";
+import {
+  ExpectedCommandDispatchError,
+  isExpectedOnlineRpcFailureError,
+} from "./command-dispatch-support.js";
 import { roundDurationMs } from "@bb/process-utils";
 import type { HostDaemonLogger } from "./logger.js";
 import { RuntimeManager } from "./runtime-manager.js";
 import type { PluginHostManager } from "./plugin-host-manager.js";
 import { runInSerialLane } from "./serial-lane.js";
+import { WorkQuiesceGate } from "./work-quiesce-gate.js";
 
 type CommandRouterLogger = Pick<HostDaemonLogger, "debug" | "warn">;
 
@@ -91,6 +97,8 @@ export class CommandRouter {
   private readonly threadUnarchiveBarriers = new Map<string, Promise<void>>();
   private readonly threadLaneTails = new Map<string, Promise<void>>();
   private readonly threadTurnLaneTails = new Map<string, Promise<void>>();
+  private readonly workAdmissionLanes = new Map<string, Promise<void>>();
+  private readonly workQuiesceGate = new WorkQuiesceGate();
 
   constructor(private readonly options: CommandRouterOptions) {
     this.logger = options.logger;
@@ -145,10 +153,77 @@ export class CommandRouter {
   private executeHostRpcCommand(
     command: HostDaemonRpcCommand,
   ): Promise<HostDaemonRpcResultForCommand> {
+    if (
+      hostDaemonQuiescePolicyForCommand(command) === "execution-start" ||
+      this.isWorkBarrierCommand(command)
+    ) {
+      return runInSerialLane(this.workAdmissionLanes, "global", () =>
+        this.executeHostRpcCommandBody(command),
+      );
+    }
+    return this.executeHostRpcCommandBody(command);
+  }
+
+  private executeHostRpcCommandBody(
+    command: HostDaemonRpcCommand,
+  ): Promise<HostDaemonRpcResultForCommand> {
+    if (command.type === "work.quiesce") {
+      const gate = this.workQuiesceGate.quiesce(command);
+      return Promise.resolve({
+        operationId: gate.operationId,
+        gatePhase: "draining",
+        activity: this.getWorkActivitySnapshot(),
+      });
+    }
+    if (command.type === "work.seal") {
+      const gate = this.workQuiesceGate.seal(command.operationId);
+      return Promise.resolve({
+        operationId: gate.operationId,
+        gatePhase: "sealed",
+        activity: this.getWorkActivitySnapshot(),
+      });
+    }
+    if (command.type === "work.unquiesce") {
+      this.workQuiesceGate.unquiesce(command.operationId);
+      return Promise.resolve({
+        operationId: command.operationId,
+        released: true,
+      });
+    }
+    if (
+      hostDaemonQuiescePolicyForCommand(command) === "execution-start" &&
+      !this.workQuiesceGate.allowsExecutionStart()
+    ) {
+      return Promise.reject(
+        new ExpectedCommandDispatchError(
+          "work_quiesced",
+          "host is not accepting new executable work during maintenance",
+        ),
+      );
+    }
     if (isHostDaemonCommand(command)) {
       return this.executeLiveDaemonCommand(command);
     }
     return this.executeOnlineRpcCommand(command);
+  }
+
+  private isWorkBarrierCommand(command: HostDaemonRpcCommand): boolean {
+    return (
+      command.type === "work.quiesce" ||
+      command.type === "work.seal" ||
+      command.type === "work.unquiesce"
+    );
+  }
+
+  private getWorkActivitySnapshot(): HostDaemonWorkActivitySnapshot {
+    const activeByKind: Record<string, number> = {};
+    const activeThreads =
+      this.options.runtimeManager.listActiveThreads().length;
+    if (activeThreads > 0) activeByKind.thread = activeThreads;
+    const activePluginCalls =
+      this.options.pluginHostManager?.getActiveCallCount() ?? 0;
+    if (activePluginCalls > 0) activeByKind.pluginCall = activePluginCalls;
+    return { activeByKind };
   }
 
   private executeOnlineRpcCommand(

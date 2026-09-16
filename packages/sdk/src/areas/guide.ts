@@ -20,6 +20,7 @@ const guideChapters: Record<string, TemplateId> = {
   providers: "bbGuideProviders",
   projects: "bbGuideProjects",
   machines: "bbGuideMachines",
+  maintenance: "bbGuideMaintenance",
   terminals: "bbGuideTerminals",
   browser: "bbGuideBrowser",
   customization: "bbGuideCustomization",

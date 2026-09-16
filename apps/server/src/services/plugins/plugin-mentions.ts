@@ -1,5 +1,6 @@
 import type { PromptInput } from "@bb/domain";
 import { ApiError } from "../../errors.js";
+import { collectPromptMentionResources } from "../prompt-mentions.js";
 import { resolvePluginMention } from "./plugin-agent-contributions.js";
 
 type PluginMentionResource = Extract<
@@ -7,29 +8,14 @@ type PluginMentionResource = Extract<
   { kind: "plugin" }
 >;
 
-function collectPluginMentionResources(
-  input: readonly PromptInput[],
-): PluginMentionResource[] {
-  const seen = new Set<string>();
-  const resources: PluginMentionResource[] = [];
-  for (const item of input) {
-    if (item.type !== "text") continue;
-    for (const mention of item.mentions) {
-      const resource = mention.resource;
-      if (resource.kind !== "plugin") continue;
-      const key = `${resource.pluginId}::${resource.itemId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      resources.push(resource);
-    }
-  }
-  return resources;
-}
-
 export async function resolvePluginMentionContextInputs(
   input: readonly PromptInput[],
 ): Promise<PromptInput[]> {
-  const resources = collectPluginMentionResources(input);
+  const resources = collectPromptMentionResources(
+    input,
+    (resource): resource is PluginMentionResource => resource.kind === "plugin",
+    (resource) => `${resource.pluginId}::${resource.itemId}`,
+  );
   if (resources.length === 0) return [];
   const contextInputs: PromptInput[] = [];
   for (const resource of resources) {

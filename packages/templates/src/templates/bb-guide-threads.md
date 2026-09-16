@@ -276,6 +276,16 @@ Messaging:
   `createBuiltinPlanCommandTextInput(text)` from `@bb/sdk` and pass it as
   `input` to `threads.spawn` or `threads.send`.
 
+  An `@thread:<id>` reference in a prompt or message is resolved before the
+  turn reaches the provider: BB appends that thread's recent transcript as
+  agent-only context, so "Continue from @thread:<id>" works without the agent
+  having to look the thread up itself. The newest turns are kept within a fixed
+  character budget and older turns are dropped with a truncation marker, so use
+  `bb thread log <id>` when the agent needs the full history. A thread that
+  mentions itself, and a mention of a thread that no longer exists, both
+  resolve to no added context. The composer's handoff action, `--prompt`, and
+  `bb thread tell` text all share this behavior.
+
   bb thread stop [id]                      Stop work and release the agent runtime
   bb thread compact [id]                   Request compaction of an idle or errored thread's context
   bb thread clear [id]                     Clear model context for an idle or failed thread

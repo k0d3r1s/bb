@@ -7,19 +7,21 @@ export interface DesktopUpdateMetadataFileNames {
 }
 
 export interface DesktopReleaseConfig {
-  appId: "dev.bb.desktop" | "dev.bb.desktop.nightly";
-  applicationName: "bb" | "bb Nightly";
+  appId: "dev.bb.desktop" | "dev.bb.desktop.nightly" | "dev.bb.desktop.local";
+  applicationName: "bb" | "bb Nightly" | "bb Local";
+  macBundleDisplayName?: "bb";
   artifactName: string;
   iconFileName: "icon.png" | "icon-nightly.png";
-  linuxExecutableName: "bb" | "bb-nightly";
+  linuxExecutableName: "bb" | "bb-nightly" | "bb-local";
   macIconPath: "assets/icon.icns" | "assets/icon-nightly.icns";
   releaseTag: "desktop-latest" | "desktop-nightly";
   updateMetadataFileNames: DesktopUpdateMetadataFileNames;
 }
 
-export function resolveDesktopReleaseChannel(
-  env: NodeJS.ProcessEnv,
-): DesktopReleaseChannel;
+export function resolveDesktopBuildSettings(env: NodeJS.ProcessEnv): {
+  localBuild: boolean;
+  releaseChannel: DesktopReleaseChannel;
+};
 
 export function resolveDesktopBuildPlatform(
   nodePlatform: string,
@@ -27,6 +29,7 @@ export function resolveDesktopBuildPlatform(
 
 export function createDesktopReleaseConfig(
   channel: DesktopReleaseChannel,
+  localBuild?: boolean,
 ): DesktopReleaseConfig;
 
 export function createDesktopUpdateReleaseBaseUrl(

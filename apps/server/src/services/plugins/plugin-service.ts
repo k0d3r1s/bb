@@ -62,7 +62,7 @@ import {
   type PluginUpdateCheckEntry,
 } from "@bb/server-contract";
 import {
-  claimPluginScheduledRun,
+  claimPluginScheduledRunWithAdmission,
   deleteAllPluginSettings,
   deleteInstalledPlugin,
   deletePluginSchedules,
@@ -76,8 +76,10 @@ import {
   listPluginSchedules,
   listThreadPluginMetadataRows,
   markInstalledPluginRemoved,
+  markWorkAdmissionActive,
   recordPluginScheduleResult,
   setInstalledPluginEnabled,
+  settleWorkAdmission,
   type InstalledPluginRow,
   type PluginMarketplaceRow,
 } from "@bb/db";
@@ -368,6 +370,8 @@ export interface PluginService {
     ctx: PluginCliContext,
   ): Promise<PluginCliExecutionResult>;
   listSkillRootContributions(): PluginSkillRootContribution[];
+  quiesceBackgroundWork(): Promise<void>;
+  resumeBackgroundWork(): void;
   listAgentTools(): PluginAgentToolContribution[];
   resolveAgentConfiguration(args: {
     context: Omit<PluginAgentConfigurationContext, "pluginMetadata">;
@@ -588,6 +592,8 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
     loadAll,
     loaded,
     loadOne,
+    quiesceBackgroundWork: quiesceRuntimeBackgroundWork,
+    resumeBackgroundWork: resumeRuntimeBackgroundWork,
     brandingAssets,
     setDevBuildProblem,
     setLoadHold,
@@ -691,6 +697,16 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
     managedArtifacts: managedPluginArtifacts,
     runArtifactGc,
   });
+
+  async function quiesceBackgroundWork(): Promise<void> {
+    await pluginUpdates.quiescePeriodicUpdateChecks();
+    await quiesceRuntimeBackgroundWork();
+  }
+
+  function resumeBackgroundWork(): void {
+    resumeRuntimeBackgroundWork();
+    pluginUpdates.resumePeriodicUpdateChecks();
+  }
 
   function resolveAgentToolPresentation(
     pluginId: string,
@@ -1010,7 +1026,7 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
             : { count: 0, totalMs: 0, maxMs: 0, errorCount: 0 },
           services: (loadedPlugin?.services ?? []).map((service) => ({
             name: service.record.name,
-            state: service.state,
+            state: service.state === "quiesced" ? "stopped" : service.state,
           })),
           schedules: scheduleRows
             .filter((schedule) => schedule.pluginId === row.id)
@@ -1164,6 +1180,8 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
 
   return {
     isBuiltin: isBuiltinPluginId,
+    quiesceBackgroundWork,
+    resumeBackgroundWork,
 
     listThemes() {
       return [...loaded.entries()]
@@ -2417,26 +2435,35 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
           );
           continue;
         }
-        const claimed = claimPluginScheduledRun(deps.db, {
+        const claim = claimPluginScheduledRunWithAdmission(deps.db, {
           pluginId: row.pluginId,
           name: row.name,
           expectedNextRunAt: row.nextRunAt,
           newNextRunAt,
           now,
         });
-        if (!claimed) continue;
-        const outcome = await invokeWrapped(
-          row.pluginId,
-          `schedule ${row.name}`,
-          () => schedule.fn(),
-        );
-        recordPluginScheduleResult(deps.db, {
-          pluginId: row.pluginId,
-          name: row.name,
-          status: outcome.ok ? "ok" : "error",
-          error: outcome.ok ? null : outcome.error,
-          now: Date.now(),
-        });
+        if (claim.kind === "quiesced") break;
+        if (claim.kind === "not-claimed") continue;
+        if (!markWorkAdmissionActive(deps.db, claim.token)) {
+          settleWorkAdmission(deps.db, claim.token);
+          continue;
+        }
+        try {
+          const outcome = await invokeWrapped(
+            row.pluginId,
+            `schedule ${row.name}`,
+            () => schedule.fn(),
+          );
+          recordPluginScheduleResult(deps.db, {
+            pluginId: row.pluginId,
+            name: row.name,
+            status: outcome.ok ? "ok" : "error",
+            error: outcome.ok ? null : outcome.error,
+            now: Date.now(),
+          });
+        } finally {
+          settleWorkAdmission(deps.db, claim.token);
+        }
       }
     },
   };

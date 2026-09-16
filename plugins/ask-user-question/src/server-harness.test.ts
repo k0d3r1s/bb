@@ -10,6 +10,7 @@ import { TOO_FEW_OPTIONS_MESSAGE } from "./tool-definition.js";
 import {
   ASK_USER_QUESTION_RENDERER_ID,
   toolInputSchema,
+  toolQuestionSchema,
   type InteractionPayload,
   type ToolResult,
 } from "./contracts.js";
@@ -85,7 +86,7 @@ describe("provider gating", () => {
     },
   );
 
-  it("advertises multiSelect as optional and defaults it during execution", async () => {
+  it("advertises multiSelect as required with a default and fills it during execution", async () => {
     const host = createHost();
     const resolved = await host.harness.resolveAgentConfiguration(
       configurationContext("codex"),
@@ -99,7 +100,7 @@ describe("provider gating", () => {
           maxItems: 4,
           items: {
             additionalProperties: false,
-            required: ["question", "header", "options"],
+            required: ["question", "header", "options", "multiSelect"],
             properties: {
               question: { minLength: 1, description: expect.any(String) },
               header: { minLength: 1, description: expect.any(String) },
@@ -128,6 +129,13 @@ describe("provider gating", () => {
         },
       },
     });
+
+    const advertised = resolved.tools[0]?.inputSchema as {
+      properties: { questions: { items: { required: string[] } } };
+    };
+    expect([...advertised.properties.questions.items.required].sort()).toEqual(
+      Object.keys(toolQuestionSchema.shape).sort(),
+    );
 
     const answered = host.harness.callAgentTool(TOOL_NAME, {
       questions: [{ ...questions[0], multiSelect: undefined }],

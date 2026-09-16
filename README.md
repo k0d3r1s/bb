@@ -131,6 +131,45 @@ pnpm exec turbo run dev --filter=@bb/desktop
 The desktop shell connects to this checkout's running dev app. Stop each command
 with Ctrl-C in its terminal.
 
+To package a private fork beside the official Homebrew-managed desktop app, use
+`pnpm desktop:local:package`. The resulting `bb Local.app` has the distinct
+bundle identifier `dev.bb.desktop.local` and does not use the official update
+feeds. Updating it is therefore an explicit fetch/rebase/build operation, while
+Homebrew can continue updating the official `bb.app` independently.
+
+Run `pnpm desktop:local:update` from a clean local-fork branch while `bb Local`
+is stopped. It starts the official BB app when its server is unavailable,
+fetches upstream `main`, rebases the private commit stack, installs dependencies,
+tests the private plugins, packages and smoke-tests the local desktop app,
+ad-hoc signs it, installs it beside the official app, and syncs the private
+plugins under `local/plugins/`. It then stops the official app, starts `bb Local`,
+waits for its server to become healthy, and pushes the result to the fork's
+`main` with a force-with-lease. `--check` only fetches and reports the upstream
+and patch counts. `--skip-install`, `--skip-plugins`, and `--skip-push`
+selectively omit those final operations.
+
+Use `pnpm desktop:local:update -- --current` to run the same test, package,
+signing, installation, activation, plugin synchronization, and health workflow
+against the exact clean `HEAD`. Current-checkout mode skips every remote fetch
+and the rebase. If pushing is enabled, it protects the fork with the existing
+remote-tracking head as a force-with-lease; fetch the fork first if that ref is
+missing. Pushing requires the checked-out branch to match the configured fork
+branch. Pass `--skip-push` to use another branch and avoid all Git remote
+operations; dependency installation can still access package registries.
+
+The updater identifies the two remotes by URL, not by name: whichever remote
+points at `get-bb/bb` is upstream, and the remaining one is the fork. Either
+remote layout therefore works, whether upstream is `origin` and the fork is
+`fork`, or upstream is a named remote such as `_get-bb` and the fork is
+`origin`. Set `BB_LOCAL_UPSTREAM_REMOTE` or `BB_LOCAL_FORK_REMOTE` to pin a
+name explicitly, `BB_LOCAL_UPSTREAM_SLUG` to track a different upstream
+repository, and `BB_LOCAL_UPSTREAM_BRANCH` or `BB_LOCAL_FORK_BRANCH` to use
+branches other than `main`.
+
+The private plugin bundle contains Shared Runtime and Directory Skills. The
+updater installs or reloads both from the fork checkout, keeping their source
+and the local BB build on the same rebased revision.
+
 To use the dev app from another machine over Tailscale, run `pnpm dev`, note the
 printed app port, and publish the loopback Vite listener:
 

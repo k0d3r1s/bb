@@ -11,13 +11,17 @@ SKILL = Path('.bb/skills/verify-bb')
 CLI_OWNERS = {
     'environment': 'projects-environments', 'project': 'projects-environments',
     'file': 'workspace-panels', 'terminal': 'workspace-panels',
-    'machine': 'hosts-updates', 'updates': 'hosts-updates',
+    'machine': 'hosts-updates', 'machine-enrollment': 'hosts-updates',
+    'machine-environment': 'hosts-updates',
+    'updates': 'hosts-updates',
     'settings': 'settings', 'theme': 'settings', 'voice': 'composer',
     'skill': 'extensions', 'plugin': 'extensions', 'marketplace': 'extensions',
     'provider': 'composer', 'guide': 'compatibility-api',
     'status': 'compatibility-api', 'manager': 'compatibility-api',
     'helpers': 'compatibility-api', 'environment-helpers': 'projects-environments',
     'thread': 'execution-controls',
+    'maintenance': 'hosts-updates',
+    'browser': 'workspace-panels',
 }
 CORE_PAGES = [
     'navigation', 'projects-environments', 'composer', 'execution-controls',
