@@ -265,7 +265,14 @@ async function packPluginSdk(packDir: string): Promise<string> {
 async function installPackedSdk(
   targetDir: string,
   tarball: string,
+  userConfig: string,
+  globalConfig: string,
 ): Promise<void> {
+  const env = { ...process.env };
+  delete env.npm_config_allow_scripts;
+  delete env.NPM_CONFIG_ALLOW_SCRIPTS;
+  env.NPM_CONFIG_GLOBALCONFIG = globalConfig;
+  env.NPM_CONFIG_USERCONFIG = userConfig;
   await execFileAsync(
     "npm",
     [
@@ -279,7 +286,10 @@ async function installPackedSdk(
       "--prefer-offline",
       tarball,
     ],
-    { cwd: targetDir },
+    {
+      cwd: targetDir,
+      env,
+    },
   );
 }
 
@@ -343,6 +353,9 @@ describe("external plugin scaffold types", () => {
 
   beforeAll(async () => {
     packRoot = await mkdtemp(join(tmpdir(), "bb-external-pack-"));
+    const userConfig = join(packRoot, "npmrc-user");
+    const globalConfig = join(packRoot, "npmrc-global");
+    await Promise.all([writeFile(userConfig, ""), writeFile(globalConfig, "")]);
     tarball = await packPluginSdk(join(packRoot, "pack"));
     const templateDir = join(packRoot, "template");
     await scaffoldPlugin({
@@ -350,7 +363,7 @@ describe("external plugin scaffold types", () => {
       packageName: "bb-plugin-external-template",
       bbVersion: "0.9.0",
     });
-    await installPackedSdk(templateDir, tarball);
+    await installPackedSdk(templateDir, tarball, userConfig, globalConfig);
     await linkExternalDependencies(templateDir);
     installedNodeModules = join(templateDir, "node_modules");
   }, 180_000);

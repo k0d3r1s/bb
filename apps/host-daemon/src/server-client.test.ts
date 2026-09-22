@@ -6,6 +6,7 @@ import {
   createServerClient,
   readHostArtifactBytes,
   ServerResponseError,
+  TOOL_CALL_TIMEOUT_MS,
   type FetchFn,
 } from "./server-client.js";
 
@@ -637,5 +638,43 @@ describe("dynamic tool cancellation", () => {
     expect(
       JSON.parse(String(fetchFn.mock.calls[0]?.[1]?.body)),
     ).not.toHaveProperty("signal");
+  });
+});
+
+describe("tool-call transport timeout", () => {
+  it("allows every forwarded tool call to hold the response open", async () => {
+    const seen: Array<{ tool: string; hasDispatcher: boolean }> = [];
+    const fetchFn = vi.fn<FetchFn>(async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { tool: string };
+      seen.push({
+        tool: body.tool,
+        hasDispatcher:
+          (init as { dispatcher?: unknown } | undefined)?.dispatcher !==
+          undefined,
+      });
+      return Response.json({ success: true, contentItems: [] });
+    });
+    const client = createServerClient({
+      fetchFn,
+      getSessionId: () => "session-1",
+      hostKey: "key",
+      logger: createLogger(),
+      serverUrl: "http://localhost",
+    });
+    const base = {
+      requestId: 1,
+      threadId: "thread",
+      providerThreadId: "provider-thread",
+      turnId: "turn",
+      callId: "call",
+    };
+    await client.callTool({ ...base, tool: "AskUserQuestion" });
+    await client.callTool({ ...base, tool: "Bash" });
+
+    expect(seen).toEqual([
+      { tool: "AskUserQuestion", hasDispatcher: true },
+      { tool: "Bash", hasDispatcher: true },
+    ]);
+    expect(TOOL_CALL_TIMEOUT_MS).toBeGreaterThan(30 * 60 * 1000);
   });
 });

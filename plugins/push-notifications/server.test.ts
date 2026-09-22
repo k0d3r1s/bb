@@ -388,6 +388,48 @@ describe("push sender", () => {
     }
   });
 
+  it("sends distinct provider turn watchdog notifications", async () => {
+    const host = await setup();
+    try {
+      await host.addSubscription();
+      const stalled = host.setThread({ status: "active" });
+      await host.harness.behavior.emitThreadEvent(
+        "experimental_thread.turnWatchdog",
+        {
+          thread: stalled,
+          action: "notify",
+          elapsedMs: 6 * 60 * 60_000,
+          thresholdMs: 6 * 60 * 60_000,
+        },
+      );
+
+      await vi.waitFor(() => expect(host.expo.requests).toHaveLength(1));
+      expect(host.expo.requests[0]?.[0]).toMatchObject({
+        body: "Turn stalled — no activity for 6 hours",
+        data: { kind: "turn-watchdog", threadId: stalled.id },
+      });
+
+      const stopped = host.setThread({ status: "stopping" });
+      await host.harness.behavior.emitThreadEvent(
+        "experimental_thread.turnWatchdog",
+        {
+          thread: stopped,
+          action: "interrupt",
+          elapsedMs: 12 * 60 * 60_000,
+          thresholdMs: 12 * 60 * 60_000,
+        },
+      );
+
+      await vi.waitFor(() => expect(host.expo.requests).toHaveLength(2));
+      expect(host.expo.requests[1]?.[0]).toMatchObject({
+        body: "bb stopped a stalled turn after 12 hours",
+        data: { kind: "turn-watchdog", threadId: stopped.id },
+      });
+    } finally {
+      await host.cleanup();
+    }
+  });
+
   it("includes the configured public server URL", async () => {
     const host = await setup({ appUrl: "https://bb.example.test" });
     try {

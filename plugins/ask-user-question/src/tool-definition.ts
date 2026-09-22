@@ -24,5 +24,5 @@ export const NOT_UNIQUE_MESSAGE =
   "Question texts must be unique, option labels must be unique within each question";
 
 export function buildTimeoutMessage(elapsedMs: number): string {
-  return `No response after ${Math.round(elapsedMs / 1000)}s — the user may be away from keyboard. Proceed using your best judgment based on the context so far; you can re-ask this question later if it's still relevant.`;
+  return `No response after ${Math.round(elapsedMs / 1000)}s — the user is away from keyboard. Stop here and wait for the user; do not proceed on assumptions. The turn is being halted so the thread will sit idle until they return.`;
 }

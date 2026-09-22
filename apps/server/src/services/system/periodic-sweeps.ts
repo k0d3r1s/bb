@@ -62,6 +62,7 @@ import {
   archiveUndoGraceKeepsTurnRunning,
 } from "../threads/archive-undo-grace.js";
 import { advanceThreadProvisioning } from "../threads/thread-provisioning.js";
+import { runProviderTurnWatchdogSweep } from "../threads/provider-turn-watchdog.js";
 import {
   runQueuedMessageDispatch,
   type QueueWaitPluginDirectory,
@@ -617,6 +618,14 @@ const PERIODIC_SWEEP_JOBS: PeriodicSweepJob[] = [
     category: "retention",
     name: "project-attachment-orphan-prune",
     run: runProjectAttachmentPrune,
+  },
+  {
+    cadenceMs: 60_000,
+    category: "maintenance",
+    name: "provider-turn-idle-watchdog",
+    run: (deps, now) => {
+      runProviderTurnWatchdogSweep(deps, { now });
+    },
   },
 ];
 

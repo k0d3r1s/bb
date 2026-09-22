@@ -18,8 +18,11 @@ export const TOOL_NAME = "AskUserQuestion";
 
 const QUESTION_TIMEOUT_MS = 30 * 60 * 1000;
 
-function errorResult(message: string): PluginAgentToolResult {
-  return { content: [{ type: "text", text: message }], isError: true };
+function textResult(message: string, isError = false): PluginAgentToolResult {
+  return {
+    content: [{ type: "text", text: message }],
+    ...(isError ? { isError: true } : {}),
+  };
 }
 
 export default function plugin(bb: BbPluginApi) {
@@ -34,14 +37,15 @@ export default function plugin(bb: BbPluginApi) {
     parameters: toolInputSchema,
     async execute(input, ctx) {
       const invalid = validateToolInput(input);
-      if (invalid !== null) return errorResult(invalid);
+      if (invalid !== null) return textResult(invalid, true);
 
       const payload = buildInteractionPayload(input);
       try {
         assertInteractionPayloadFits(payload);
       } catch (error) {
-        return errorResult(
+        return textResult(
           error instanceof Error ? error.message : String(error),
+          true,
         );
       }
 
@@ -68,31 +72,38 @@ export default function plugin(bb: BbPluginApi) {
               );
             },
           },
-          { signal: ctx.signal },
+          { signal: ctx.signal, experimental_holdToolCall: true },
         );
       } catch (error) {
-        return errorResult(
+        return textResult(
           `The question could not be shown (${error instanceof Error ? error.message : String(error)}). Only one prompt can await the user at a time — put all of your questions in a single AskUserQuestion call, or continue with your best judgement.`,
+          true,
         );
       }
 
       if (result.outcome === "cancelled") {
-        return errorResult(
+        if (result.reason === "user") {
+          return textResult(
+            "The user dismissed the question without answering. Proceed with your best judgement, or ask again in your reply.",
+          );
+        }
+        return textResult(
           result.reason === "timeout"
             ? buildTimeoutMessage(Date.now() - askedAt)
-            : "The user dismissed the question without answering. Proceed with your best judgement, or ask again in your reply.",
+            : "The question was interrupted before it was answered. Stop and wait for the user rather than proceeding.",
+          true,
         );
       }
 
       const parsed = interactionResponseSchema.safeParse(result.value);
       if (!parsed.success) {
-        return errorResult(
+        return textResult(
           "The answer could not be read. Ask the question again in your reply instead.",
         );
       }
       const toolResult = buildToolResult(payload, parsed.data);
       if (Object.keys(toolResult.answers).length === 0) {
-        return errorResult(
+        return textResult(
           "The user submitted no answers. Proceed with your best judgement, or ask again in your reply.",
         );
       }

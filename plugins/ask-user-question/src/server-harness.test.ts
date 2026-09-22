@@ -258,7 +258,7 @@ describe("asking a question", () => {
     });
   });
 
-  it("tells the model to carry on when the user dismisses the question", async () => {
+  it("lets the agent proceed when the user explicitly dismisses the question", async () => {
     const host = createHost();
     const call = host.harness.callAgentTool(TOOL_NAME, { questions });
     await vi.waitFor(() =>
@@ -267,11 +267,38 @@ describe("asking a question", () => {
     host.harness.cancelInteraction(host.harness.pendingInteractions[0]!.id);
 
     const result = await call;
-    expect(result).toMatchObject({ isError: true });
+    expect(result).not.toMatchObject({ isError: true });
     expect(await resultText(result)).toContain("dismissed the question");
   });
 
-  it("reports an empty submission as an error instead of a blank answer", async () => {
+  it("does not let the agent proceed when the question times out", async () => {
+    const host = createFakePluginHost({ pluginId: "ask-user-question" });
+    host.bb.ui.requestInput = () =>
+      Promise.resolve({ outcome: "cancelled", reason: "timeout" });
+    plugin(host.bb as unknown as Parameters<typeof plugin>[0]);
+
+    const result = await host.harness.callAgentTool(TOOL_NAME, { questions });
+
+    expect(result).toMatchObject({ isError: true });
+    const text = await resultText(result);
+    expect(text).toContain("Stop here and wait for the user");
+    expect(text).not.toContain("Proceed");
+    expect(text).not.toContain("best judgment");
+  });
+
+  it("does not let the agent proceed when the question is interrupted", async () => {
+    const host = createFakePluginHost({ pluginId: "ask-user-question" });
+    host.bb.ui.requestInput = () =>
+      Promise.resolve({ outcome: "cancelled", reason: "server-restarted" });
+    plugin(host.bb as unknown as Parameters<typeof plugin>[0]);
+
+    const result = await host.harness.callAgentTool(TOOL_NAME, { questions });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(await resultText(result)).toContain("Stop and wait for the user");
+  });
+
+  it("lets the agent proceed when the submission has no answers", async () => {
     const host = createHost();
     const call = host.harness.callAgentTool(TOOL_NAME, { questions });
     await vi.waitFor(() =>
@@ -282,7 +309,7 @@ describe("asking a question", () => {
     });
 
     const result = await call;
-    expect(result).toMatchObject({ isError: true });
+    expect(result).not.toMatchObject({ isError: true });
     expect(await resultText(result)).toContain("no answers");
   });
 

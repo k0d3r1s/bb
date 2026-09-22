@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/// <reference types="vitest/jsdom" />
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientDelivery } from "./client.js";
 
@@ -26,7 +27,11 @@ const message = {
 beforeEach(() => {
   TestNotification.permission = "granted";
   TestNotification.instances = [];
-  localStorage.clear();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: jsdom.window.localStorage,
+  });
+  window.localStorage.clear();
   vi.stubGlobal("Notification", TestNotification);
   vi.stubGlobal("isSecureContext", true);
   vi.spyOn(window, "focus").mockImplementation(() => undefined);

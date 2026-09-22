@@ -854,6 +854,7 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Observe debounced experimental_thread.events notifications with the latest sequence and current thread, or experimental_terminal.input without keystroke contents",
           "Observe experimental_host.deleted when a machine is removed, to drop state kept for that machine",
           "Subscribe to a turn failing, with the provider's error and rate-limit windows attached",
+          "Subscribe to experimental_thread.turnWatchdog when the stall watchdog flags or interrupts an idle turn (metadata only, no thread content)",
           "Respond by sending a notification, asking for a retry, or writing to its own storage",
         ],
         apiSymbols: [

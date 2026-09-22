@@ -1,5 +1,27 @@
 # APIs To Audit
 
+## `bb.ui.requestInput` `experimental_holdToolCall`
+
+`bb.ui.requestInput`'s options accept an optional `experimental_holdToolCall`
+boolean. Default (`false`/absent) keeps today's behavior: inside a native tool's
+`execute`, the tool call is detached and answered at once with a waiting notice,
+and the eventual result reaches the agent as a later message. When set, the tool
+call instead stays blocked until the form settles, and the interaction is bound
+to the thread's active turn (`turnId` is populated from the active turn), so the
+turn-bound send/steer/dispatch guards treat the thread as busy and reject a send
+until the form resolves — matching a provider's native question. Used by the
+bundled `ask-user-question` plugin so an unanswered question halts the turn
+rather than letting the agent proceed.
+
+Before stabilizing: audit the held-open tool-call transport (a blocking form can
+hold the daemon→server request open up to the form timeout; forwarded tool calls
+use a 65-minute transport ceiling), the turn-bound interaction lifecycle
+(steer/edit/queue while pending, and abort on thread stop/delete, plugin dispose,
+session revocation, and server-move), and concurrency (the
+one-active-interaction-per-thread guard is the only cap on held-open calls).
+Decide whether turn-binding should be inferred from the renderer/policy on the
+server rather than carried as a public option.
+
 ## `app.commands.register`
 
 `app.commands.register` requires SDK 0.4.91; `defaultShortcut` and keyboard
@@ -462,6 +484,23 @@ message needs before this is stable. For `turn.failed`, confirm the payload answ
 question a retry policy asks without replaying the event log, and note that
 attempt caps are entirely the plugin's: core enforces no ceiling on retry chains
 beyond one live retry row per original request.
+
+## `experimental_thread.turnWatchdog` (`PluginThreadEventPayloads`)
+
+**What it does.** Fires when the provider-turn stall watchdog acts on the active
+turn: `action: "notify"` when idle time first crosses `providerTurnIdleNotifyMs`
+(the turn is still running), and `action: "interrupt"` when it crosses
+`providerTurnIdleInterruptMs` and core is stopping the turn. The payload is
+metadata only — `{ thread, elapsedMs, thresholdMs, action }` — with no assistant
+text or prompt content, so a delivery target (e.g. the push-notifications plugin)
+can surface it without exfiltrating in-flight thread state to a third party.
+
+**Audit before stabilizing.** Confirm the payload answers what a notifier needs
+without replaying the event log, and decide whether `notify` and `interrupt`
+should stay one event with an `action` discriminant or split into two named
+events. Confirm the metadata-only shape is the right privacy boundary before the
+`experimental_` prefix is dropped (stabilization includes the project-wide
+rename and removing this entry).
 
 ## `bb.experimental_environments` (`register`, `recheck`)
 

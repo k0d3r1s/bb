@@ -49,6 +49,7 @@ import {
 import { setPluginMachineProviderBridge } from "./services/plugins/plugin-machine-provider-registry.js";
 import { invalidateEnvironmentProviderMachineAvailability } from "./services/environments/provider-machine-availability.js";
 import { requestQueuedMessageDispatch } from "./services/threads/queued-message-dispatch.js";
+import { haltThreadForUnansweredQuestion } from "./services/threads/thread-lifecycle.js";
 import { registerInternalEventRoutes } from "./internal/events.js";
 import { registerInternalHostRoutes } from "./internal/hosts.js";
 import { registerInternalInteractiveRequestRoutes } from "./internal/interactive-requests.js";
@@ -725,12 +726,15 @@ export function createApp(
   });
   // Messages queued while a thread awaited user interaction stop waiting once
   // that interaction settles (#1650); the idle drain then delivers them.
-  deps.pendingInteractions.setThreadInteractionSettledListener((threadId) => {
-    requestQueuedMessageDispatch(deps, {
-      kind: "interaction-settled",
-      threadId,
-    });
-  });
+  deps.pendingInteractions.setThreadInteractionSettledListener(
+    (interaction) => {
+      requestQueuedMessageDispatch(deps, {
+        kind: "interaction-settled",
+        threadId: interaction.threadId,
+      });
+      haltThreadForUnansweredQuestion(deps, interaction);
+    },
+  );
   setPluginThreadEventEmitter(pluginService.events);
   // Bridge the dispatch pipeline to this service's hooks. Until this runs
   // there are no hooks, which is exactly the zero-overhead path.

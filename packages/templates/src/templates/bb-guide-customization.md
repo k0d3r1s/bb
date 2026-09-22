@@ -160,6 +160,14 @@ own model.
 `bb settings show`. Boolean preferences take `true`, `false`, `on`, or `off`,
 and `null` clears a preference that can be unset.
 
+The provider-turn stall watchdog flags a turn whose active operation has been
+idle (no provider activity) past `providerTurnIdleNotifyMs` (default `21600000`,
+6h) and interrupts it past `providerTurnIdleInterruptMs` (default `43200000`,
+12h); `providerTurnIdleWatchdogEnabled` (default `true`) turns both off. Set them
+with `bb settings general providerTurnIdleNotifyMs <ms>` etc. — the interrupt
+threshold must exceed the notify threshold, and both floor at `300000` (5
+minutes).
+
 `bb settings completed-turns` lists how each provider shows a finished turn:
 `collapse` folds the turn's work into one "Worked for" row and keeps the final
 answer visible, and `flat` keeps every step visible. Each provider has a

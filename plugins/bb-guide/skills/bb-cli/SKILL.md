@@ -125,6 +125,11 @@ BB_HOST_DAEMON_PORT only for an intentional non-default target.
   it also prints that machine's availability (`available`, `setup-required`,
   `unavailable`, or `unknown` until the background probe answers). Read or set `managedBranchPrefix`
   through `bb settings show` and `bb settings general <key> <value>`.
+- The provider-turn stall watchdog flags (6h) then interrupts (12h) a turn whose
+  active operation goes idle. Tune it with `bb settings general
+  providerTurnIdleWatchdogEnabled <on|off>`, `providerTurnIdleNotifyMs <ms>`, and
+  `providerTurnIdleInterruptMs <ms>` (interrupt must exceed notify; both floor at
+  300000ms / 5 minutes).
 - The server keeps a registry of sidebar layout preferences (organization
   mode, section order, collapsed rows, navigation entries): `bb settings ui
 list`, `get`, `set`, and `reset`.

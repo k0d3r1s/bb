@@ -131,6 +131,8 @@ function threadInterruptedTitle(
       return "Stopped — host daemon restarted";
     case "provider-turn-idle":
       return "Stopped — provider turn stopped responding";
+    case "question-unanswered":
+      return "Stopped — question unanswered, waiting for you";
     default:
       return assertNever(reason);
   }
@@ -625,13 +627,16 @@ export function parseOperationMessage(
   }
 
   if (decoded.type === "system/provider-turn-watchdog") {
+    const interrupting = decoded.action === "interrupt";
     return op(decoded, meta, "provider-turn-watchdog", {
       opType: "operation",
-      title: "Provider turn stopped responding",
+      title: interrupting
+        ? "Provider turn stopped responding, interrupting turn"
+        : "Provider turn stopped responding",
       detail: `No provider activity for ${Math.round(
         decoded.elapsedMs / 1_000,
       )}s after ${decoded.lastActivityEventType}`,
-      status: "error",
+      status: interrupting ? "error" : "completed",
     });
   }
 

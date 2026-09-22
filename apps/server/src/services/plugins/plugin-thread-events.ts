@@ -1,5 +1,9 @@
 import type { ApplyThreadLifecycleEventOutcome, HostRow } from "@bb/db";
-import type { PendingInteraction, Thread } from "@bb/domain";
+import type {
+  PendingInteraction,
+  ProviderTurnWatchdogAction,
+  Thread,
+} from "@bb/domain";
 import type { ThreadQueuedMessage } from "@bb/domain";
 import type { PluginThreadEventEmitter } from "./plugin-service.js";
 
@@ -66,6 +70,17 @@ export function emitPluginMessageCancelled(entry: ThreadQueuedMessage): void {
  */
 export function emitPluginTurnFailed(threadId: string): void {
   emitter?.emitTurnFailed(threadId);
+}
+
+export function emitPluginThreadTurnWatchdog(
+  thread: Thread,
+  payload: {
+    elapsedMs: number;
+    thresholdMs: number;
+    action: ProviderTurnWatchdogAction;
+  },
+): void {
+  emitter?.emitThreadTurnWatchdog(thread, payload);
 }
 
 /**

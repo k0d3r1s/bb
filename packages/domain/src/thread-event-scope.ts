@@ -221,7 +221,7 @@ const threadEventScopeDefinitionByType = {
   "system/provider-turn-watchdog": {
     policy: "thread",
     rationale:
-      "Legacy persisted watchdog diagnostics are decoded for old timelines only; there is no current producer.",
+      "Provider turn watchdog diagnostics describe server lifecycle ownership for the whole thread.",
   },
 } as const satisfies ThreadEventScopePolicyDefinitionByType;
 
@@ -242,7 +242,18 @@ function buildThreadEventScopePolicyByType(): ThreadEventScopePolicyByType {
   return policies as ThreadEventScopePolicyByType;
 }
 
-const threadEventScopePolicyByType = buildThreadEventScopePolicyByType();
+export const threadEventScopePolicyByType = buildThreadEventScopePolicyByType();
+
+type ThreadEventTypeForScopePolicy<Policy extends "thread" | "thread-or-turn"> =
+  {
+    [
+      Type in ThreadEventType
+    ]: (typeof threadEventScopeDefinitionByType)[Type]["policy"] extends Policy
+      ? Type
+      : never;
+  }[ThreadEventType];
+
+export type ThreadOnlyThreadEventType = ThreadEventTypeForScopePolicy<"thread">;
 
 export function threadScope(): ThreadEventScope {
   return { kind: "thread" };

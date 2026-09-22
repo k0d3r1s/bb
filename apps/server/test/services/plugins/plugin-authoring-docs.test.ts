@@ -238,6 +238,12 @@ const THREAD_EVENT_PAYLOAD_FIELDS = {
     "rateLimits",
     "attemptNumber",
   ],
+  "experimental_thread.turnWatchdog": [
+    "thread",
+    "elapsedMs",
+    "thresholdMs",
+    "action",
+  ],
 } as const satisfies {
   [
     E in keyof PluginThreadEventPayloads

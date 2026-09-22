@@ -13,6 +13,7 @@ import type {
   ProviderNativeRootInput,
   ProviderNativeRootsInputLike,
   ProviderRateLimitState,
+  ProviderTurnWatchdogAction,
   ReasoningLevel,
   ServiceTier,
   ThreadCreateOrigin,
@@ -343,6 +344,19 @@ export interface PluginThreadEventPayloads {
    * event, not this one.
    */
   "message.cancelled": { entry: ThreadQueuedMessage };
+  /**
+   * Fired when the provider-turn stall watchdog flags the active turn: `notify`
+   * when it first crosses the idle threshold (turn still running), `interrupt`
+   * when it crosses the interrupt threshold and the turn is being stopped.
+   * Metadata only — no thread content — so a delivery target may surface it
+   * without exfiltrating in-flight prompt/output.
+   */
+  "experimental_thread.turnWatchdog": {
+    thread: ThreadResponse;
+    elapsedMs: number;
+    thresholdMs: number;
+    action: ProviderTurnWatchdogAction;
+  };
 }
 
 export type PluginThreadEventName = keyof PluginThreadEventPayloads;
@@ -1820,10 +1834,15 @@ export interface PluginUi {
    * reaches the agent as a message; see {@link PluginAgentToolContext.signal}.
    * The form leaves a timeline row described by `presentation` and
    * `describeSubmission`.
+   *
+   * `experimental_holdToolCall` reverses that default inside a native tool's
+   * `execute`: the tool call stays blocked until the form settles (the agent
+   * does not keep working), and the interaction is bound to the active turn so
+   * a send while it is open is rejected until it resolves.
    */
   requestInput(
     request: PluginInteractionRequest,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; experimental_holdToolCall?: boolean },
   ): Promise<PluginInteractionResult>;
   /**
    * Register a mention provider for the shipped app's composer (design §4.9).

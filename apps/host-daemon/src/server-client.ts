@@ -1,4 +1,5 @@
 import pRetry, { AbortError } from "p-retry";
+import { Agent } from "undici";
 import { z } from "zod";
 import {
   HOST_DAEMON_PROTOCOL_VERSION,
@@ -174,6 +175,12 @@ function toRetryControlError(error: ServerResponseError): Error {
 export type FetchFn = (
   ...args: Parameters<typeof fetch>
 ) => ReturnType<typeof fetch>;
+
+export const TOOL_CALL_TIMEOUT_MS = 65 * 60 * 1000;
+const toolCallDispatcher = new Agent({
+  headersTimeout: TOOL_CALL_TIMEOUT_MS,
+  bodyTimeout: TOOL_CALL_TIMEOUT_MS,
+});
 
 interface CreateServerClientOptions {
   serverUrl: string;
@@ -601,6 +608,7 @@ export function createServerClient(
         method: "POST",
         headers: headers(),
         body: JSON.stringify(payload),
+        ...{ dispatcher: toolCallDispatcher },
       });
 
       if (!response.ok) {

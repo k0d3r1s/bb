@@ -1,6 +1,7 @@
 import {
   createPendingInteraction,
   getActivePendingInteractionForThread,
+  getActiveStoredTurnId,
   getEnvironment,
   getPendingInteraction,
   getPendingInteractionByProviderRequest,
@@ -132,6 +133,7 @@ interface RequestPluginInteractionArgs {
   describeSubmission: DescribePluginSubmission | null;
   timeoutMs: number;
   signal?: AbortSignal;
+  holdToolCall?: boolean;
 }
 
 interface PluginInteractionWaiter {
@@ -295,7 +297,9 @@ function buildInteractiveResolveCommand(
 
 type PendingInteractionLifecycleArgs = CreateLifecycleDeps;
 
-export type ThreadInteractionSettledListener = (threadId: string) => void;
+export type ThreadInteractionSettledListener = (
+  interaction: PendingInteraction,
+) => void;
 
 function buildInteractionChangeMetadata({
   db,
@@ -400,12 +404,6 @@ export class PendingInteractionLifecycle {
     return interaction;
   }
 
-  /**
-   * Whether a pending interaction holds this thread's turn. A provider's
-   * question or approval does: the provider is blocked on it, so nothing
-   * else can be sent until it settles. A plugin's card has no turn and never
-   * blocks a send; whatever answers it later steers or starts a turn.
-   */
   hasTurnBoundPendingThreadInteraction(threadId: string): boolean {
     const active = getActivePendingInteractionForThread(this.deps.db, threadId);
     return active !== null && active.turnId !== null;
@@ -542,7 +540,9 @@ export class PendingInteractionLifecycle {
         pluginId: args.pluginId,
         rendererId: args.rendererId,
         threadId: args.threadId,
-        turnId: null,
+        turnId: args.holdToolCall
+          ? getActiveStoredTurnId(tx, args.threadId)
+          : null,
         expiresAt,
         payload: JSON.stringify({
           kind: "plugin",
@@ -1008,7 +1008,7 @@ export class PendingInteractionLifecycle {
       hasPendingInteraction: false,
       threadId: interaction.threadId,
     });
-    this.notifyInteractionSettled(interaction.threadId);
+    this.notifyInteractionSettled(interaction);
   }
 
   private settleInteractionTerminalStateInTransaction(
@@ -1021,18 +1021,18 @@ export class PendingInteractionLifecycle {
       hasPendingInteraction: false,
       threadId: interaction.threadId,
     });
-    this.notifyInteractionSettled(interaction.threadId);
+    this.notifyInteractionSettled(interaction);
   }
 
-  private notifyInteractionSettled(threadId: string): void {
+  private notifyInteractionSettled(interaction: PendingInteraction): void {
     if (!this.interactionSettledListener) {
       return;
     }
     try {
-      this.interactionSettledListener(threadId);
+      this.interactionSettledListener(interaction);
     } catch (error) {
       this.deps.logger.warn(
-        { err: error, threadId },
+        { err: error, threadId: interaction.threadId },
         "Pending interaction settled listener failed",
       );
     }

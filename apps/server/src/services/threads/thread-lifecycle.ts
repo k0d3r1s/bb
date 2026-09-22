@@ -33,6 +33,7 @@ import {
 import { assertNever } from "@bb/core-ui";
 import { COMPETING_TURN_ERROR_CODE } from "@bb/host-daemon-contract";
 import {
+  type PendingInteraction,
   type ProvisioningTranscriptEntry,
   type SystemThreadInterruptedReason,
   type Thread,
@@ -40,6 +41,7 @@ import {
   type ThreadEventType,
   type ThreadLifecycleEvent,
   type ThreadStatus,
+  isPluginPendingInteraction,
   threadScope,
   turnScope,
 } from "@bb/domain";
@@ -381,6 +383,7 @@ function lifecycleEventForInterruptedThread(
   switch (reason) {
     case "host-removed":
     case "manual-stop":
+    case "question-unanswered":
       return { type: "stop.settled" };
     case "host-daemon-restarted":
     case "host-connection-lost":
@@ -405,6 +408,8 @@ function pendingInteractionStopReason(
       return "Connection to host was lost while awaiting user interaction";
     case "provider-turn-idle":
       return "Thread stopped after the provider stopped sending progress";
+    case "question-unanswered":
+      return "Thread stopped after a question went unanswered";
     default:
       return assertNever(reason);
   }
@@ -416,6 +421,7 @@ function threadCommandFailureMessageForInterruption(
   switch (reason) {
     case "host-removed":
     case "manual-stop":
+    case "question-unanswered":
       return null;
     case "host-daemon-restarted":
       return "Thread interrupted because the host daemon disconnected";
@@ -436,6 +442,8 @@ function threadCommandFailureDetailForInterruption(
       return "Thread stopped because the machine was removed";
     case "manual-stop":
       return "Thread stopped by user request";
+    case "question-unanswered":
+      return "Thread stopped because a question went unanswered";
     case "host-daemon-restarted":
     case "host-connection-lost":
       return "Please retry the thread to continue.";
@@ -1319,7 +1327,7 @@ async function requestThreadStartOnce(
   }
 }
 
-function requestThreadStop(
+export function requestThreadStop(
   deps: CommandResultSideEffectsDeps,
   args: RequestThreadStopArgs,
 ): void {
@@ -1334,6 +1342,58 @@ function requestThreadStop(
   }
 
   dispatchThreadStopCommand(deps, args);
+}
+
+export function haltThreadForUnansweredQuestion(
+  deps: CommandResultSideEffectsDeps,
+  interaction: PendingInteraction,
+): void {
+  if (!isPluginPendingInteraction(interaction)) {
+    return;
+  }
+  if (interaction.origin.pluginId !== "ask-user-question") {
+    return;
+  }
+  if (interaction.origin.rendererId !== "ask-user-question") {
+    return;
+  }
+  if (
+    interaction.status !== "interrupted" ||
+    interaction.statusReason !== "timeout"
+  ) {
+    return;
+  }
+  queueMicrotask(() => {
+    try {
+      const thread = getThread(deps.db, interaction.threadId);
+      if (
+        !thread ||
+        thread.status !== "active" ||
+        thread.environmentId === null
+      ) {
+        return;
+      }
+      const environment = getEnvironment(deps.db, thread.environmentId);
+      if (!environment) {
+        return;
+      }
+      requestThreadStop(deps, {
+        environmentId: environment.id,
+        hostId: environment.hostId,
+        interruptionReason: "question-unanswered",
+        threadId: thread.id,
+      });
+      deps.logger.info(
+        { threadId: thread.id, interactionId: interaction.id },
+        "Halted turn: AskUserQuestion timed out with no answer",
+      );
+    } catch (error) {
+      deps.logger.warn(
+        { err: error, threadId: interaction.threadId },
+        "Failed to halt turn after an unanswered question",
+      );
+    }
+  });
 }
 
 function markThreadStopRequested(

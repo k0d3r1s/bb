@@ -482,6 +482,7 @@ export function createPluginApi(options: {
     args: Omit<NormalizedPluginInteractionRequest, "presentation"> & {
       presentation: ThreadEventItemPresentation;
       signal?: AbortSignal;
+      holdToolCall?: boolean;
     },
   ) => Promise<PluginInteractionResult>;
   ensureSharedPortTunnel: PluginHosts["ensureSharedPortTunnel"];
@@ -569,6 +570,7 @@ export function createPluginApi(options: {
     "turn.failed": [],
     "message.cancelled": [],
     "thread.unarchived": [],
+    "experimental_thread.turnWatchdog": [],
   };
   const hooks: PluginHookRecords = {
     "message.dispatch": null,
@@ -627,6 +629,7 @@ export function createPluginApi(options: {
     if (iconProblem !== null) {
       throw new Error(`ui.requestInput presentation.icon ${iconProblem}`);
     }
+    const holdToolCall = requestOptions?.experimental_holdToolCall === true;
     const pending = requestInteraction({
       ...normalized,
       presentation: fillPluginPresentation({
@@ -638,8 +641,9 @@ export function createPluginApi(options: {
         },
       }),
       signal: requestOptions?.signal,
+      ...(holdToolCall ? { holdToolCall: true } : {}),
     });
-    if (!requestOptions?.signal?.aborted) {
+    if (!holdToolCall && !requestOptions?.signal?.aborted) {
       detachActivePluginToolCallForUserInput();
     }
     return pending;

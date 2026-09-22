@@ -1346,6 +1346,14 @@ export function createPluginService(deps: PluginServiceDeps): PluginService {
           interaction,
         }));
       },
+      emitThreadTurnWatchdog(thread, payload) {
+        emitThreadEvent("experimental_thread.turnWatchdog", () => ({
+          thread: buildThreadDto(thread),
+          elapsedMs: payload.elapsedMs,
+          thresholdMs: payload.thresholdMs,
+          action: payload.action,
+        }));
+      },
       emitMessageQueued: buildQueuedMessageEventEmitter("message.queued"),
       emitMessageDispatched:
         buildQueuedMessageEventEmitter("message.dispatched"),

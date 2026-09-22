@@ -1217,6 +1217,37 @@ loop` with a per-stage breakdown, and event-loop stalls over 500ms log `Event
 loop stalled`. Both log at `info`, so they are visible in `~/.bb/logs/` without
 raising `BB_LOG_LEVEL`.
 
+## Provider Turn Stall Watchdog
+
+A background sweep watches every active provider turn for a stall — no new
+provider activity on the running operation for a configured time — and acts in
+two stages. Idle is measured on the single active operation (time since the
+turn's last activity event), not on wall-clock, so a turn that is still
+streaming output never trips it, and a turn parked waiting for your approval is
+excluded outright.
+
+- Stage 1 (`providerTurnIdleNotifyMs`, default `21600000` = 6 hours): writes a
+  "Provider turn stopped responding" marker into the thread timeline and, if the
+  push-notifications plugin is enabled, sends an OS/desktop/mobile notification.
+  The turn keeps running.
+- Stage 2 (`providerTurnIdleInterruptMs`, default `43200000` = 12 hours): writes
+  the marker again, stops the stuck turn (the same interrupt as `bb thread stop`,
+  with reason "provider turn stopped responding"), and notifies again.
+
+Settings (global, via `bb settings general <key> <value>`):
+
+- `providerTurnIdleWatchdogEnabled` (default `on`) — set `off` to disable both
+  stages entirely.
+- `providerTurnIdleNotifyMs` (default `21600000`, i.e. 6h) — stage-1 idle
+  threshold in milliseconds.
+- `providerTurnIdleInterruptMs` (default `43200000`, i.e. 12h) — stage-2 idle
+  threshold in milliseconds. Must be greater than `providerTurnIdleNotifyMs`.
+
+Both thresholds have a floor of 5 minutes (`300000` ms), comfortably above the
+60-second sweep cadence, so a mistaken value can only ever fire early rather
+than continuously. Because the sweep runs about once a minute, a marker can lag
+crossing a threshold by up to a minute.
+
 ## Plugins
 
 Plugins are on by default. Builtin plugins, including connect, ship with bb;

@@ -73,6 +73,7 @@ function requestPluginInteraction(
     threadId: string;
     name?: string;
     signal?: AbortSignal;
+    holdToolCall?: boolean;
   },
 ) {
   return deps.pendingInteractions.requestPluginInteraction({
@@ -91,6 +92,7 @@ function requestPluginInteraction(
     describeSubmission: null,
     timeoutMs: 10_000,
     ...(args.signal ? { signal: args.signal } : {}),
+    ...(args.holdToolCall ? { holdToolCall: true } : {}),
   });
 }
 
@@ -2328,5 +2330,70 @@ it("rejects a late answer when an abort callback settled the waiter but failed t
         interactionId: interaction!.id,
       }),
     ).toMatchObject({ status: "interrupted", resolution: null });
+  });
+});
+
+describe("hold-tool-call turn binding", () => {
+  it("binds a held interaction to the active turn so sends are blocked", async () => {
+    await withTestHarness(async (harness) => {
+      const deps = harness.deps;
+      const thread = seedPluginInteractionThread(deps, "hold-bound");
+      seedTurnStarted(deps, {
+        threadId: thread.id,
+        turnId: "turn-hold-bound",
+        providerThreadId: "provider-thread-hold-bound",
+      });
+      const controller = new AbortController();
+      try {
+        const pending = requestPluginInteraction(deps, {
+          threadId: thread.id,
+          holdToolCall: true,
+          signal: controller.signal,
+        });
+        const [interaction] =
+          deps.pendingInteractions.listPendingThreadInteractions(thread.id);
+        expect(interaction?.turnId).toBe("turn-hold-bound");
+        expect(
+          deps.pendingInteractions.hasTurnBoundPendingThreadInteraction(
+            thread.id,
+          ),
+        ).toBe(true);
+        controller.abort();
+        await pending.catch(() => undefined);
+      } finally {
+        controller.abort();
+      }
+    });
+  });
+
+  it("leaves a non-held interaction unbound from the turn", async () => {
+    await withTestHarness(async (harness) => {
+      const deps = harness.deps;
+      const thread = seedPluginInteractionThread(deps, "no-hold");
+      seedTurnStarted(deps, {
+        threadId: thread.id,
+        turnId: "turn-no-hold",
+        providerThreadId: "provider-thread-no-hold",
+      });
+      const controller = new AbortController();
+      try {
+        const pending = requestPluginInteraction(deps, {
+          threadId: thread.id,
+          signal: controller.signal,
+        });
+        const [interaction] =
+          deps.pendingInteractions.listPendingThreadInteractions(thread.id);
+        expect(interaction?.turnId).toBeNull();
+        expect(
+          deps.pendingInteractions.hasTurnBoundPendingThreadInteraction(
+            thread.id,
+          ),
+        ).toBe(false);
+        controller.abort();
+        await pending.catch(() => undefined);
+      } finally {
+        controller.abort();
+      }
+    });
   });
 });

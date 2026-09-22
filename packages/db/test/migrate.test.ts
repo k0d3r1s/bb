@@ -1990,6 +1990,11 @@ describe("migrate", () => {
         providerOrder: [],
         defaultProviderId: null,
         providerCompletedTurnDisplay: {},
+        providerTurnIdleInterruptMs:
+          defaultAppSettings.providerTurnIdleInterruptMs,
+        providerTurnIdleNotifyMs: defaultAppSettings.providerTurnIdleNotifyMs,
+        providerTurnIdleWatchdogEnabled:
+          defaultAppSettings.providerTurnIdleWatchdogEnabled,
         machineServerUrl: null,
         defaultMachineAccess: null,
         machineGitCredentialsEnabled: true,

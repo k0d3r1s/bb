@@ -18,6 +18,7 @@ type PendingInteraction =
   PluginThreadEventPayloads["interaction.pending"]["interaction"];
 type PushNotificationKind =
   | "pending-interaction"
+  | "turn-watchdog"
   | "turn-finished"
   | "thread-error";
 
@@ -29,6 +30,7 @@ const NETWORK_WARNING_INTERVAL_MS = 60 * 60 * 1_000;
 const LAST_OUTCOME_KEY = "last-send-outcome";
 const PUSH_KIND_PRIORITY: readonly PushNotificationKind[] = [
   "pending-interaction",
+  "turn-watchdog",
   "thread-error",
   "turn-finished",
 ];
@@ -124,6 +126,9 @@ export interface PushSender {
   ): void;
   onThreadFailed(payload: PluginThreadEventPayloads["thread.failed"]): void;
   onThreadIdle(payload: PluginThreadEventPayloads["thread.idle"]): void;
+  onTurnWatchdog(
+    payload: PluginThreadEventPayloads["experimental_thread.turnWatchdog"],
+  ): void;
   settle(): Promise<void>;
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -154,6 +159,15 @@ function firstLine(text: string): string {
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function describeApproxDuration(ms: number): string {
+  const hours = Math.floor(ms / 3_600_000);
+  if (hours >= 1) {
+    return hours === 1 ? "1 hour" : `${hours} hours`;
+  }
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  return minutes === 1 ? "1 minute" : `${minutes} minutes`;
 }
 
 function threadDisplayTitle(thread: ThreadResponse): string {
@@ -495,6 +509,16 @@ export function createPushSender(args: CreatePushSenderArgs): PushSender {
         thread.id,
         "turn-finished",
         firstLine(lastAssistantText ?? "") || "Finished and waiting for you",
+      );
+    },
+    onTurnWatchdog({ thread, elapsedMs, action }) {
+      const duration = describeApproxDuration(elapsedMs);
+      schedule(
+        thread.id,
+        "turn-watchdog",
+        action === "interrupt"
+          ? `bb stopped a stalled turn after ${duration}`
+          : `Turn stalled — no activity for ${duration}`,
       );
     },
     settle,

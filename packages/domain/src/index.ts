@@ -57,6 +57,7 @@ export * from "./terminal.js";
 export * from "./thread-dynamic-context.js";
 export * from "./thread-event-scope.js";
 export * from "./thread-events.js";
+export * from "./provider-turn-watchdog.js";
 export * from "./thread-git-diff.js";
 export * from "./started-on-behalf-of.js";
 export * from "./thread-create-origin.js";
