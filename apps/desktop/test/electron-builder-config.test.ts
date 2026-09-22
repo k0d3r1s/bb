@@ -67,7 +67,7 @@ const macConfigSchema = z
 const linuxConfigSchema = z
   .object({
     category: z.literal("Development"),
-    executableName: z.enum(["bb", "bb-nightly"]),
+    executableName: z.enum(["bb", "bb-nightly", "bb-local"]),
     icon: z.string().min(1),
     target: z.tuple([
       z
@@ -109,14 +109,17 @@ const electronBuilderConfigSchema = z
     appId: z.string().min(1),
     artifactName: z.string().min(1),
     productName: z.string().min(1),
-    publish: z.tuple([
-      z
-        .object({
-          channel: z.enum(["latest", "nightly"]),
-          provider: z.literal("generic"),
-          url: z.string().min(1),
-        })
-        .passthrough(),
+    publish: z.union([
+      z.tuple([]),
+      z.tuple([
+        z
+          .object({
+            channel: z.enum(["latest", "nightly"]),
+            provider: z.literal("generic"),
+            url: z.string().min(1),
+          })
+          .passthrough(),
+      ]),
     ]),
     toolsets: z.object({
       appimage: z.literal("1.0.3"),
@@ -615,6 +618,27 @@ describe("electron-builder signing config", () => {
       provider: "generic",
       url: nightlyRelease.updateReleaseBaseUrl,
     });
+  });
+
+  it("creates a separate local app identity without an update feed", async () => {
+    const { config } = await readResolvedConfig({
+      BB_DESKTOP_LOCAL_BUILD: "1",
+    });
+
+    expect(config.appId).toBe("dev.bb.desktop.local");
+    expect(config.productName).toBe("bb Local");
+    expect(config.artifactName).toBe("bb-local-${version}-${arch}.${ext}");
+    expect(config.linux.executableName).toBe("bb-local");
+    expect(config.publish).toEqual([]);
+  });
+
+  it("rejects an invalid local build selector", async () => {
+    const result = await runConfigScript({
+      BB_DESKTOP_LOCAL_BUILD: "yes",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("BB_DESKTOP_LOCAL_BUILD must be 0 or 1");
   });
 
   it("rejects unknown desktop release channels", async () => {

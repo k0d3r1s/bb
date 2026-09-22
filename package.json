@@ -13,6 +13,10 @@
     "ensure-native-modules": "node scripts/ensure-native-modules.mjs",
     "dev": "node scripts/ensure-native-modules.mjs && cross-env NODE_ENV=development dotenv -c development -- node --conditions=source --import tsx packages/scripts/src/commands/run-dev.ts",
     "start": "cross-env NODE_ENV=production dotenv -c production -- node --conditions=source --import tsx scripts/start-bb.mjs",
+    "desktop:local:package": "cross-env BB_DESKTOP_LOCAL_BUILD=1 pnpm --filter @bb/desktop package",
+    "desktop:local:update": "node scripts/update-local-desktop.mjs",
+    "vps:local:service-install": "node scripts/install-local-vps-service.mjs",
+    "vps:local:update": "node scripts/update-local-vps.mjs",
     "start:worktree": "cross-env NODE_ENV=development dotenv -c development -- node --conditions=source --import tsx packages/scripts/src/commands/run-dev.ts --worktree",
     "start:worktree-remote": "cross-env BB_SERVER_BIND_HOST=0.0.0.0 pnpm run start:worktree",
     "desktop": "cross-env NODE_ENV=production dotenv -c production -- node --conditions=source --import tsx packages/scripts/src/commands/run-desktop.ts",
@@ -64,7 +68,8 @@
     "turbo": "^2.10.12",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-7": "npm:typescript@^7.0.2",
-    "vitest": "^4.1.1"
+    "vitest": "^4.1.1",
+    "yaml": "^2.9.0"
   },
   "packageManager": "pnpm@9.15.0",
   "pnpm": {

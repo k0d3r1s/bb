@@ -1,17 +1,34 @@
 const DESKTOP_RELEASE_CHANNEL_ENV_NAME = "BB_DESKTOP_RELEASE_CHANNEL";
+const DESKTOP_LOCAL_BUILD_ENV_NAME = "BB_DESKTOP_LOCAL_BUILD";
 
-export function resolveDesktopReleaseChannel(env) {
-  const rawChannel = env[DESKTOP_RELEASE_CHANNEL_ENV_NAME]?.trim();
-  if (rawChannel === undefined || rawChannel.length === 0) {
-    return "latest";
+function resolveDesktopBuildSetting(env, args) {
+  const rawValue = env[args.name]?.trim();
+  if (rawValue === undefined || rawValue.length === 0) {
+    return args.defaultValue;
   }
-  if (rawChannel === "latest" || rawChannel === "nightly") {
-    return rawChannel;
+  if (args.allowedValues.includes(rawValue)) {
+    return rawValue;
   }
 
   throw new Error(
-    `${DESKTOP_RELEASE_CHANNEL_ENV_NAME} must be latest or nightly, got ${rawChannel}.`,
+    `${args.name} must be ${args.allowedValues.join(" or ")}, got ${rawValue}.`,
   );
+}
+
+export function resolveDesktopBuildSettings(env) {
+  return {
+    localBuild:
+      resolveDesktopBuildSetting(env, {
+        allowedValues: ["0", "1"],
+        defaultValue: "0",
+        name: DESKTOP_LOCAL_BUILD_ENV_NAME,
+      }) === "1",
+    releaseChannel: resolveDesktopBuildSetting(env, {
+      allowedValues: ["latest", "nightly"],
+      defaultValue: "latest",
+      name: DESKTOP_RELEASE_CHANNEL_ENV_NAME,
+    }),
+  };
 }
 
 export function resolveDesktopBuildPlatform(nodePlatform) {
@@ -27,7 +44,23 @@ export function resolveDesktopBuildPlatform(nodePlatform) {
   );
 }
 
-export function createDesktopReleaseConfig(channel) {
+export function createDesktopReleaseConfig(channel, localBuild = false) {
+  if (localBuild) {
+    return {
+      appId: "dev.bb.desktop.local",
+      applicationName: "bb Local",
+      artifactName: "bb-local-${version}-${arch}.${ext}",
+      iconFileName: "icon.png",
+      linuxExecutableName: "bb-local",
+      macIconPath: "assets/icon.icns",
+      releaseTag: "desktop-latest",
+      updateMetadataFileNames: {
+        linux: "latest-linux.yml",
+        macos: "latest-mac.yml",
+      },
+    };
+  }
+
   if (channel === "nightly") {
     return {
       appId: "dev.bb.desktop.nightly",

@@ -3,16 +3,15 @@ import { spawn } from "node:child_process";
 import { forwardSignalsAndMirrorExit } from "./child-process-helpers.mjs";
 import {
   createDesktopReleaseConfig,
-  resolveDesktopReleaseChannel,
+  resolveDesktopBuildSettings,
 } from "./desktop-release-channel.mjs";
 import { createPackagedAppLaunchArguments } from "./packaged-app-launch.mjs";
 import { resolvePackagedAppBinary } from "./packaged-app-paths.mjs";
 
 const packageRoot = process.cwd();
 const releaseDir = join(packageRoot, "release");
-const releaseConfig = createDesktopReleaseConfig(
-  resolveDesktopReleaseChannel(process.env),
-);
+const { localBuild, releaseChannel } = resolveDesktopBuildSettings(process.env);
+const releaseConfig = createDesktopReleaseConfig(releaseChannel, localBuild);
 
 function createElectronAppEnv(env) {
   const childEnv = {

@@ -57,11 +57,34 @@ const PORT_COLLISION_PATTERN =
 
 const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(scriptsDir, "..");
-const tempRoot = await mkdtemp(join(tmpdir(), "bb-app-tarball-"));
+const tempRoot = await mkdtemp(join(tmpdir(), "bb-"));
 const smokeProcessEnv = {
   BB_TELEMETRY: "false",
 };
 const stopManagedProcess = createManagedProcessStop(PROCESS_STOP_TIMEOUT_MS);
+const useWorkspaceArtifacts =
+  process.env.BB_APP_SMOKE_USE_WORKSPACE_ARTIFACTS === "true";
+const inheritedNpmConfigKeys = new Set([
+  "npm_config_allow_scripts",
+  "npm_config_foreground_scripts",
+  "npm_config_ignore_scripts",
+  "npm_config_recursive",
+]);
+
+function smokeEnvironment(overrides) {
+  const environment = {
+    ...process.env,
+    BB_DATA_DIR: join(tempRoot, "default-data"),
+    ...overrides,
+    ...smokeProcessEnv,
+  };
+  for (const key of Object.keys(environment)) {
+    if (inheritedNpmConfigKeys.has(key.toLowerCase())) {
+      delete environment[key];
+    }
+  }
+  return environment;
+}
 
 function formatElapsed(startedAt) {
   return `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
@@ -124,11 +147,7 @@ function waitForProcessExit(childProcess) {
 async function runCommand({ args, command, cwd = tempRoot, env = {}, label }) {
   const childProcess = spawn(command, args, {
     cwd,
-    env: {
-      ...process.env,
-      ...env,
-      ...smokeProcessEnv,
-    },
+    env: smokeEnvironment(env),
     stdio: ["ignore", "pipe", "pipe"],
   });
   const output = collectProcessOutput(childProcess);
@@ -146,11 +165,7 @@ function spawnManagedProcess({ args, command, env = {}, label }) {
   const childProcess = spawn(command, args, {
     cwd: tempRoot,
     detached,
-    env: {
-      ...process.env,
-      ...env,
-      ...smokeProcessEnv,
-    },
+    env: smokeEnvironment(env),
     stdio: ["ignore", "pipe", "pipe"],
   });
   const output = collectProcessOutput(childProcess);
@@ -383,6 +398,27 @@ async function smokeNpxEntrypoint(tarballPath) {
   );
 }
 
+function parseSingleNpmPackEntry(stdout) {
+  const packed = JSON.parse(stdout);
+  const entries = Array.isArray(packed)
+    ? packed
+    : typeof packed === "object" && packed !== null
+      ? Object.values(packed)
+      : [];
+  if (entries.length !== 1) {
+    throw new Error(`Unexpected npm pack output: ${stdout}`);
+  }
+  const [entry] = entries;
+  if (
+    typeof entry !== "object" ||
+    entry === null ||
+    !Array.isArray(entry.files)
+  ) {
+    throw new Error(`Unexpected npm pack entry: ${stdout}`);
+  }
+  return entry;
+}
+
 async function packTarball() {
   const chunkDir = join(packageRoot, "host-daemon", "dist", "bb-chunks");
   const liveChunk = readdirSync(chunkDir).find((name) => name.endsWith(".js"));
@@ -400,18 +436,8 @@ async function packTarball() {
       command: "npm",
       label: "npm pack",
     });
-    const packed = JSON.parse(stdout);
-    if (!Array.isArray(packed) || packed.length !== 1) {
-      throw new Error(`Unexpected npm pack output: ${stdout}`);
-    }
-    const [entry] = packed;
-    if (
-      typeof entry !== "object" ||
-      entry === null ||
-      !("filename" in entry) ||
-      typeof entry.filename !== "string" ||
-      !Array.isArray(entry.files)
-    ) {
+    const entry = parseSingleNpmPackEntry(stdout);
+    if (!("filename" in entry) || typeof entry.filename !== "string") {
       throw new Error(`Unexpected npm pack entry: ${stdout}`);
     }
     const staleChunkPath = `host-daemon/dist/bb-chunks/${staleChunkName}`;
@@ -505,7 +531,19 @@ function waitForJsonRpcResponse({ childProcess, id, label, output }) {
  */
 function spawnPackedBridge({ bridgePath, packageDir, pluginId }) {
   const dataDir = join(tempRoot, "bridge-data", pluginId);
+  const providerHome = join(tempRoot, "bridge-home", pluginId);
+  const claudeConfigDir = join(providerHome, ".claude");
+  const codexHome = join(providerHome, ".codex");
+  const piAgentDir = join(providerHome, ".pi");
   mkdirSync(dataDir, { recursive: true });
+  for (const directory of [
+    providerHome,
+    claudeConfigDir,
+    codexHome,
+    piAgentDir,
+  ]) {
+    mkdirSync(directory, { recursive: true });
+  }
   return spawn(
     process.execPath,
     [
@@ -514,7 +552,18 @@ function spawnPackedBridge({ bridgePath, packageDir, pluginId }) {
       pluginId,
       dataDir,
     ],
-    { cwd: tempRoot, stdio: ["pipe", "pipe", "pipe"] },
+    {
+      cwd: tempRoot,
+      env: {
+        ...process.env,
+        CLAUDE_CONFIG_DIR: claudeConfigDir,
+        CODEX_HOME: codexHome,
+        HOME: providerHome,
+        PI_CODING_AGENT_DIR: piAgentDir,
+        USERPROFILE: providerHome,
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    },
   );
 }
 
@@ -801,18 +850,12 @@ async function smokeConfigCommand(binDir) {
   }
 }
 
-async function smokeSdkPackage(tarballPath) {
-  const sdkDir = join(tempRoot, "sdk-import");
-  await mkdir(sdkDir, { recursive: true });
-  await writeFile(
-    join(sdkDir, "package.json"),
-    JSON.stringify({ type: "module", private: true }, null, 2),
-  );
+async function installSdkTarball(sdkDir, tarballPath) {
   await timed("npm install tarball", () =>
     runCommand({
       args: [
         "install",
-        "--ignore-scripts=false",
+        `--ignore-scripts=${useWorkspaceArtifacts ? "true" : "false"}`,
         "--no-audit",
         "--no-fund",
         tarballPath,
@@ -822,6 +865,68 @@ async function smokeSdkPackage(tarballPath) {
       label: "install bb-app SDK smoke package",
     }),
   );
+  if (useWorkspaceArtifacts) {
+    const nativeRelativePath = join(
+      "better-sqlite3",
+      "build",
+      "Release",
+      "better_sqlite3.node",
+    );
+    const installedNativePath = join(
+      sdkDir,
+      "node_modules",
+      nativeRelativePath,
+    );
+    await mkdir(dirname(installedNativePath), { recursive: true });
+    await copyFile(
+      join(packageRoot, "node_modules", nativeRelativePath),
+      installedNativePath,
+    );
+  }
+}
+
+async function typecheckSdkPackage(sdkDir) {
+  const typeScriptArgs = [
+    "--module",
+    "NodeNext",
+    "--moduleResolution",
+    "NodeNext",
+    "--target",
+    "ES2022",
+    "--noEmit",
+    "sdk-smoke.ts",
+  ];
+  await timed("typescript check", () =>
+    runCommand({
+      args: useWorkspaceArtifacts
+        ? typeScriptArgs
+        : [
+            "--yes",
+            "--no-audit",
+            "--no-fund",
+            "--package",
+            "typescript",
+            "--",
+            "tsc",
+            ...typeScriptArgs,
+          ],
+      command: useWorkspaceArtifacts
+        ? resolve(packageRoot, "../../node_modules/.bin/tsc")
+        : "npx",
+      cwd: sdkDir,
+      label: "bb-app SDK TypeScript import",
+    }),
+  );
+}
+
+async function smokeSdkPackage(tarballPath) {
+  const sdkDir = join(tempRoot, "sdk-import");
+  await mkdir(sdkDir, { recursive: true });
+  await writeFile(
+    join(sdkDir, "package.json"),
+    JSON.stringify({ type: "module", private: true }, null, 2),
+  );
+  await installSdkTarball(sdkDir, tarballPath);
   await runCommand({
     args: [
       "--input-type=module",
@@ -864,30 +969,7 @@ async function smokeSdkPackage(tarballPath) {
       "",
     ].join("\n"),
   );
-  await timed("npx typescript check", () =>
-    runCommand({
-      args: [
-        "--yes",
-        "--no-audit",
-        "--no-fund",
-        "--package",
-        "typescript",
-        "--",
-        "tsc",
-        "--module",
-        "NodeNext",
-        "--moduleResolution",
-        "NodeNext",
-        "--target",
-        "ES2022",
-        "--noEmit",
-        "sdk-smoke.ts",
-      ],
-      command: "npx",
-      cwd: sdkDir,
-      label: "bb-app SDK TypeScript import",
-    }),
-  );
+  await typecheckSdkPackage(sdkDir);
   return sdkDir;
 }
 
@@ -898,8 +980,7 @@ async function smokeInstalledRepack(installedPackageDir) {
     cwd: installedPackageDir,
     label: "repack installed bb-app",
   });
-  const [packed] = JSON.parse(stdout);
-  if (!Array.isArray(packed?.files)) throw new Error("Invalid npm pack output");
+  const packed = parseSingleNpmPackEntry(stdout);
   const chunkPrefix = "host-daemon/dist/bb-chunks/";
   const liveChunks = readdirSync(join(installedPackageDir, chunkPrefix))
     .filter((name) => name.endsWith(".js"))
@@ -917,7 +998,7 @@ async function smokeInstalledRepack(installedPackageDir) {
   }
 }
 
-async function smokeBuiltinPluginsRunning({ binDir, cliEnv }) {
+async function smokeBuiltinPluginsRunning({ binDir, cliEnv, processRef }) {
   const deadline = Date.now() + PLUGIN_LOAD_TIMEOUT_MS;
   let lastSummary = "no plugin list output yet";
   // Plugins load after the HTTP server starts listening, so poll until every
@@ -963,7 +1044,7 @@ async function smokeBuiltinPluginsRunning({ binDir, cliEnv }) {
     await delay(PLUGIN_LOAD_INTERVAL_MS);
   }
   throw new Error(
-    `Timed out waiting for builtin plugins to run: ${lastSummary}`,
+    `Timed out waiting for builtin plugins to run: ${lastSummary}\n${formatProcessOutput(processRef.output)}`,
   );
 }
 
@@ -1032,7 +1113,7 @@ async function smokeFullStackAttempt(binDir, sdkDir, attempt) {
       env: cliEnv,
       label: "bb cli status",
     });
-    await smokeBuiltinPluginsRunning({ binDir, cliEnv });
+    await smokeBuiltinPluginsRunning({ binDir, cliEnv, processRef: stack });
     // Keep Awake reconciles even its default disabled state, so reaching this
     // log proves the packed daemon found its companion worker, downloaded the
     // plugin artifact, and started the worker for a host RPC call.
@@ -1177,7 +1258,7 @@ async function smokeDaemonJoinAttempt(binDir, attempt) {
       BB_HOST_DAEMON_PORT: String(firstDaemonReservation.port),
       BB_SERVER_URL: serverUrl,
     };
-    await smokeBuiltinPluginsRunning({ binDir, cliEnv });
+    await smokeBuiltinPluginsRunning({ binDir, cliEnv, processRef: server });
     // Both daemons joined a server in a different process and data directory.
     // Ready workers on both prove host-plugin artifacts and calls fan out to
     // enrolled machines instead of assuming server-local paths.
@@ -1208,7 +1289,9 @@ async function smokeDaemonJoin(binDir) {
 try {
   const smokeStartedAt = performance.now();
   const tarballPath = await timed("npm pack", () => packTarball());
-  await timed("npx entrypoint", () => smokeNpxEntrypoint(tarballPath));
+  if (!useWorkspaceArtifacts) {
+    await timed("npx entrypoint", () => smokeNpxEntrypoint(tarballPath));
+  }
   const sdkDir = await timed("sdk package", () => smokeSdkPackage(tarballPath));
   const installedBinDir = join(sdkDir, "node_modules", ".bin");
   const installedPackageDir = join(sdkDir, "node_modules", "bb-app");

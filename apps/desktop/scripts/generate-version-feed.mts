@@ -10,13 +10,13 @@ import {
 import {
   createDesktopReleaseConfig,
   resolveDesktopBuildPlatform,
-  resolveDesktopReleaseChannel,
+  resolveDesktopBuildSettings,
 } from "./desktop-release-channel.mjs";
 
 const packageRoot = process.cwd();
 const packageJsonPath = resolve(packageRoot, "package.json");
-const releaseChannel = resolveDesktopReleaseChannel(process.env);
-const releaseConfig = createDesktopReleaseConfig(releaseChannel);
+const { localBuild, releaseChannel } = resolveDesktopBuildSettings(process.env);
+const releaseConfig = createDesktopReleaseConfig(releaseChannel, localBuild);
 const buildPlatform = resolveDesktopBuildPlatform(process.platform);
 const updateMetadataFileName =
   releaseConfig.updateMetadataFileNames[buildPlatform];

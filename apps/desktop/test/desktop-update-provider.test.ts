@@ -20,6 +20,19 @@ const alwaysReplaceable = () => true;
 const neverReplaceable = () => false;
 
 describe("desktop update support", () => {
+  it("disables official update paths for local builds", () => {
+    expect(
+      resolveDesktopUpdateSupport({
+        canReplaceAppImage: alwaysReplaceable,
+        env: {
+          APPIMAGE: APP_IMAGE_PATH,
+          BB_DESKTOP_LOCAL_BUILD: "1",
+        },
+        platform: "macos",
+      }),
+    ).toEqual({ autoUpdate: false, versionCheck: false });
+  });
+
   it("enables both update paths on macOS", () => {
     expect(
       resolveDesktopUpdateSupport({
