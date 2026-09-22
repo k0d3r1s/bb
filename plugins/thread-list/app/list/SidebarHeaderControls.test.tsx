@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +20,8 @@ import {
   sidebarChronologicalSortAtom,
   sidebarOrganizationModeAtom,
   sidebarEnvironmentGroupingAtom,
+  sidebarProjectSortAtom,
+  sidebarProjectSortDirectionAtom,
   sidebarSortDirectionAtom,
   sidebarShowProviderIconsAtom,
 } from "../preferences/atoms.js";
@@ -46,6 +49,8 @@ function setup(
   store.set(sidebarOrganizationModeAtom, organization);
   store.set(sidebarChronologicalSortAtom, "updated");
   store.set(sidebarSortDirectionAtom, "default");
+  store.set(sidebarProjectSortAtom, "custom");
+  store.set(sidebarProjectSortDirectionAtom, "default");
   store.set(sidebarEnvironmentGroupingAtom, "auto");
   store.set(sidebarShowProviderIconsAtom, false);
   const newThread = vi.fn();
@@ -290,7 +295,10 @@ describe("sidebar header controls", () => {
     );
     expect(store.get(sidebarSortDirectionAtom)).toBe("descending");
     fireEvent.click(
-      screen.getByRole("menuitemradio", { name: "Alphabetical" }),
+      within(screen.getByRole("group", { name: "Sort threads" })).getByRole(
+        "menuitemradio",
+        { name: "Alphabetical" },
+      ),
     );
     expect(store.get(sidebarChronologicalSortAtom)).toBe("alpha");
     expect(store.get(sidebarSortDirectionAtom)).toBe("ascending");
@@ -302,6 +310,39 @@ describe("sidebar header controls", () => {
         })
         .getAttribute("aria-checked"),
     ).toBe("true");
+  });
+
+  it("sorts project rows independently from threads", async () => {
+    const { store } = setup();
+    await openMenu();
+    await openSubmenu("Sort by");
+    const projectSort = await screen.findByRole("group", {
+      name: "Sort projects",
+    });
+    fireEvent.click(
+      within(projectSort).getByRole("menuitemradio", { name: "Alphabetical" }),
+    );
+    expect(store.get(sidebarProjectSortAtom)).toBe("alpha");
+    expect(store.get(sidebarProjectSortDirectionAtom)).toBe("ascending");
+    expect(store.get(sidebarChronologicalSortAtom)).toBe("updated");
+    expect(store.get(sidebarSortDirectionAtom)).toBe("default");
+    fireEvent.click(
+      within(projectSort).getByRole("menuitemradio", {
+        name: "Alphabetical, ascending. Sort descending",
+      }),
+    );
+    expect(store.get(sidebarProjectSortDirectionAtom)).toBe("descending");
+    fireEvent.click(
+      within(projectSort).getByRole("menuitemradio", { name: "Custom" }),
+    );
+    expect(store.get(sidebarProjectSortAtom)).toBe("custom");
+  });
+
+  it("does not offer project sorting outside project organization", async () => {
+    setup("Pinned", false, "chronological");
+    await openMenu();
+    await openSubmenu("Sort by");
+    expect(screen.queryByRole("group", { name: "Sort projects" })).toBeNull();
   });
 
   it("announces compact sort direction and resets the nested page after closing", async () => {

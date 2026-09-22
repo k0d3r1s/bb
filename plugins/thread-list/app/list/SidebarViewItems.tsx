@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { SidebarSectionId } from "../model/sidebar-section-id.js";
 import type { HeaderCreationActions } from "./SidebarHeaderControls.js";
+import { DirectionalSortMenuItems } from "./DirectionalSortMenuItems.js";
+import { ProjectSortMenuItems } from "./ProjectSortMenuItems.js";
 import { ThreadListVisibilityMenuItems } from "./ThreadListVisibility.js";
 import {
   sidebarThreadLifecyclesAtom,
@@ -131,17 +133,29 @@ export function SidebarHeaderMenuContents({
   );
 }
 
+function ThreadSortMenuItems() {
+  const [sort, setSort] = useAtom(sidebarChronologicalSortAtom);
+  const [savedDirection, setDirection] = useAtom(sidebarSortDirectionAtom);
+  const selectedSort = sort === "none" ? "updated" : sort;
+  return (
+    <DirectionalSortMenuItems
+      options={SIDEBAR_SORT_OPTIONS}
+      selectedSort={selectedSort}
+      savedDirection={savedDirection}
+      onSortChange={setSort}
+      onDirectionChange={setDirection}
+    />
+  );
+}
+
 function SidebarViewItems({ page }: { page: SidebarViewPage }) {
   const [lifecycles, setLifecycles] = useAtom(sidebarThreadLifecyclesAtom);
   const [organization, setOrganization] = useAtom(sidebarOrganizationModeAtom);
-  const [sort, setSort] = useAtom(sidebarChronologicalSortAtom);
-  const [savedDirection, setDirection] = useAtom(sidebarSortDirectionAtom);
   const setEnvironmentGrouping = useSetAtom(sidebarEnvironmentGroupingAtom);
   const groupByEnvironment = useAtomValue(sidebarGroupThreadsByEnvironmentAtom);
   const [showProviderIcons, setShowProviderIcons] = useAtom(
     sidebarShowProviderIconsAtom,
   );
-  const selectedSort = sort === "none" ? "updated" : sort;
   if (page === "filter") {
     return (
       <DropdownMenuGroup aria-label="Filter">
@@ -236,49 +250,18 @@ function SidebarViewItems({ page }: { page: SidebarViewPage }) {
     );
   }
   return (
-    <DropdownMenuGroup aria-label="Sort">
-      {SIDEBAR_SORT_OPTIONS.map((option) => {
-        const selected = selectedSort === option.sort;
-        const direction =
-          savedDirection === "default" ? option.direction : savedDirection;
-        const nextDirection = selected
-          ? direction === "ascending"
-            ? "descending"
-            : "ascending"
-          : option.direction;
-        return (
-          <DropdownMenuItem
-            key={option.sort}
-            role="menuitemradio"
-            aria-checked={selected}
-            aria-label={
-              selected
-                ? `${option.label}, ${direction}. Sort ${nextDirection}`
-                : option.label
-            }
-            onSelect={(event) => {
-              event.preventDefault();
-              setSort(option.sort);
-              setDirection(nextDirection);
-            }}
-          >
-            {option.label}
-            {selected && (
-              <span className="sr-only">
-                , {direction}. Sort {nextDirection}
-              </span>
-            )}
-            <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center">
-              {selected && (
-                <Icon
-                  name={direction === "ascending" ? "ArrowUp" : "ArrowDown"}
-                  className="size-4"
-                />
-              )}
-            </span>
-          </DropdownMenuItem>
-        );
-      })}
-    </DropdownMenuGroup>
+    <>
+      <DropdownMenuGroup aria-label="Sort threads">
+        <ThreadSortMenuItems />
+      </DropdownMenuGroup>
+      {organization === "project" && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup aria-label="Sort projects">
+            <ProjectSortMenuItems />
+          </DropdownMenuGroup>
+        </>
+      )}
+    </>
   );
 }

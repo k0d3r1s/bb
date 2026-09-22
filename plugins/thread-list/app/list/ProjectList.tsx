@@ -94,6 +94,8 @@ import {
   collapsedSidebarSectionIdsAtom,
   sidebarChronologicalSortAtom,
   sidebarGroupThreadsByEnvironmentAtom,
+  sidebarProjectSortAtom,
+  sidebarProjectSortDirectionAtom,
   sidebarSortDirectionAtom,
   sidebarCollapsedMachinesAtom,
   sidebarManualSectionOrderAtom,
@@ -124,6 +126,13 @@ import {
   useSidebarMachineHosts,
   type SidebarProject,
 } from "../model/use-sidebar-data.js";
+import {
+  getProjectComparator,
+  getProjectLastActivity,
+  isCustomProjectSort,
+  sortProjectSectionIds,
+  type ProjectSortInput,
+} from "./projectSort.js";
 
 export interface ProjectListProps {
   activeThreadId: string | null;
@@ -527,6 +536,47 @@ interface ProjectModeSectionsProps
   threadsSection: Omit<BuiltInSidebarSectionOptions, "content">;
 }
 
+function useSortedProjectSectionOrder(
+  projectRows: readonly ProjectListRowModel[],
+  storedSectionOrder: SidebarSectionId[],
+) {
+  const projectSort = useAtomValue(sidebarProjectSortAtom);
+  const projectSortDirection = useAtomValue(sidebarProjectSortDirectionAtom);
+  const projectComparator = useMemo(
+    () =>
+      isCustomProjectSort(projectSort)
+        ? null
+        : getProjectComparator(projectSort, projectSortDirection),
+    [projectSort, projectSortDirection],
+  );
+  const projectSortRowsBySectionId = useMemo(() => {
+    const rows = new Map<SidebarSectionId, ProjectSortInput>();
+    for (const row of projectRows) {
+      rows.set(buildSidebarEntitySectionId("project", row.project.id), {
+        id: row.project.id,
+        name: row.project.name,
+        lastActivityAt: getProjectLastActivity(row.project.threads),
+      });
+    }
+    return rows;
+  }, [projectRows]);
+  const order = useMemo(
+    () =>
+      projectComparator === null
+        ? storedSectionOrder
+        : sortProjectSectionIds(
+            storedSectionOrder,
+            projectSortRowsBySectionId,
+            projectComparator,
+          ),
+    [projectComparator, projectSortRowsBySectionId, storedSectionOrder],
+  );
+  return {
+    order,
+    projectReorderDisabled: order.length < 2 || projectComparator !== null,
+  };
+}
+
 function ProjectModeSections({
   collapsedEnvironmentIds,
   collapsedSectionIds,
@@ -623,13 +673,21 @@ function ProjectModeSections({
       EMPTY_THREAD_LIST
     );
   }, [personalProjectId, threadsByProject]);
-  const { onOrderChange, order, persistedOrder } = useSidebarModeSectionOrder({
+  const {
+    onOrderChange,
+    order: storedSectionOrder,
+    persistedOrder,
+  } = useSidebarModeSectionOrder({
     mode: "project",
     entitySectionIds: projectSectionIds,
     hasThreadsSection: personalThreads.length > 0 || projectRows.length === 0,
     showPinnedSection,
   });
-  const reorderDisabled = order.length < 2;
+  const { order, projectReorderDisabled } = useSortedProjectSectionOrder(
+    projectRows,
+    storedSectionOrder,
+  );
+  const sectionReorderDisabled = order.length < 2;
   const personalItems = useMemo(
     () =>
       buildProjectThreadGroups(
@@ -796,7 +854,7 @@ function ProjectModeSections({
           const builtInSection = renderBuiltInSidebarSection({
             sectionId,
             sections: builtInSections,
-            disabled: reorderDisabled,
+            disabled: sectionReorderDisabled,
             collapsedSectionIds,
             onToggleCollapsed,
             consumeClickSuppression,
@@ -831,7 +889,7 @@ function ProjectModeSections({
                 onToggleProjectCollapsed={toggleProjectCollapsed}
                 onToggleThreadCollapsed={onToggleThreadCollapsed}
                 onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-                reorderDisabled={reorderDisabled}
+                reorderDisabled={projectReorderDisabled}
                 consumeProjectClickSuppression={consumeClickSuppression}
               />
             </ThreadListVisibilityGroupScope>

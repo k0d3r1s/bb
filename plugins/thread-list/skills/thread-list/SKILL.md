@@ -6,10 +6,10 @@ description: "Inspect or change the sidebar thread list's layout preferences: or
 # Thread list preferences
 
 The Thread list plugin owns the sidebar's layout state. Read it with
-`bb thread-list prefs list --json`; keys are `showProviderIcons`, `threadLifecycles`, `organizationMode`,
-`environmentGrouping`, `chronologicalSort`, `sortDirection`, `sectionOrder`,
-`manualSectionOrder`, `machineSectionOrder`, `hiddenGroups` (including the
-built-in `threads` group),
+`bb thread-list prefs list --json`; keys are `showProviderIcons`, `threadLifecycles`,
+`organizationMode`, `environmentGrouping`, `chronologicalSort`, `sortDirection`,
+`projectSort`, `projectSortDirection`, `sectionOrder`, `manualSectionOrder`,
+`machineSectionOrder`, `hiddenGroups` (including the built-in `threads` group),
 `collapsedSections`, `collapsedProjects`, `collapsedThreads`,
 `collapsedEnvironments`, `collapsedThreadSections`, and `collapsedMachines`.
 
@@ -41,3 +41,9 @@ Organize → Rows → Provider icons toggles the icon before each thread title.
 `showProviderIcons` defaults to `false`; use
 `bb thread-list prefs set showProviderIcons true` to show them. Unknown
 provider ids have no icon.
+
+Thread sorting and project sorting are independent. `chronologicalSort` and
+`sortDirection` order threads within project rows. `projectSort` accepts
+`custom`, `alpha`, or `activity`; `projectSortDirection` controls automatic
+project order without changing the stored drag order. Recent activity is the
+latest visible, non-archived thread update in each project.

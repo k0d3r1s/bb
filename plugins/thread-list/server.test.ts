@@ -169,6 +169,15 @@ describe("bb thread-list prefs", () => {
     expect(set.exitCode).toBe(0);
     expect(set.stdout).toBe('manualSectionOrder = ["threads","pinned","sections"]');
 
+    const projectSort = await harness.behavior.runCli([
+      "prefs",
+      "set",
+      "projectSort",
+      "activity",
+    ]);
+    expect(projectSort.exitCode).toBe(0);
+    expect(projectSort.stdout).toBe('projectSort = "activity"');
+
     const bare = await harness.behavior.runCli(["prefs", "set", "organizationMode", "project"]);
     expect(bare.exitCode).toBe(0);
 

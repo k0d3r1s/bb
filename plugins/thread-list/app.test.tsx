@@ -319,6 +319,38 @@ describe("thread-list plugin", () => {
     },
   );
 
+  it("sorts project rows alphabetically without moving built-in sections", async () => {
+    setPreferencesMirrorStorageForTest(null);
+    renderList({
+      organizationMode: "project",
+      projectSort: "alpha",
+      projectSortDirection: "descending",
+    });
+
+    await screen.findByText("Pinned thread");
+    expect(sectionHeaders()).toEqual(["Pinned", "Web", "App", "Threads"]);
+    expect(
+      screen
+        .getByTitle("App")
+        .closest('[data-sidebar-sticky-tier="label"]')
+        ?.getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByTitle("Pinned")
+        .closest('[data-sidebar-sticky-tier="label"]')
+        ?.getAttribute("aria-disabled"),
+    ).toBe("false");
+  });
+
+  it("sorts project rows by visible thread activity including pinned threads", async () => {
+    setPreferencesMirrorStorageForTest(null);
+    renderList({ organizationMode: "project", projectSort: "activity" });
+
+    await screen.findByText("Pinned thread");
+    expect(sectionHeaders()).toEqual(["Pinned", "App", "Web", "Threads"]);
+  });
+
   it("calls onNavigate when a thread row is opened", async () => {
     setPreferencesMirrorStorageForTest(null);
     const listProps = props();

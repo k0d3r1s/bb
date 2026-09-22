@@ -28,6 +28,9 @@ export const sortDirectionSchema = z.enum([
 ]);
 export type SortDirection = z.infer<typeof sortDirectionSchema>;
 
+export const projectSortSchema = z.enum(["custom", "alpha", "activity"]);
+export type ProjectSort = z.infer<typeof projectSortSchema>;
+
 export const environmentGroupingSchema = z.union([
   z.literal("auto"),
   z.boolean(),
@@ -95,6 +98,18 @@ export const preferenceDefinitions = {
     "default",
     "Sort direction; default keeps the field's natural direction.",
     "sidebar.sortDirection",
+  ),
+  projectSort: definePreference(
+    projectSortSchema,
+    "custom",
+    "How project rows are ordered: custom drag order, alphabetical, or recent thread activity.",
+    null,
+  ),
+  projectSortDirection: definePreference(
+    sortDirectionSchema,
+    "default",
+    "Project row sort direction; default keeps the field's natural direction.",
+    null,
   ),
   sectionOrder: definePreference(
     stringListSchema,
