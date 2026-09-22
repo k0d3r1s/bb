@@ -1,4 +1,5 @@
 import {
+  installDefaultEnvironmentProviders,
   installFakeGitWorktreeProvider,
   installFakePersonalWorkspaceProvider,
 } from "../helpers/environment-provider.js";
@@ -13,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveCreateThreadEnvironment,
   resolveCreateThreadExecutionDefaults,
+  resolveCreateThreadWorktreePromotion,
   resolveProjectDefaultThreadEnvironment,
   resolveThreadDefaultPermissionMode,
   resolveThreadExecutionPermissionMode,
@@ -272,43 +274,30 @@ describe("resolveCreateThreadEnvironment", () => {
     });
   }
 
-  it("defaults implicit child host environments to the worktree provider", async () => {
-    await expect(
-      resolveEnvironment({
-        parentThread: makeParentThread(),
-        projectId: "proj-1",
-        requestedEnvironment: {
-          type: "host",
-          hostId: "host-1",
-          workspace: { type: "unmanaged", path: null },
-        },
-      }),
-    ).resolves.toEqual({
-      type: "provider",
-      environmentProviderId: "git-worktree",
-      machine: { type: "existing" as const, hostId: "host-1" },
-      inputs: { branch: { kind: "default" } },
-    });
-  });
+  it.each([
+    { name: "the same project", parentThread: makeParentThread() },
+    {
+      name: "another project",
+      parentThread: makeParentThread({ projectId: "proj-2" }),
+    },
+  ])(
+    "keeps implicit child host environments shared for $name",
+    async ({ parentThread }) => {
+      const requestedEnvironment = {
+        type: "host" as const,
+        hostId: "host-1",
+        workspace: { type: "unmanaged" as const, path: null },
+      };
 
-  it("defaults a child under a parent from another project to the worktree provider", async () => {
-    await expect(
-      resolveEnvironment({
-        parentThread: makeParentThread({ projectId: "proj-2" }),
-        projectId: "proj-1",
-        requestedEnvironment: {
-          type: "host",
-          hostId: "host-1",
-          workspace: { type: "unmanaged", path: null },
-        },
-      }),
-    ).resolves.toEqual({
-      type: "provider",
-      environmentProviderId: "git-worktree",
-      machine: { type: "existing" as const, hostId: "host-1" },
-      inputs: { branch: { kind: "default" } },
-    });
-  });
+      await expect(
+        resolveEnvironment({
+          parentThread,
+          projectId: "proj-1",
+          requestedEnvironment,
+        }),
+      ).resolves.toEqual(requestedEnvironment);
+    },
+  );
 
   it("keeps explicit same-environment reuse for child threads", async () => {
     await expect(
@@ -326,9 +315,9 @@ describe("resolveCreateThreadEnvironment", () => {
     });
   });
 
-  it("uses a fresh worktree on the parent's machine for a project child", async () => {
+  it("uses the project checkout on the parent's machine for a project child", async () => {
     await withTestHarness(async (harness) => {
-      installFakeGitWorktreeProvider();
+      installDefaultEnvironmentProviders();
       const { host } = seedHostSession(harness.deps, {
         id: "host-project-child",
       });
@@ -355,9 +344,9 @@ describe("resolveCreateThreadEnvironment", () => {
         }),
       ).resolves.toEqual({
         type: "provider",
-        environmentProviderId: "git-worktree",
+        environmentProviderId: "project-checkout",
         machine: { type: "existing", hostId: host.id },
-        inputs: { branch: { kind: "default" } },
+        inputs: { path: "/tmp/project-child-source" },
       });
     });
   });
@@ -488,9 +477,9 @@ describe("resolveCreateThreadEnvironment", () => {
     );
   });
 
-  it("gives a sub-thread of a project with no commits a worktree of the source", async () => {
+  it("gives a sub-thread of a project with no commits the shared checkout", async () => {
     await withTestHarness(async (harness) => {
-      installFakeGitWorktreeProvider();
+      installDefaultEnvironmentProviders();
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-default-order",
       });
@@ -535,18 +524,18 @@ describe("resolveCreateThreadEnvironment", () => {
         }),
       ).resolves.toEqual({
         type: "provider",
-        environmentProviderId: "git-worktree",
+        environmentProviderId: "project-checkout",
         machine: { type: "existing", hostId: host.id },
-        inputs: { branch: { kind: "default" } },
+        inputs: { path: "/tmp/default-order-source" },
       });
     });
   });
 });
 
 describe("resolveProjectDefaultThreadEnvironment", () => {
-  it("uses a worktree for a Git project", async () => {
+  it("uses the project checkout for a Git project", async () => {
     await withTestHarness(async (harness) => {
-      installFakeGitWorktreeProvider();
+      installDefaultEnvironmentProviders();
       const { host, session } = seedHostSession(harness.deps, {
         id: "host-git-default",
       });
@@ -582,9 +571,9 @@ describe("resolveProjectDefaultThreadEnvironment", () => {
         }),
       ).resolves.toEqual({
         type: "provider",
-        environmentProviderId: "git-worktree",
+        environmentProviderId: "project-checkout",
         machine: { type: "existing", hostId: host.id },
-        inputs: { branch: { kind: "named", name: "main" } },
+        inputs: { path: "/tmp/git-default-source" },
       });
     });
   });
@@ -648,6 +637,67 @@ describe("resolveProjectDefaultThreadEnvironment", () => {
         inputs: null,
       });
     });
+  });
+});
+
+describe("resolveCreateThreadWorktreePromotion", () => {
+  const checkoutPlacement = {
+    type: "provider",
+    environmentProviderId: "project-checkout",
+    machine: { type: "existing", hostId: "host-1" },
+    inputs: { path: "/tmp/project" },
+  } as const;
+
+  it("arms promotion for an implicit project-default checkout placement", () => {
+    expect(
+      resolveCreateThreadWorktreePromotion({
+        requestedEnvironment: { type: "project-default" },
+        resolvedEnvironment: checkoutPlacement,
+      }),
+    ).toBe("armed");
+  });
+
+  it("arms explicit branch promotion only for a checkout", () => {
+    expect(
+      resolveCreateThreadWorktreePromotion({
+        requestedEnvironment: { type: "project-default", promotion: "branch" },
+        resolvedEnvironment: checkoutPlacement,
+      }),
+    ).toBe("armed");
+    expect(() =>
+      resolveCreateThreadWorktreePromotion({
+        requestedEnvironment: { type: "project-default", promotion: "branch" },
+        resolvedEnvironment: {
+          type: "provider",
+          environmentProviderId: "personal-workspace",
+          machine: { type: "existing", hostId: "host-1" },
+          inputs: null,
+        },
+      }),
+    ).toThrow(/requires an available project checkout/);
+  });
+
+  it("declines when the caller named the project-checkout provider", () => {
+    expect(
+      resolveCreateThreadWorktreePromotion({
+        requestedEnvironment: checkoutPlacement,
+        resolvedEnvironment: checkoutPlacement,
+      }),
+    ).toBe("declined");
+  });
+
+  it("declines when the default resolves somewhere other than the checkout", () => {
+    expect(
+      resolveCreateThreadWorktreePromotion({
+        requestedEnvironment: { type: "project-default" },
+        resolvedEnvironment: {
+          type: "provider",
+          environmentProviderId: "personal-workspace",
+          machine: { type: "existing", hostId: "host-1" },
+          inputs: null,
+        },
+      }),
+    ).toBe("declined");
   });
 });
 

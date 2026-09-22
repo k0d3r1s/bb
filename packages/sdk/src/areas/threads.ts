@@ -20,6 +20,7 @@ import {
 import type {
   CreateQueuedMessageRequest,
   CreateThreadRequest,
+  ResolveThreadBranchPromotionRequest,
   QueuedMessageListQuery,
   EditMessageRequest,
   EditMessageResponse,
@@ -28,6 +29,7 @@ import type {
   PromptHistoryResponse,
   SendQueuedMessageResponse,
   ThreadArchiveAllResponse,
+  ThreadBranchPromotionResponse,
   ThreadChildSummaryResponse,
   ThreadConversationOutlineResponse,
   ThreadCountGroupBy,
@@ -546,6 +548,12 @@ export interface ThreadQueueArea {
 }
 
 export interface ThreadsArea {
+  inspectBranchPromotion(
+    args: ThreadActionArgs,
+  ): Promise<ThreadBranchPromotionResponse>;
+  resolveBranchPromotion(
+    args: ThreadActionArgs & ResolveThreadBranchPromotionRequest,
+  ): Promise<ThreadBranchPromotionResponse>;
   archive(args: ThreadActionArgs): Promise<ThreadArchiveResult>;
   archiveAll(args: ThreadActionArgs): Promise<ThreadArchiveAllResult>;
   childSummary(args: ThreadStatusArgs): Promise<ThreadChildSummaryResult>;
@@ -1086,6 +1094,27 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
     },
   };
   return {
+    inspectBranchPromotion: (input) =>
+      transport.readJson(
+        transport.api.v1.threads[":id"]["branch-promotion"].$get(
+          { param: { id: input.threadId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      ),
+    resolveBranchPromotion: (input) =>
+      transport.readJson(
+        transport.api.v1.threads[":id"]["branch-promotion"].resolve.$post(
+          {
+            param: { id: input.threadId },
+            json: {
+              operationId: input.operationId,
+              observation: input.observation,
+              resolution: input.resolution,
+            },
+          },
+          ...signalRequestArgs(input.signal),
+        ),
+      ),
     archive: archiveAll,
     archiveAll,
     async childSummary(input) {

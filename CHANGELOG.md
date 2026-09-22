@@ -1,5 +1,9 @@
 # Changelog
 
+**Unreleased**
+
+- Add **Checkout, then branch** beside checkout-then-worktree. Threads can create or select a branch in the same checkout before editing, with shared-checkout admission checks and interrupted-operation recovery in metadata, SDK, and CLI (`--promote branch`).
+
 ## 0.43.3
 
 Save messages as drafts, annotate pages for your agent, and watch browser automation live in chat. This release also redesigns handoffs and improves everyday navigation, configuration across machines, and conversation performance.

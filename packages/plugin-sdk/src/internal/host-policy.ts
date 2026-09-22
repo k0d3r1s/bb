@@ -93,6 +93,9 @@ export function pluginCliCollisionWarning(
  * apps/server/test/services/plugins/plugin-agent-tools.test.ts.
  */
 export const RESERVED_AGENT_TOOL_NAMES: readonly string[] = [
+  "bb_enter_branch",
+  "bb_enter_worktree",
+  "bb_keep_checkout",
   "update_environment_directory",
 ];
 

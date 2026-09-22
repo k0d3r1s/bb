@@ -131,6 +131,7 @@ describe("threads", () => {
     expect(thread.deletedAt).toBeNull();
     expect(thread.lastReadAt).toBe(thread.latestAttentionAt);
     expect(thread.visibility).toBe("visible");
+    expect(thread.worktreePromotion).toBe("declined");
 
     const fetched = getThread(db, thread.id);
     expect(fetched?.visibility).toBe("visible");
@@ -1120,6 +1121,30 @@ describe("threads", () => {
     updateThread(db, spy, thread.id, {
       environmentId: environment.id,
     });
+
+    expect(spy.notifyThread).toHaveBeenCalledWith(
+      thread.id,
+      ["environment-changed"],
+      { projectId: project.id },
+    );
+  });
+
+  it("notifies when worktree promotion is declined", () => {
+    const { db, project } = setup();
+    const spy: DbNotifier = {
+      notifyThread: vi.fn(),
+      notifyEnvironment: vi.fn(),
+      notifyHost: vi.fn(),
+      notifyProject: vi.fn(),
+      notifySystem: vi.fn(),
+    };
+    const thread = createThread(db, noopNotifier, {
+      projectId: project.id,
+      providerId: "codex",
+      worktreePromotion: "armed",
+    });
+
+    updateThread(db, spy, thread.id, { worktreePromotion: "declined" });
 
     expect(spy.notifyThread).toHaveBeenCalledWith(
       thread.id,

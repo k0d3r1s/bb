@@ -159,6 +159,77 @@ describe("EnvironmentPickerUI", () => {
     ).toBeNull();
   });
 
+  it("separates checkout promotion from an explicit project checkout", () => {
+    const onSelectProjectDefault = vi.fn();
+    const onSelectProvider = vi.fn();
+    renderPicker(
+      <EnvironmentPickerUI
+        value="project-default"
+        sources={sources}
+        host={host}
+        isLocal
+        providers={[checkoutProvider]}
+        onSelectProjectDefault={onSelectProjectDefault}
+        onSelectProvider={onSelectProvider}
+        modal={false}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Environment" });
+    expect(trigger.textContent).toContain("Checkout, then worktree");
+    fireEvent.click(trigger);
+
+    const projectDefault = screen.getByRole("option", {
+      name: /Checkout, then worktree/u,
+    });
+    expect(projectDefault.getAttribute("aria-current")).toBe("true");
+    expect(
+      screen
+        .getByRole("option", { name: /Project checkout/u })
+        .getAttribute("aria-current"),
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("option", { name: /Project checkout/u }));
+    expect(onSelectProvider).toHaveBeenCalledWith(checkoutProvider, host.id);
+
+    fireEvent.click(trigger);
+    fireEvent.click(
+      screen.getByRole("option", { name: /Checkout, then worktree/u }),
+    );
+    expect(onSelectProjectDefault).toHaveBeenCalledOnce();
+  });
+
+  it("selects branch promotion without selecting the worktree default", () => {
+    const select = vi.fn();
+    render(
+      <EnvironmentPickerUI
+        value="project-default:branch"
+        sources={sources}
+        host={host}
+        isLocal
+        providers={[checkoutProvider]}
+        onSelectProjectDefault={select}
+        modal={false}
+      />,
+    );
+    const trigger = screen.getByRole("button", {
+      name: /^Environment(?:$|:)/u,
+    });
+    expect(trigger.textContent).toContain("Checkout, then branch");
+    fireEvent.click(trigger, { button: 0 });
+    const branch = screen.getByRole("option", {
+      name: /Checkout, then branch/u,
+    });
+    expect(branch.getAttribute("aria-current")).toBe("true");
+    expect(
+      screen
+        .getByRole("option", { name: /Checkout, then worktree/u })
+        .getAttribute("aria-current"),
+    ).toBeNull();
+    fireEvent.click(branch);
+    expect(select).toHaveBeenCalledWith("branch");
+  });
+
   it.each([false, true])(
     "shows loading instead of empty options (multiple machines: %s)",
     (multipleMachines) => {

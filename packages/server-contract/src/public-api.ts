@@ -1,3 +1,4 @@
+import { branchPromotionRoutes } from "./branch-promotion-routes.fork.js";
 import {
   machineEnvironmentSetSchema,
   machineEnvironmentDeleteSchema,
@@ -1227,6 +1228,7 @@ export const publicApiRoutes = {
   },
 
   threads: {
+    ...branchPromotionRoutes,
     list: defineRoute({
       path: "/threads",
       method: "get",

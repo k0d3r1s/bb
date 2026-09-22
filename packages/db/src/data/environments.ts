@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { assertBranchPromotionEnvironmentAvailable, assertBranchPromotionsSettled } from "./branch-promotions.fork.js";
 import type {
   DiscoveredWorkspaceProperties,
   EnvironmentChangeKind,
@@ -207,6 +208,7 @@ export function markHostEnvironmentsDestroyed(
   notifier: DbNotifier,
   hostId: string,
 ): EnvironmentRow[] {
+  assertBranchPromotionsSettled(db, { hostId });
   const updated = db
     .update(environments)
     .set({
@@ -440,6 +442,7 @@ export function applyEnvironmentLifecycleEventInTransaction(
     };
   }
 
+  assertBranchPromotionEnvironmentAvailable(db, environment.id);
   const evaluation = evaluateEnvironmentLifecycleEvent({
     environment,
     event: args.event,
@@ -540,6 +543,7 @@ export function reserveEnvironment(db: EnvironmentWriteConnection, input: Omit<t
 }
 
 export function updatePreparingEnvironment(db: EnvironmentWriteConnection, row: EnvironmentRow): boolean {
+  assertBranchPromotionEnvironmentAvailable(db, row.id);
   return db.update(environments).set({ ...row, updatedAt: Date.now() }).where(and(eq(environments.id, row.id), row.ownerThreadId === null ? isNull(environments.ownerThreadId) : eq(environments.ownerThreadId, row.ownerThreadId), eq(environments.attempt, row.attempt))).run().changes > 0;
 }
 
@@ -580,6 +584,7 @@ export function bindEnvironmentPath(db: DbConnection, provisioning: EnvironmentR
     if (current === null || current.attempt !== provisioning.attempt || current.ownerThreadId !== provisioning.ownerThreadId) throw new Error("Environment preparation is no longer current");
     const existing = tx.select().from(environments).where(and(eq(environments.hostId, current.hostId), eq(environments.path, path), eq(environments.projectId, current.projectId))).get();
     if (existing === undefined || existing.id === current.id) return current;
+    assertBranchPromotionEnvironmentAvailable(tx, existing.id);
     if (existing.teardownStatus !== null || (existing.status !== "ready" && existing.status !== "provisioning")) throw new Error("Workspace is not ready or cleanup is still pending");
     if (existing.ownerThreadId !== null) throw new Error("Workspace is still being prepared by another thread");
     tx.update(environments).set({ ownerThreadId: null, status: "destroyed", teardownStatus: "removed", claimPath: null, resource: null, path: null }).where(eq(environments.id, current.id)).run();

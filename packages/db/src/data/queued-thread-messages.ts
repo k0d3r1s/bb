@@ -667,6 +667,17 @@ export function createQueuedThreadMessage(
   return row;
 }
 
+export function deleteQueuedThreadMessageInTransaction(
+  tx: DbTransaction,
+  id: string,
+): QueuedThreadMessageRow | null {
+  const existing = getQueuedThreadMessage(tx, id);
+  if (!existing) return null;
+  clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing);
+  tx.delete(queuedThreadMessages).where(eq(queuedThreadMessages.id, id)).run();
+  return existing;
+}
+
 export function updateQueuedThreadMessage(
   db: DbConnection,
   notifier: DbNotifier,
@@ -2143,15 +2154,7 @@ export function deleteQueuedThreadMessage(
   id: string,
 ) {
   const existing = db.transaction(
-    (tx) => {
-      const existing = getQueuedThreadMessage(tx, id);
-      if (!existing) return null;
-      clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing);
-      tx.delete(queuedThreadMessages)
-        .where(eq(queuedThreadMessages.id, id))
-        .run();
-      return existing;
-    },
+    (tx) => deleteQueuedThreadMessageInTransaction(tx, id),
     { behavior: "immediate" },
   );
   if (!existing) return false;

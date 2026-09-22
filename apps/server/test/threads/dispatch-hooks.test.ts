@@ -34,6 +34,7 @@ import { createThreadFromRequest } from "../../src/services/threads/thread-creat
 import { applyLoggedThreadLifecycleEvent } from "../../src/services/threads/lifecycle-outcome.js";
 import { createClientTurnRequestId } from "../../src/services/threads/thread-events.js";
 import { toThreadQueuedMessage } from "../../src/services/threads/thread-queued-messages.js";
+import { ENTER_WORKTREE_CONTINUATION_TEXT } from "../../src/services/threads/worktree-promotion.js";
 import { textInput } from "../helpers/prompt-input.js";
 import {
   listQueuedThreadCommands,
@@ -44,6 +45,7 @@ import {
   seedEnvironment,
   seedHostSession,
   seedProjectWithSource,
+  seedQueuedMessage,
   seedThread,
   seedThreadRuntimeState,
   seedTurnStarted,
@@ -603,12 +605,106 @@ describe("message.dispatch hook admission visibility", () => {
         threadId: thread.id,
         turnId: "turn-host-warm-admission",
       });
+      seedQueuedMessage(harness.deps, {
+        content: [
+          {
+            type: "text",
+            text: ENTER_WORKTREE_CONTINUATION_TEXT,
+            mentions: [],
+            visibility: "agent-only",
+          },
+        ],
+        threadId: thread.id,
+        waitingOn: { kind: "thread-busy" },
+      });
 
       await acceptThreadSendRequest(harness.deps, {
         payload: { input: textInput("a steer"), mode: "steer" },
         thread: getThread(harness.db, thread.id)!,
       });
       expect(seen[1]).toEqual([thread.id]);
+      expect(listQueuedThreadMessages(harness.db, thread.id)).toEqual([]);
+    });
+  });
+
+  it("replaces worktree continuation when an ordinary send queues behind an active turn", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread } = seedRunnableThread(harness, {
+        hostId: "host-queued-user-after-promotion",
+        status: "active",
+      });
+      seedQueuedMessage(harness.deps, {
+        content: [
+          {
+            type: "text",
+            text: ENTER_WORKTREE_CONTINUATION_TEXT,
+            mentions: [],
+            visibility: "agent-only",
+          },
+        ],
+        threadId: thread.id,
+        waitingOn: { kind: "thread-busy" },
+      });
+
+      await expect(
+        acceptThreadSendRequest(harness.deps, {
+          payload: {
+            input: textInput("Use the new worktree differently"),
+            mode: "queue-if-active",
+          },
+          thread,
+        }),
+      ).resolves.toMatchObject({ ok: true, delivery: "queued" });
+
+      const queuedMessages = listQueuedThreadMessages(harness.db, thread.id);
+      expect(queuedMessages).toHaveLength(1);
+      expect(JSON.parse(queuedMessages[0]!.content)).toEqual(
+        textInput("Use the new worktree differently"),
+      );
+    });
+  });
+
+  it("keeps worktree continuation ahead of a newly scheduled future send", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread } = seedRunnableThread(harness, {
+        hostId: "host-scheduled-user-after-promotion",
+        status: "active",
+      });
+      seedQueuedMessage(harness.deps, {
+        content: [
+          {
+            type: "text",
+            text: ENTER_WORKTREE_CONTINUATION_TEXT,
+            mentions: [],
+            visibility: "agent-only",
+          },
+        ],
+        threadId: thread.id,
+        waitingOn: { kind: "thread-busy" },
+      });
+
+      await expect(
+        acceptThreadSendRequest(harness.deps, {
+          payload: {
+            input: textInput("Run this after lunch"),
+            mode: "auto",
+            sendAt: Date.now() + 60_000,
+          },
+          thread,
+        }),
+      ).resolves.toMatchObject({ ok: true, delivery: "queued" });
+
+      const queuedMessages = listQueuedThreadMessages(harness.db, thread.id);
+      expect(queuedMessages).toHaveLength(2);
+      expect(JSON.parse(queuedMessages[0]!.content)).toEqual([
+        expect.objectContaining({
+          text: ENTER_WORKTREE_CONTINUATION_TEXT,
+          visibility: "agent-only",
+        }),
+      ]);
+      expect(JSON.parse(queuedMessages[1]!.content)).toEqual(
+        textInput("Run this after lunch"),
+      );
     });
   });
 });

@@ -38,6 +38,7 @@ import type {
   ThreadOriginKind,
   ThreadStatus,
   ThreadVisibility,
+  ThreadWorktreePromotion,
 } from "@bb/domain";
 import type { AppDeps } from "../../src/types.js";
 import { ARCHIVE_UNDO_GRACE_MS } from "../../src/constants.js";
@@ -204,9 +205,12 @@ export function seedThread(
     originPluginId?: string | null;
     titleFallback?: string | null;
     visibility?: ThreadVisibility;
+    worktreePromotion?: ThreadWorktreePromotion;
+    promotionTarget?: "worktree" | "branch";
   },
 ) {
   return createThread(deps.db, deps.hub, {
+    promotionTarget: args.promotionTarget ?? "worktree",
     projectId: args.projectId,
     environmentId: args.environmentId ?? null,
     providerId: args.providerId ?? "codex",
@@ -219,6 +223,7 @@ export function seedThread(
     originKind: args.originKind ?? null,
     originPluginId: args.originPluginId ?? null,
     visibility: args.visibility ?? "visible",
+    worktreePromotion: args.worktreePromotion ?? "armed",
   });
 }
 

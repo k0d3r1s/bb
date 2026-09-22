@@ -407,3 +407,131 @@ describe("checkout provider existing path", () => {
     },
   );
 });
+
+it("reserves promotion input for the internal workflow", async () => {
+  expect(
+    await validateWith({
+      environments: [],
+      threads: [],
+      inputs: {
+        promotion: {
+          action: "enter",
+          intent: {
+            operationId: "promotion",
+            path: CHECKOUT_PATH,
+            sourceBranch: "main",
+            sourceHead: "a".repeat(40),
+            target: { kind: "new", name: "feature" },
+          },
+        },
+      },
+    }),
+  ).toMatchObject({
+    action: "refuse",
+    message: expect.stringContaining("reserved"),
+  });
+});
+
+it.each([
+  "completed",
+  "uncertain",
+  "failed",
+  "claim-refused",
+  "transport",
+  "live-enter",
+  "live-inspect",
+] as const)(
+  "handles internal promotion %s without normal attach",
+  async (mode) => {
+    const intent = {
+      operationId: "promotion",
+      path: CHECKOUT_PATH,
+      sourceBranch: "main",
+      sourceHead: "a".repeat(40),
+      target: { kind: "new", name: "feature" },
+    };
+    const claim = vi.fn(async () => mode !== "claim-refused");
+    const resultSnapshot = {
+      operationId: "promotion",
+      phase:
+        mode === "completed"
+          ? "completed"
+          : mode === "uncertain"
+            ? "uncertain"
+            : "failed",
+      branchName: "main",
+      headSha: "a".repeat(40),
+      observation: "observed",
+      commandTerminated: true,
+      resolution: null,
+      message: null,
+      replayed: false,
+    };
+    const hostCall = vi.fn((call: { method: string; input: unknown }) => {
+      expect(claim).toHaveBeenCalledWith(CHECKOUT_PATH);
+      expect(call.method).toBe("promoteBranch");
+      if (mode === "transport") throw new Error("offline");
+      return resultSnapshot;
+    });
+    const live = mode === "live-enter" || mode === "live-inspect";
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "environment-project-checkout",
+      experimental_callHostRpc: hostCall,
+      sdk: {
+        environments: {
+          list: () => (live ? [environmentAt(CHECKOUT_PATH)] : []),
+        },
+        threads: {
+          list: () => (live ? [{ id: "other", status: "active" }] : []),
+        },
+      },
+    });
+    try {
+      await plugin(bb);
+      const provider = harness.registrations.environmentProviders.get(
+        PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID,
+      );
+      if (!provider) throw new Error("Missing provider");
+      const result = await provider.create({
+        project: PROJECT,
+        host: HOST,
+        projectCheckout: { path: CHECKOUT_PATH, experimental_ownsPath: true },
+        gitRemote: null,
+        inputs: {
+          promotion: {
+            action: mode === "live-inspect" ? "inspect" : "enter",
+            intent,
+          },
+        },
+        thread: makeThreadResponse(),
+        suggestedBranchName: "ignored",
+        attempt: 1,
+        pathKey: "promotion",
+        rebuild: false,
+        experimental_claimPath: claim,
+        previous: null,
+        report: { step() {}, log() {} },
+        signal: new AbortController().signal,
+      });
+      if (mode === "claim-refused") {
+        expect(result.status).toBe("failed");
+        expect(hostCall).not.toHaveBeenCalled();
+      } else if (mode === "transport")
+        expect(result).toMatchObject({ status: "failed", message: "offline" });
+      else {
+        expect(result).toMatchObject({
+          status: "created",
+          path: CHECKOUT_PATH,
+          ownsPath: false,
+          resource: { phase: resultSnapshot.phase },
+        });
+        if (live)
+          expect(hostCall.mock.calls[0]?.[0].input).toMatchObject({
+            action: "inspect",
+          });
+      }
+    } finally {
+      await harness.lifecycle.dispose();
+    }
+  },
+);

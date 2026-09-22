@@ -1,0 +1,30 @@
+{
+  "name": "bb-checkout-contract",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./git-branch-name": {
+      "source": "./src/git-branch-name.ts",
+      "types": "./src/git-branch-name.ts",
+      "default": "./src/git-branch-name.ts"
+    },
+    "./branch-promotion": {
+      "source": "./src/branch-promotion.fork.ts",
+      "types": "./src/branch-promotion.fork.ts",
+      "default": "./src/branch-promotion.fork.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@bb/tsconfig": "workspace:*",
+    "@types/node": "^22.0.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-7": "npm:typescript@^7.0.2"
+  }
+}

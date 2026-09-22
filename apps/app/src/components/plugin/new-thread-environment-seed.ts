@@ -10,6 +10,8 @@ import type {
   WorkspaceArgs,
 } from "@bb/server-contract";
 import {
+  PROJECT_BRANCH_VALUE,
+  PROJECT_DEFAULT_VALUE,
   encodeReuseValue,
   encodeProviderValue,
 } from "@/components/pickers/environment-picker-value";
@@ -59,7 +61,15 @@ export function newThreadEnvironmentArgsToSeed(
   environment: CreateThreadEnvironmentArgs,
 ): NewThreadEnvironmentSeed | null {
   if (environment.type === "project-default") {
-    return null;
+    return {
+      selectionValue:
+        environment.promotion === "branch"
+          ? PROJECT_BRANCH_VALUE
+          : PROJECT_DEFAULT_VALUE,
+      providerMachine: null,
+      providerHostId: null,
+      providerInputs: null,
+    };
   }
   if (environment.type === "provider") {
     return {

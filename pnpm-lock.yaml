@@ -1593,6 +1593,25 @@ importers:
         specifier: workspace:*
         version: link:../../plugins/workflows
 
+  packages/checkout-contract:
+    dependencies:
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@bb/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.10
+      typescript:
+        specifier: npm:@typescript/typescript6@^6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      typescript-7:
+        specifier: npm:typescript@^7.0.2
+        version: typescript@7.0.2
+
   packages/client-core:
     dependencies:
       '@bb/core-ui':
@@ -1800,6 +1819,9 @@ importers:
 
   packages/domain:
     dependencies:
+      bb-checkout-contract:
+        specifier: workspace:*
+        version: link:../checkout-contract
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -3732,6 +3754,9 @@ importers:
       '@bb/shared-ui':
         specifier: workspace:*
         version: link:../../packages/shared-ui
+      bb-checkout-contract:
+        specifier: workspace:*
+        version: link:../../packages/checkout-contract
       bb-environment-provider-host:
         specifier: workspace:*
         version: link:../../packages/environment-provider-host
@@ -6891,7 +6916,7 @@ packages:
 
   '@expo/bunyan@4.0.1':
     resolution: {integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==}
-    engines: {'0': node >=0.10.0}
+    engines: {node: '>=0.10.0'}
 
   '@expo/cli@57.0.16':
     resolution: {integrity: sha512-+HyMY2nAS6QBJb0nSeMz92p11bZ1AtWSRnhWnklznN07IRoQirisnKq2vr18Ayjb/fnb5F/um+n6FRhF0fZm1Q==}

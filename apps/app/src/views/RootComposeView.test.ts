@@ -830,12 +830,44 @@ describe("resolveRootComposeEffectiveEnvironmentValue", () => {
   const checkoutProvider = makeProjectProvider("project-checkout");
   const worktreeProvider = makeProjectProvider("git-worktree");
 
-  it("falls back to the checkout on the primary host for a project with a source there", () => {
+  it("falls back to the project default when the primary host has a checkout", () => {
     expect(
       resolveRootComposeEffectiveEnvironmentValue({
         seededReuseEnvironment: null,
         knownHostIds: new Set(["host_1"]),
         environmentSelectionValue: "",
+        environmentProviders: [checkoutProvider, worktreeProvider],
+        isProjectless: false,
+        primaryHostId: "host_1",
+        projectSources: [makeProjectSource("host_1")],
+        reuseThreadOptions: [],
+        reuseThreadOptionsLoading: false,
+      }),
+    ).toBe("project-default");
+  });
+
+  it("retains branch promotion when normalizing a saved selection", () => {
+    expect(
+      resolveRootComposeEffectiveEnvironmentValue({
+        seededReuseEnvironment: null,
+        knownHostIds: new Set(["host_1"]),
+        environmentSelectionValue: "project-default:branch",
+        environmentProviders: [checkoutProvider, worktreeProvider],
+        isProjectless: false,
+        primaryHostId: "host_1",
+        projectSources: [makeProjectSource("host_1")],
+        reuseThreadOptions: [],
+        reuseThreadOptionsLoading: false,
+      }),
+    ).toBe("project-default:branch");
+  });
+
+  it("keeps an explicit checkout distinct from the project default", () => {
+    expect(
+      resolveRootComposeEffectiveEnvironmentValue({
+        seededReuseEnvironment: null,
+        knownHostIds: new Set(["host_1"]),
+        environmentSelectionValue: "provider:project-checkout",
         environmentProviders: [checkoutProvider, worktreeProvider],
         isProjectless: false,
         primaryHostId: "host_1",
@@ -900,7 +932,7 @@ describe("resolveRootComposeEffectiveEnvironmentValue", () => {
         ...args,
         environmentSelectionValue: "provider:gone",
       }),
-    ).toBe("provider:project-checkout");
+    ).toBe("project-default");
   });
 
   it("keeps a reuse environment only when it belongs to the selected project", () => {
@@ -930,7 +962,7 @@ describe("resolveRootComposeEffectiveEnvironmentValue", () => {
         reuseThreadOptions: [makeReuseThreadOption("env_current")],
         reuseThreadOptionsLoading: false,
       }),
-    ).toBe("provider:project-checkout");
+    ).toBe("project-default");
   });
 
   it("keeps a seeded environment that no live thread points at", () => {
@@ -987,7 +1019,7 @@ describe("resolveRootComposeEffectiveEnvironmentValue", () => {
         reuseThreadOptions: [],
         reuseThreadOptionsLoading: false,
       }),
-    ).toBe("provider:project-checkout");
+    ).toBe("project-default");
   });
 
   it("ignores a seeded lookup for a different environment than the selection", () => {
@@ -1006,7 +1038,7 @@ describe("resolveRootComposeEffectiveEnvironmentValue", () => {
         reuseThreadOptions: [],
         reuseThreadOptionsLoading: false,
       }),
-    ).toBe("provider:project-checkout");
+    ).toBe("project-default");
   });
 
   it("holds reuse mode before an environment is picked, including with nothing to reuse", () => {

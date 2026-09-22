@@ -118,6 +118,8 @@ export function makeThread(overrides: MakeThreadArgs): Thread {
     originKind: null,
     originPluginId: null,
     visibility: "visible",
+    promotionTarget: "worktree",
+    worktreePromotion: "declined",
     archivedAt: null,
     pinnedAt: null,
     deletedAt: null,

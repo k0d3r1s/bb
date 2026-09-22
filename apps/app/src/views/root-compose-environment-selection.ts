@@ -11,6 +11,7 @@ import {
 import {
   encodeProviderValue,
   parseEnvironmentValue,
+  PROJECT_DEFAULT_VALUE,
 } from "@/components/pickers/environment-picker-value";
 import type { ReuseThreadOption } from "@/components/pickers/ReuseEnvironmentPicker";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
@@ -251,8 +252,12 @@ export function resolveRootComposeEffectiveEnvironmentValue({
     findLocalPathProjectSourceForHost(projectSources, primaryHostId) !==
       undefined &&
     providerRegistered(PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID)
-      ? encodeProviderValue(PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID)
+      ? PROJECT_DEFAULT_VALUE
       : "";
+
+  if (parsedSelection?.type === "project-default" && fallbackValue !== "") {
+    return environmentSelectionValue;
+  }
 
   if (parsedSelection?.type === "reuse") {
     if (parsedSelection.environmentId === null) {

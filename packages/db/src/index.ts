@@ -9,6 +9,7 @@ export type {
 
 export * from "./schema.js";
 export {
+  createEnvironmentId,
   createQueuedThreadMessageId,
   createEventId,
   createHostId,

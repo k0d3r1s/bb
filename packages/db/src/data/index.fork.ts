@@ -30,3 +30,4 @@ export {
   type WorkAdmissionToken,
   type WorkQuiescedResult,
 } from "./work-admissions.js";
+export * from "./branch-promotions.fork.js";

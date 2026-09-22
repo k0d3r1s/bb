@@ -8,6 +8,20 @@
       "when": 1790079694518,
       "tag": "0000_work_quiesce",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790084440020,
+      "tag": "0001_thread_worktree_promotion",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790097807550,
+      "tag": "0002_sparkling_cannonball",
+      "breakpoints": true
     }
   ]
 }

@@ -202,3 +202,17 @@ For review or fix pipelines, get the environment ID from
   same scope, size, and title. It does not replay the original launch command.
 
 Clearing a thread's parent with `bb thread update --clear-parent-thread` inherits the former parent's section unless the update explicitly supplies a section. Children released by environment archiving also inherit their former parent's section.
+
+## Branch promotion recovery
+
+`bb thread show ID` reports the promotion target and armed/declined/promoted state.
+Use `bb thread promotion inspect ID [--json]` to get the operation and observation.
+An interrupted operation blocks the shared checkout until the host proves the
+command process group terminated. Resolve with
+`bb thread promotion resolve ID --operation OP --observation TOKEN --accept-current`
+to accept the requested target at the observed HEAD, or `--keep-current` to decline
+promotion and keep the observed branch. Choose exactly one. Recovery does not
+mutate Git; stale observations fail and there is no force-unlock. SDK equivalents
+are `threads.inspectBranchPromotion({ threadId })` and
+`threads.resolveBranchPromotion({ threadId, operationId, observation, resolution })`,
+where resolution is `"accept-current"` or `"keep-current"`.

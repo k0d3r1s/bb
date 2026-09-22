@@ -2,9 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   encodeProviderValue,
   parseEnvironmentValue,
+  PROJECT_DEFAULT_VALUE,
+  PROJECT_BRANCH_VALUE,
 } from "./environment-picker-value";
 
 describe("provider environment values", () => {
+  it("keeps branch promotion distinct from worktree promotion", () => {
+    expect(parseEnvironmentValue(PROJECT_BRANCH_VALUE)).toEqual({
+      type: "project-default",
+      promotion: "branch",
+    });
+  });
   it("round-trips a provider id containing dashes", () => {
     const value = encodeProviderValue("docker-sandbox");
     expect(value).toBe("provider:docker-sandbox");
@@ -27,5 +35,15 @@ describe("provider environment values", () => {
     expect(parseEnvironmentValue("provider:a/b")).toBeNull();
     expect(parseEnvironmentValue("provider:bad*id")).toBeNull();
     expect(parseEnvironmentValue(`provider:${"a".repeat(65)}`)).toBeNull();
+  });
+
+  it("keeps the project default distinct from an explicit provider", () => {
+    expect(parseEnvironmentValue(PROJECT_DEFAULT_VALUE)).toEqual({
+      type: "project-default",
+    });
+    expect(parseEnvironmentValue("provider:project-checkout")).toEqual({
+      type: "provider",
+      environmentProviderId: "project-checkout",
+    });
   });
 });

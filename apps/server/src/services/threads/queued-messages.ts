@@ -89,6 +89,7 @@ import { recordAcceptedPromptHistoryEntry } from "../prompt-history.js";
 import { requireThreadCommandEnvironment } from "./thread-command-environment.js";
 import { applyLoggedThreadLifecycleEventInTransaction } from "./lifecycle-outcome.js";
 import { buildThreadStatusChangeMetadata } from "./thread-runtime-display.js";
+import { deleteEnterWorktreeContinuations } from "./worktree-promotion.js";
 import {
   goneThreadEnvironmentDetails,
   threadEnvironmentUnavailableDetails,
@@ -241,6 +242,12 @@ export async function createQueuedMessageForThread(
           throw new ApiError(404, "thread_not_found", "Thread not found");
         }
         const { hasProviderSession } = admitQueuedMessage(tx, currentThread);
+        if (senderThreadId === null) {
+          deleteEnterWorktreeContinuations(
+            { kind: "transaction", db: tx },
+            thread.id,
+          );
+        }
         const queuedMessage = createQueuedThreadMessageInTransaction(tx, {
           threadId: thread.id,
           content: payload.input,

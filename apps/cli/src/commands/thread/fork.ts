@@ -4,7 +4,7 @@ import {
   type PromptInput,
   type Thread,
 } from "@bb/domain";
-import type { EnvironmentArgs } from "@bb/server-contract";
+import type { CreateThreadEnvironmentArgs } from "@bb/server-contract";
 import { action } from "../../action.js";
 import { createCliBbSdk } from "../../client.js";
 import { resolveExplicitIdFlag } from "../../context-env.js";
@@ -19,10 +19,12 @@ import {
 import {
   buildSpawnEnvironment,
   looksLikePath,
+  parsePromotionOption,
   resolveSpawnEnvironmentValue,
 } from "./spawn.js";
 
 interface ThreadForkCommandOptions {
+  promote?: string;
   agentContextSeed?: string;
   baseBranch?: string;
   environment?: string;
@@ -86,9 +88,12 @@ async function resolveForkSourceHostId(
 }
 
 function describeForkEnvironment(
-  environment: EnvironmentArgs | undefined,
+  environment: CreateThreadEnvironmentArgs | undefined,
 ): string {
   if (environment === undefined) return "source environment";
+  if (environment.type === "project-default")
+    return `project checkout, then ${environment.promotion ?? "worktree"}`;
+  if (environment.type === "provider") return environment.environmentProviderId;
   if (environment.type === "reuse") return environment.environmentId;
   if (environment.workspace.type === "managed-worktree") {
     return "new worktree";
@@ -117,6 +122,10 @@ export function registerForkCommand(
     .option(
       "--source-seq-end <seq>",
       "Fork after the source turn containing this event sequence",
+    )
+    .option(
+      "--promote <target>",
+      "Start in the shared project checkout, then promote to worktree or branch",
     )
     .option(
       "--environment <id-or-path>",
@@ -152,6 +161,7 @@ export function registerForkCommand(
     .action(
       action(
         async (sourceThreadIdValue: string, opts: ThreadForkCommandOptions) => {
+          const promotion = parsePromotionOption(opts);
           const sourceThreadId = resolveExplicitIdFlag({
             flagName: "source thread ID",
             value: sourceThreadIdValue,
@@ -171,7 +181,7 @@ export function registerForkCommand(
           );
 
           let thread: Thread;
-          let environment: EnvironmentArgs | undefined;
+          let environment: CreateThreadEnvironmentArgs | undefined;
           try {
             const sdk = createCliBbSdk(getUrl());
             const input =
@@ -197,25 +207,19 @@ export function registerForkCommand(
             if (
               environmentValue === undefined &&
               opts.newEnvironment === undefined &&
-              opts.baseBranch === undefined
+              opts.baseBranch === undefined &&
+              promotion === undefined
             ) {
               environment = undefined;
             } else {
               const builtEnvironment = buildSpawnEnvironment({
+                promotion,
                 defaultPersonalWorkspace: false,
                 environmentValue,
                 newEnvironmentKind: opts.newEnvironment,
                 hostId,
                 baseBranch: opts.baseBranch,
               });
-              if (
-                builtEnvironment.type === "project-default" ||
-                builtEnvironment.type === "provider"
-              ) {
-                throw new Error(
-                  "Fork environment flags resolved no environment",
-                );
-              }
               environment = builtEnvironment;
             }
             thread = await sdk.threads.fork({

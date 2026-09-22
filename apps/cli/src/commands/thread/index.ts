@@ -9,6 +9,7 @@ import { registerPaneCommand } from "./pane.js";
 import { registerOrganizationCommands } from "./organization.js";
 import { registerShowCommand } from "./show.js";
 import { registerSpawnCommand } from "./spawn.js";
+import { registerPromotionCommands } from "./promotion.fork.js";
 import { registerForkCommand } from "./fork.js";
 import { registerWaitCommand } from "./wait.js";
 
@@ -20,6 +21,7 @@ export function registerThreadCommands(
   registerWaitCommand(thread, getUrl);
   registerSpawnCommand(thread, getUrl);
   registerForkCommand(thread, getUrl);
+  registerPromotionCommands(thread, getUrl);
   registerListCommand(thread, getUrl);
   registerCountCommand(thread, getUrl);
   registerContextCommand(thread, getUrl);

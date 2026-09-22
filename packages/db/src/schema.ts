@@ -15,6 +15,10 @@ import { startedOnBehalfOfInitiatorValues } from "@bb/domain/started-on-behalf-o
 import { threadCreateOriginValues } from "@bb/domain/thread-create-origin";
 import { threadOriginKindValues } from "@bb/domain/thread-origin-kind";
 import { threadVisibilityValues } from "@bb/domain/thread-visibility";
+import {
+  threadWorktreePromotionValues,
+  threadPromotionTargetValues,
+} from "@bb/domain/thread-worktree-promotion";
 import type {
   EnvironmentProviderSelection,
   JsonValue,
@@ -624,6 +628,16 @@ export const threads = sqliteTable(
     visibility: text("visibility", { enum: threadVisibilityValues })
       .notNull()
       .default("visible"),
+    worktreePromotion: text("worktree_promotion", {
+      enum: threadWorktreePromotionValues,
+    })
+      .notNull()
+      .default("declined"),
+    promotionTarget: text("promotion_target", {
+      enum: threadPromotionTargetValues,
+    })
+      .notNull()
+      .default("worktree"),
     archivedAt: integer("archived_at"),
     pinnedAt: integer("pinned_at"),
     pinSortKey: text("pin_sort_key"),

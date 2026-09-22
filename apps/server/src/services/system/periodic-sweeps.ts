@@ -1,3 +1,4 @@
+import { reconcileBranchPromotions } from "../threads/thread-environment-branch.fork.js";
 import {
   runThreadPruningSweep,
   THREAD_PRUNING_SWEEP_LIMITS,
@@ -493,6 +494,12 @@ export function createThreadEventPruningJob(
 }
 
 const PERIODIC_SWEEP_JOBS: PeriodicSweepJob[] = [
+  {
+    cadenceMs: 15_000,
+    category: "durable-intent-retry",
+    name: "branch-promotion-reconciliation",
+    run: reconcileBranchPromotions,
+  },
   {
     cadenceMs: 0,
     category: "durable-intent-retry",

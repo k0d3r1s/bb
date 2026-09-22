@@ -68,6 +68,8 @@ export * from "./thread-timeline-goal.js";
 export * from "./thread-timeline-model-fallback.js";
 export * from "./thread-timeline-pending-todos.js";
 export * from "./thread-visibility.js";
+export * from "./thread-worktree-promotion.js";
 export * from "./thread.js";
 
 export * from "./project-attachment.js";
+export * from "./branch-promotion.fork.js";

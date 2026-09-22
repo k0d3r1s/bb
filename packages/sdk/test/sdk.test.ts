@@ -1209,6 +1209,83 @@ describe("@bb/sdk", () => {
     expect(queue.requests).toEqual([]);
   });
 
+  it("preserves checkout branch promotion on spawn and fork", async () => {
+    const queue = createFetchQueue([
+      { body: { id: "thr_1" } },
+      { body: { id: "thr_2" } },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+    const environment = {
+      type: "project-default",
+      promotion: "branch",
+    } as const;
+    await sdk.threads.spawn({
+      projectId: "proj_1",
+      environment,
+      prompt: "Ship it",
+    });
+    await sdk.threads.fork({ sourceThreadId: "thr_1", environment });
+    expect(
+      queue.requests.map(
+        (request) => JSON.parse(request.bodyText ?? "{}").environment,
+      ),
+    ).toEqual([environment, environment]);
+  });
+
+  it("inspects branch promotion and resolves using the exact observation", async () => {
+    const result = {
+      operationId: "op_1",
+      phase: "reconciling",
+      snapshot: { observation: "host-token" },
+    };
+    const queue = createFetchQueue([
+      { body: result },
+      { body: null },
+      { body: result },
+    ]);
+    const sdk = createBbSdk({
+      transport: createHttpTransport({
+        baseUrl: "http://bb.test",
+        fetch: queue.fetch,
+        runtime: "node",
+      }),
+    });
+    await expect(
+      sdk.threads.inspectBranchPromotion({ threadId: "thr_1" }),
+    ).resolves.toEqual(result);
+    await expect(
+      sdk.threads.inspectBranchPromotion({ threadId: "thr_2" }),
+    ).resolves.toBeNull();
+    await expect(
+      sdk.threads.resolveBranchPromotion({
+        threadId: "thr_1",
+        operationId: "op_1",
+        observation: "host-token",
+        resolution: "keep-current",
+      }),
+    ).resolves.toEqual(result);
+    expect(queue.requests[0]).toEqual({
+      method: "GET",
+      url: "http://bb.test/api/v1/threads/thr_1/branch-promotion",
+      bodyText: undefined,
+    });
+    expect(queue.requests[2]).toEqual({
+      method: "POST",
+      url: "http://bb.test/api/v1/threads/thr_1/branch-promotion/resolve",
+      bodyText: JSON.stringify({
+        operationId: "op_1",
+        observation: "host-token",
+        resolution: "keep-current",
+      }),
+    });
+  });
+
   it("fills thread spawn defaults before sending a request", async () => {
     const queue = createFetchQueue([{ body: { id: "thr_1" }, status: 201 }]);
     const sdk = createBbSdk({

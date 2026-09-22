@@ -1,3 +1,7 @@
+import {
+  branchPromotionRequestSchema,
+  branchPromotionSnapshotSchema,
+} from "bb-checkout-contract/branch-promotion";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { environmentHostProgressSchema } from "bb-environment-provider-host/progress";
@@ -65,6 +69,10 @@ export const checkoutInspectionSchema = z.union([
 export type CheckoutInspection = z.infer<typeof checkoutInspectionSchema>;
 
 export const checkoutHostContract = defineRpcContract({
+  promoteBranch: {
+    input: branchPromotionRequestSchema,
+    output: branchPromotionSnapshotSchema,
+  },
   attach: {
     input: z
       .object({

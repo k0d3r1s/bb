@@ -2,21 +2,35 @@ import { assertEnvironmentPathAvailable } from "../environments/path-admission.j
 import { z } from "zod";
 import {
   createEnvironment,
+  createQueuedThreadMessageInTransaction,
+  type DbTransaction,
   type EnvironmentRow,
   createEventId,
   findProjectEnvironmentByHostPath,
   getEnvironment,
   getThread,
+  listQueuedThreadMessages,
   updateThread,
 } from "@bb/db";
 import { turnScope } from "@bb/domain";
-import type { DynamicTool, Thread, ToolCallResponse } from "@bb/domain";
+import type {
+  DynamicTool,
+  ResolvedThreadExecutionOptions,
+  Thread,
+  ToolCallResponse,
+} from "@bb/domain";
 import type { AppDeps } from "../../types.js";
 import { runLiveHostCommand } from "../hosts/live-command.js";
+import { DEFAULT_ENVIRONMENT_PROVIDER_ID } from "../environments/environment-provider-ids.js";
 import { appendThreadEventInTransaction } from "./thread-events.js";
 import { buildEnvironmentProvisionCommand } from "./thread-create-helpers.js";
 import { findHostDataDir } from "../lib/entity-lookup.js";
 import { suppliedWorkspacePathRefusal } from "./workspace-path-claims.js";
+import {
+  ENTER_WORKTREE_CONTINUATION_TEXT,
+  isEnterWorktreeContinuationContent,
+  isSupersedingUserQueueEnvelope,
+} from "./worktree-promotion.js";
 
 export const UPDATE_ENVIRONMENT_DIRECTORY_TOOL_NAME =
   "update_environment_directory";
@@ -61,12 +75,26 @@ interface HandleUpdateEnvironmentDirectoryToolCallArgs {
   turnId: string;
 }
 
-type ReadyEnvironment = EnvironmentRow & { path: string; status: "ready" };
+export type ReadyEnvironment = EnvironmentRow & {
+  path: string;
+  status: "ready";
+};
 
-type AttachEnvironmentResult =
-  | { kind: "attached"; changed: boolean }
+export type AttachEnvironmentResult =
+  | { kind: "attached"; changed: boolean; queuedContinuation: boolean }
   | { kind: "environment_changed" }
+  | { kind: "promotion_declined" }
   | { kind: "thread_unavailable"; message: string };
+
+interface AttachReadyEnvironmentArgs {
+  currentEnvironment: EnvironmentRow;
+  createdEnvironment: boolean;
+  targetEnvironment: ReadyEnvironment;
+  thread: Thread;
+  turnId: string;
+  continuationExecution?: ResolvedThreadExecutionOptions;
+  requiresArmedPromotion?: boolean;
+}
 
 function toolCallTextResponse(
   success: boolean,
@@ -78,11 +106,11 @@ function toolCallTextResponse(
   };
 }
 
-function toolCallFailure(text: string): ToolCallResponse {
+export function toolCallFailure(text: string): ToolCallResponse {
   return toolCallTextResponse(false, text);
 }
 
-function toolCallSuccess(text: string): ToolCallResponse {
+export function toolCallSuccess(text: string): ToolCallResponse {
   return toolCallTextResponse(true, text);
 }
 
@@ -107,7 +135,7 @@ function validateDirectoryPath(path: string): string | null {
   return null;
 }
 
-function threadWritableFailure(thread: Thread): string | null {
+export function threadWritableFailure(thread: Thread): string | null {
   if (thread.deletedAt !== null) {
     return "Cannot update the environment directory for a deleted thread.";
   }
@@ -117,7 +145,7 @@ function threadWritableFailure(thread: Thread): string | null {
   return null;
 }
 
-function resolveReadyEnvironment(
+export function resolveReadyEnvironment(
   environment: EnvironmentRow,
 ): ReadyEnvironment | { failure: string } {
   if (environment.status !== "ready") {
@@ -141,70 +169,127 @@ function successMessage(path: string): string {
   return `Environment directory updated to ${path}. This applies to future turns; stop work in this turn so the next turn can run from the updated directory.`;
 }
 
-function attachReadyEnvironment(
+function appendEnvironmentAttachmentEvent(
+  tx: DbTransaction,
+  args: AttachReadyEnvironmentArgs,
+  threadId: string,
+): void {
+  appendThreadEventInTransaction(tx, {
+    threadId,
+    environmentId: args.targetEnvironment.id,
+    type: "system/operation",
+    scope: turnScope(args.turnId),
+    data: {
+      operation: "environment_directory_update",
+      operationId: createEventId(),
+      status: "completed",
+      message: `Updated environment directory to ${args.targetEnvironment.path}`,
+      metadata: {
+        createdEnvironment: args.createdEnvironment,
+        previousEnvironmentId: args.currentEnvironment.id,
+        previousPath: args.currentEnvironment.path,
+        nextEnvironmentId: args.targetEnvironment.id,
+        nextPath: args.targetEnvironment.path,
+      },
+    },
+  });
+}
+
+function queueEnterWorktreeContinuation(
+  tx: DbTransaction,
+  args: AttachReadyEnvironmentArgs,
+  threadId: string,
+): boolean {
+  const execution = args.continuationExecution;
+  if (!execution) return false;
+  const hasSupersedingMessage = listQueuedThreadMessages(tx, threadId).some(
+    (queuedMessage) =>
+      isSupersedingUserQueueEnvelope(queuedMessage) &&
+      !isEnterWorktreeContinuationContent(queuedMessage.content),
+  );
+  if (hasSupersedingMessage) return false;
+  createQueuedThreadMessageInTransaction(tx, {
+    threadId,
+    content: [
+      {
+        type: "text",
+        text: ENTER_WORKTREE_CONTINUATION_TEXT,
+        mentions: [],
+        visibility: "agent-only",
+      },
+    ],
+    senderThreadId: null,
+    model: execution.model,
+    reasoningLevel: execution.reasoningLevel,
+    permissionMode: execution.permissionMode,
+    serviceTier: execution.serviceTier,
+    waitingOn: { kind: "thread-busy" },
+    sendAt: null,
+    payload: { kind: "inline" },
+    systemNotice: null,
+  });
+  return true;
+}
+
+export function attachReadyEnvironmentInTransaction(
+  tx: DbTransaction,
+  hub: AppDeps["hub"],
+  args: AttachReadyEnvironmentArgs,
+): AttachEnvironmentResult {
+  const latestThread = getThread(tx, args.thread.id);
+  if (!latestThread || latestThread.deletedAt !== null) {
+    return { kind: "thread_unavailable", message: "Thread no longer exists." };
+  }
+
+  const writableFailure = threadWritableFailure(latestThread);
+  if (writableFailure) {
+    return { kind: "thread_unavailable", message: writableFailure };
+  }
+
+  if (
+    args.requiresArmedPromotion === true &&
+    latestThread.worktreePromotion !== "armed"
+  ) {
+    return { kind: "promotion_declined" };
+  }
+
+  if (latestThread.environmentId === args.targetEnvironment.id) {
+    return { kind: "attached", changed: false, queuedContinuation: false };
+  }
+
+  if (latestThread.environmentId !== args.currentEnvironment.id) {
+    return { kind: "environment_changed" };
+  }
+
+  updateThread(tx, hub, latestThread.id, {
+    environmentId: args.targetEnvironment.id,
+  });
+  appendEnvironmentAttachmentEvent(tx, args, latestThread.id);
+  const queuedContinuation = queueEnterWorktreeContinuation(
+    tx,
+    args,
+    latestThread.id,
+  );
+  return { kind: "attached", changed: true, queuedContinuation };
+}
+
+export function attachReadyEnvironment(
   deps: Pick<AppDeps, "db" | "hub">,
-  args: {
-    currentEnvironment: EnvironmentRow;
-    createdEnvironment: boolean;
-    targetEnvironment: ReadyEnvironment;
-    thread: Thread;
-    turnId: string;
-  },
+  args: AttachReadyEnvironmentArgs,
 ): AttachEnvironmentResult {
   const result = deps.db.transaction(
-    (tx): AttachEnvironmentResult => {
-      const latestThread = getThread(tx, args.thread.id);
-      if (!latestThread || latestThread.deletedAt !== null) {
-        return {
-          kind: "thread_unavailable",
-          message: "Thread no longer exists.",
-        };
-      }
-
-      const writableFailure = threadWritableFailure(latestThread);
-      if (writableFailure) {
-        return { kind: "thread_unavailable", message: writableFailure };
-      }
-
-      if (latestThread.environmentId === args.targetEnvironment.id) {
-        return { kind: "attached", changed: false };
-      }
-
-      if (latestThread.environmentId !== args.currentEnvironment.id) {
-        return { kind: "environment_changed" };
-      }
-
-      updateThread(tx, deps.hub, latestThread.id, {
-        environmentId: args.targetEnvironment.id,
-      });
-      appendThreadEventInTransaction(tx, {
-        threadId: latestThread.id,
-        environmentId: args.targetEnvironment.id,
-        type: "system/operation",
-        scope: turnScope(args.turnId),
-        data: {
-          operation: "environment_directory_update",
-          operationId: createEventId(),
-          status: "completed",
-          message: `Updated environment directory to ${args.targetEnvironment.path}`,
-          metadata: {
-            createdEnvironment: args.createdEnvironment,
-            previousEnvironmentId: args.currentEnvironment.id,
-            previousPath: args.currentEnvironment.path,
-            nextEnvironmentId: args.targetEnvironment.id,
-            nextPath: args.targetEnvironment.path,
-          },
-        },
-      });
-      return { kind: "attached", changed: true };
-    },
+    (tx) => attachReadyEnvironmentInTransaction(tx, deps.hub, args),
     { behavior: "immediate" },
   );
 
   if (result.kind === "attached" && result.changed) {
-    deps.hub.notifyThread(args.thread.id, ["events-appended"], {
-      eventTypes: ["system/operation"],
-    });
+    deps.hub.notifyThread(
+      args.thread.id,
+      result.queuedContinuation
+        ? ["events-appended", "queue-changed"]
+        : ["events-appended"],
+      { eventTypes: ["system/operation"] },
+    );
   }
 
   return result;
@@ -257,6 +342,71 @@ async function provisionUnmanagedEnvironmentForPath(
   return ready;
 }
 
+function confirmCurrentEnvironmentDirectory(
+  deps: Pick<AppDeps, "db" | "hub">,
+  args: HandleUpdateEnvironmentDirectoryToolCallArgs,
+  normalizedPath: string,
+): ToolCallResponse | null {
+  return deps.db.transaction(
+    (tx) => {
+      const latestThread = getThread(tx, args.thread.id);
+      if (latestThread === null) {
+        return toolCallFailure("Thread no longer exists.");
+      }
+      const writableFailure = threadWritableFailure(latestThread);
+      if (writableFailure) return toolCallFailure(writableFailure);
+      const latestEnvironment =
+        latestThread.environmentId === null
+          ? null
+          : getEnvironment(tx, latestThread.environmentId);
+      if (latestEnvironment === null) {
+        return toolCallFailure("Thread environment no longer exists.");
+      }
+      if (latestEnvironment.path !== normalizedPath) return null;
+      if (
+        !latestEnvironment.isWorktree &&
+        latestEnvironment.environmentProviderId !==
+          DEFAULT_ENVIRONMENT_PROVIDER_ID.gitWorktree
+      ) {
+        updateThread(tx, deps.hub, latestThread.id, {
+          worktreePromotion: "declined",
+        });
+      }
+      return toolCallSuccess(
+        `This thread is already using ${normalizedPath} as its environment directory.`,
+      );
+    },
+    { behavior: "immediate" },
+  );
+}
+
+function environmentAttachmentResponse(
+  deps: Pick<AppDeps, "db" | "hub">,
+  args: HandleUpdateEnvironmentDirectoryToolCallArgs,
+  targetEnvironment: ReadyEnvironment,
+  attachResult: AttachEnvironmentResult,
+): ToolCallResponse {
+  switch (attachResult.kind) {
+    case "attached":
+      if (!targetEnvironment.isWorktree) {
+        updateThread(deps.db, deps.hub, args.thread.id, {
+          worktreePromotion: "declined",
+        });
+      }
+      return toolCallSuccess(successMessage(targetEnvironment.path));
+    case "environment_changed":
+      return toolCallFailure(
+        "Thread environment changed while preparing the new directory. Try again with the desired path.",
+      );
+    case "promotion_declined":
+      return toolCallFailure(
+        "Worktree promotion was declined while preparing the new directory. Continue from the current checkout.",
+      );
+    case "thread_unavailable":
+      return toolCallFailure(attachResult.message);
+  }
+}
+
 export async function handleUpdateEnvironmentDirectoryToolCall(
   deps: AppDeps,
   args: HandleUpdateEnvironmentDirectoryToolCallArgs,
@@ -291,13 +441,12 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     );
   }
 
-  if (
-    getEnvironment(deps.db, args.currentEnvironment.id)?.path === normalizedPath
-  ) {
-    return toolCallSuccess(
-      `This thread is already using ${normalizedPath} as its environment directory.`,
-    );
-  }
+  const currentDirectoryResponse = confirmCurrentEnvironmentDirectory(
+    deps,
+    args,
+    normalizedPath,
+  );
+  if (currentDirectoryResponse !== null) return currentDirectoryResponse;
 
   const existingEnvironment = findProjectEnvironmentByHostPath(
     deps.db,
@@ -360,14 +509,10 @@ export async function handleUpdateEnvironmentDirectoryToolCall(
     );
   }
 
-  switch (attachResult.kind) {
-    case "attached":
-      return toolCallSuccess(successMessage(targetEnvironment.path));
-    case "environment_changed":
-      return toolCallFailure(
-        "Thread environment changed while preparing the new directory. Try again with the desired path.",
-      );
-    case "thread_unavailable":
-      return toolCallFailure(attachResult.message);
-  }
+  return environmentAttachmentResponse(
+    deps,
+    args,
+    targetEnvironment,
+    attachResult,
+  );
 }

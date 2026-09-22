@@ -1,3 +1,4 @@
+import { validateBranchPromotionPlacement } from "./thread-environment-branch.fork.js";
 import { requestThreadStorageDeletion } from "./thread-lifecycle.js";
 import { assertEnvironmentPathAvailable } from "../environments/path-admission.js";
 import {
@@ -57,6 +58,7 @@ import {
 import {
   buildProviderThreadExecutionDefaults,
   resolveCreateThreadEnvironment,
+  resolveCreateThreadWorktreePromotion,
 } from "./thread-default-policy.js";
 import { assertValidParentThread } from "./thread-parent.js";
 import {
@@ -687,6 +689,14 @@ export async function createThreadFromRequest(
     environment: requestedEnvironment,
     providerId,
     titleFallback: deriveTitleFallback(requestInput.input),
+    promotionTarget:
+      requestInput.environment.type === "project-default"
+        ? (requestInput.environment.promotion ?? "worktree")
+        : "worktree",
+    worktreePromotion: resolveCreateThreadWorktreePromotion({
+      requestedEnvironment: requestInput.environment,
+      resolvedEnvironment: requestedEnvironment,
+    }),
   };
   const resolvedEnvironment =
     requestedEnvironment.type === "provider"
@@ -713,6 +723,11 @@ export async function createThreadFromRequest(
   if (childHostId !== null) {
     await ensureHostSessionReadyForWork(deps, { hostId: childHostId });
   }
+  await validateBranchPromotionPlacement(
+    deps,
+    requestedEnvironment,
+    requestInput.environment,
+  );
   const modelCatalogCwd =
     resolvedEnvironment !== null
       ? modelCatalogCwdForResolvedEnvironment(resolvedEnvironment)

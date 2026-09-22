@@ -1,4 +1,8 @@
 import {
+  ENTER_BRANCH_TOOL,
+  ENTER_BRANCH_INSTRUCTIONS,
+} from "./thread-environment-branch.fork.js";
+import {
   resolveHostEnvironment,
   mergeHostAndProviderEnvironment,
 } from "../hosts/host-environment.js";
@@ -30,7 +34,12 @@ import { resolveSkillCatalog } from "../skills/skill-catalog.js";
 import { discoverPluginSkillIds } from "../skills/injected-skills.js";
 import { resolveWorkspaceProjectSkills } from "../skills/workspace-skills.js";
 import { resolveSharedSkills } from "../skills/shared-skills.js";
+import { DEFAULT_ENVIRONMENT_PROVIDER_ID } from "../environments/environment-provider-ids.js";
 import { UPDATE_ENVIRONMENT_DIRECTORY_TOOL } from "./thread-environment-directory.js";
+import {
+  ENTER_WORKTREE_TOOL,
+  KEEP_CHECKOUT_TOOL,
+} from "./thread-environment-directory.fork.js";
 import {
   DATA_DIR_AGENT_INSTRUCTIONS_RELATIVE_PATH,
   WORKSPACE_AGENT_INSTRUCTIONS_RELATIVE_PATH,
@@ -41,6 +50,10 @@ import { resolveDeprecatedWorkspaceProvisionType } from "../environments/environ
 
 const UPDATE_ENVIRONMENT_DIRECTORY_INSTRUCTIONS =
   "If the user asks you to move this thread to another checkout, worktree, or directory, make sure the target directory exists, then call `update_environment_directory` with its absolute path. After it succeeds, stop work in the current turn; future turns will run in the updated environment.";
+const ENTER_WORKTREE_INSTRUCTIONS =
+  "When the user asks you to implement, modify, fix, refactor, or otherwise change project files, keep read-only exploration in the current checkout so repository-local indexes such as Ripwire remain available. Unless the user explicitly asks to keep changes in the current checkout or avoid a worktree, call `bb_enter_worktree` when you are ready to make the first change, before the first edit or any command that may modify the project. Do this automatically without asking the user to create or enter a worktree. After the tool succeeds, stop the current turn; bb queues the next turn automatically in the prepared worktree. If the tool reports that the checkout cannot be promoted safely, follow its guidance without retrying — in particular, do not reach for a different worktree mechanism to get around the refusal.";
+const KEEP_CHECKOUT_INSTRUCTIONS =
+  "If the user asks to work in the current checkout, to skip the worktree, or declines a worktree when you offer one, call `bb_keep_checkout` before continuing. That records the decision for the whole thread, so these instructions stop asking you to promote on later turns. Do not call it on your own initiative; the user's instruction is what makes it true.";
 
 const PLUGIN_INSTRUCTION_CONTRIBUTION_MAX_CHARS = 4096;
 
@@ -91,8 +104,33 @@ interface DynamicToolContribution {
 
 function resolveDynamicTools(
   pluginTools: ReturnType<typeof listPluginAgentTools>,
+  includeEnterWorktree: boolean,
+  promotionTarget: "worktree" | "branch",
 ): DynamicToolContribution[] {
   return [
+    ...(includeEnterWorktree
+      ? [
+          {
+            tool:
+              promotionTarget === "branch"
+                ? ENTER_BRANCH_TOOL
+                : ENTER_WORKTREE_TOOL,
+            instructions:
+              promotionTarget === "branch"
+                ? ENTER_BRANCH_INSTRUCTIONS
+                : ENTER_WORKTREE_INSTRUCTIONS,
+            pluginId: null,
+          },
+          {
+            tool: KEEP_CHECKOUT_TOOL,
+            instructions:
+              promotionTarget === "branch"
+                ? "Call bb_keep_checkout only when the user explicitly asks to keep the current branch or skip branching. Staying in the checkout alone does not decline branching."
+                : KEEP_CHECKOUT_INSTRUCTIONS,
+            pluginId: null,
+          },
+        ]
+      : []),
     {
       tool: UPDATE_ENVIRONMENT_DIRECTORY_TOOL,
       instructions: UPDATE_ENVIRONMENT_DIRECTORY_INSTRUCTIONS,
@@ -219,6 +257,13 @@ export async function resolveThreadRuntimeCommandConfig(
   );
   const dynamicToolContributions = resolveDynamicTools(
     conditionalConfiguration.tools,
+    args.thread.worktreePromotion === "armed" &&
+      project.kind === "standard" &&
+      environment.isGitRepo &&
+      environment.environmentProviderId !==
+        DEFAULT_ENVIRONMENT_PROVIDER_ID.gitWorktree &&
+      !environment.isWorktree,
+    args.thread.promotionTarget,
   );
   const dynamicTools = dynamicToolContributions.map(
     (contribution) => contribution.tool,

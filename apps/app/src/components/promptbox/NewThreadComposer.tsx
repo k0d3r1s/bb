@@ -43,7 +43,9 @@ import {
   encodeReuseValue,
   encodeProviderValue,
   parseEnvironmentValue,
+  PROJECT_DEFAULT_VALUE,
   REUSE_VALUE_WITHOUT_ENVIRONMENT,
+  PROJECT_BRANCH_VALUE,
 } from "@/components/pickers/environment-picker-value";
 import { providerInputsControlRequired } from "@/components/pickers/environment-provider-inputs";
 import { useMachineProviderInputs } from "@/components/pickers/machine-provider-inputs";
@@ -937,6 +939,15 @@ export function NewThreadComposer({
       setStoredMachineId,
       snapshotDraftBeforeOptionChange,
     ],
+  );
+  const handleSelectProjectDefault = useCallback(
+    (promotion: "worktree" | "branch") => {
+      changeEnvironment(
+        promotion === "branch" ? PROJECT_BRANCH_VALUE : PROJECT_DEFAULT_VALUE,
+        null,
+      );
+    },
+    [changeEnvironment],
   );
   const effectiveEnvironmentValue = useMemo(
     () =>
@@ -1888,6 +1899,7 @@ export function NewThreadComposer({
               onSelectProvider: handleSelectProvider,
               onSelectHost: handleSelectHost,
               onSelectReuse: handleSelectReuse,
+              onSelectProjectDefault: handleSelectProjectDefault,
               ...(!isProjectless && options.onRequestMachineSetup
                 ? { onRequestMachineSetup: options.onRequestMachineSetup }
                 : {}),
@@ -2014,6 +2026,7 @@ export function NewThreadComposer({
       handleReasoningChange,
       handleSelectProvider,
       handleSelectHost,
+      handleSelectProjectDefault,
       handleSelectReuse,
       handleServiceTierChange,
       handleSubmit,

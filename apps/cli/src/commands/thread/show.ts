@@ -542,6 +542,8 @@ function printThreadStatus(
     console.log(`  Title: ${thread.title}`);
   }
   console.log(`  Project: ${thread.projectId}`);
+  console.log(`  Promotion target: ${thread.promotionTarget}`);
+  console.log(`  Promotion state: ${thread.worktreePromotion}`);
   if (thread.parentThreadId) {
     console.log(`  Parent: ${thread.parentThreadId}`);
   }

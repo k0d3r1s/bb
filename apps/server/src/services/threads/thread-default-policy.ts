@@ -6,6 +6,7 @@ import type {
   ReasoningLevel,
   ServiceTier,
   Thread,
+  ThreadWorktreePromotion,
 } from "@bb/domain";
 import { getEnvironment } from "@bb/db";
 import { DEFAULT_ENVIRONMENT_PROVIDER_ID } from "../environments/environment-provider-ids.js";
@@ -14,18 +15,12 @@ import type {
   EnvironmentArgs,
   ProviderEnvironmentArgs,
 } from "@bb/server-contract";
-import { COMMAND_TIMEOUT_MS } from "../../constants.js";
 import type { WorkSessionDeps } from "../../types.js";
 import type { ProviderRegistryService } from "../providers/provider-registry.js";
 import { ApiError } from "../../errors.js";
-import { callHostRetryableOnlineRpc } from "../hosts/online-rpc.js";
 import { requireConnectedPrimaryHostId } from "../hosts/primary-host.js";
 import { resolveProjectWorkspaceTarget } from "../projects/project-workspace.js";
-import { resolveDefaultWorktreeBaseBranch } from "../projects/worktree-base-branch.js";
-import {
-  checkoutProviderInputs,
-  worktreeProviderInputs,
-} from "./thread-environment-placement.js";
+import { checkoutProviderInputs } from "./thread-environment-placement.js";
 import { isLiveParentThread, type ParentThread } from "./thread-parent.js";
 
 export const DEFAULT_SERVICE_TIER: ServiceTier = "default";
@@ -105,7 +100,7 @@ interface ResolveSupportedPermissionModeArgs {
 type CreateThreadEnvironment =
   | EnvironmentArgs
   | ProviderEnvironmentArgs
-  | { type: "project-default" };
+  | { type: "project-default"; promotion?: "worktree" | "branch" };
 export type ResolvedCreateThreadEnvironment = Exclude<
   CreateThreadEnvironment,
   { type: "project-default" }
@@ -266,34 +261,13 @@ export async function resolveProjectDefaultThreadEnvironment(
     hostId,
     projectId: args.projectId,
   });
-  const checkout = await callHostRetryableOnlineRpc(deps, {
-    hostId,
-    timeoutMs: COMMAND_TIMEOUT_MS,
-    command: {
-      type: "host.inspect_git_source",
-      path: source.path,
-      remoteRefresh: "background",
-    },
-  });
-  const baseBranch = resolveDefaultWorktreeBaseBranch(checkout);
-  if (baseBranch === null) {
-    return {
-      type: "provider",
-      environmentProviderId: requireDefaultEnvironmentProvider(
-        DEFAULT_ENVIRONMENT_PROVIDER_ID.projectCheckout,
-      ),
-      machine: { type: "existing", hostId },
-      inputs: checkoutProviderInputs(source.path, undefined),
-    };
-  }
-
   return {
     type: "provider",
     environmentProviderId: requireDefaultEnvironmentProvider(
-      DEFAULT_ENVIRONMENT_PROVIDER_ID.gitWorktree,
+      DEFAULT_ENVIRONMENT_PROVIDER_ID.projectCheckout,
     ),
     machine: { type: "existing", hostId },
-    inputs: worktreeProviderInputs({ kind: "named", name: baseBranch }),
+    inputs: checkoutProviderInputs(source.path, undefined),
   };
 }
 
@@ -301,6 +275,12 @@ export async function resolveCreateThreadEnvironment(
   deps: WorkSessionDeps,
   args: ResolveCreateThreadEnvironmentArgs,
 ): Promise<ResolvedCreateThreadEnvironment> {
+  if (
+    args.requestedEnvironment.type === "project-default" &&
+    args.requestedEnvironment.promotion === "branch" &&
+    args.projectId === PERSONAL_PROJECT_ID
+  )
+    throw new Error("Branch promotion requires a standard project checkout.");
   const parentThread = args.parentThread;
   const hasLiveParent = isLiveParentThread({ parentThread });
   if (
@@ -330,13 +310,17 @@ export async function resolveCreateThreadEnvironment(
     if (parentEnvironment === null) {
       throw new Error("Parent thread environment is missing");
     }
+    const parentSource = resolveProjectWorkspaceTarget(deps, {
+      hostId: parentEnvironment.hostId,
+      projectId: args.projectId,
+    });
     return {
       type: "provider",
       environmentProviderId: requireDefaultEnvironmentProvider(
-        DEFAULT_ENVIRONMENT_PROVIDER_ID.gitWorktree,
+        DEFAULT_ENVIRONMENT_PROVIDER_ID.projectCheckout,
       ),
       machine: { type: "existing", hostId: parentEnvironment.hostId },
-      inputs: worktreeProviderInputs({ kind: "default" }),
+      inputs: checkoutProviderInputs(parentSource.path, undefined),
     };
   }
   const environment =
@@ -363,37 +347,30 @@ export async function resolveCreateThreadEnvironment(
     };
   }
 
-  if (hasLiveParent && isImplicitHostDefaultEnvironment(environment)) {
-    return {
-      type: "provider",
-      environmentProviderId: requireDefaultEnvironmentProvider(
-        DEFAULT_ENVIRONMENT_PROVIDER_ID.gitWorktree,
-      ),
-      machine: {
-        type: "existing",
-        hostId: requireHostEnvironmentId(environment),
-      },
-      inputs: worktreeProviderInputs({ kind: "default" }),
-    };
-  }
-  if (
-    hasLiveParent &&
-    environment.type === "provider" &&
-    environment.environmentProviderId ===
-      DEFAULT_ENVIRONMENT_PROVIDER_ID.projectCheckout &&
-    args.requestedEnvironment.type === "project-default"
-  ) {
-    return {
-      type: "provider",
-      environmentProviderId: requireDefaultEnvironmentProvider(
-        DEFAULT_ENVIRONMENT_PROVIDER_ID.gitWorktree,
-      ),
-      machine: environment.machine,
-      inputs: worktreeProviderInputs({ kind: "default" }),
-    };
-  }
-
   return environment;
+}
+
+export function resolveCreateThreadWorktreePromotion(args: {
+  requestedEnvironment: CreateThreadEnvironment;
+  resolvedEnvironment: ResolvedCreateThreadEnvironment;
+}): ThreadWorktreePromotion {
+  if (args.requestedEnvironment.type !== "project-default") return "declined";
+  if (
+    args.requestedEnvironment.promotion === "branch" &&
+    !(
+      args.resolvedEnvironment.type === "provider" &&
+      args.resolvedEnvironment.environmentProviderId ===
+        DEFAULT_ENVIRONMENT_PROVIDER_ID.projectCheckout
+    )
+  )
+    throw new Error(
+      "Checkout, then branch requires an available project checkout; choose another environment.",
+    );
+  return args.resolvedEnvironment.type === "provider" &&
+    args.resolvedEnvironment.environmentProviderId ===
+      DEFAULT_ENVIRONMENT_PROVIDER_ID.projectCheckout
+    ? "armed"
+    : "declined";
 }
 
 export function resolveThreadDefaultPermissionMode(

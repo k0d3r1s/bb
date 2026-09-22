@@ -298,10 +298,12 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   },
   {
     reason:
-      "Unmanaged workspaces may omit branch checkout intent when the daemon should leave HEAD untouched.",
+      "Checkout requests may omit branch intent to leave HEAD untouched, or omit promotion to preserve checkout-then-worktree policy for existing clients.",
     fields: [
       "createThreadRequestSchema.environment.workspace.branch",
       "forkThreadRequestSchema.environment.workspace.branch",
+      "createThreadRequestSchema.environment.promotion",
+      "forkThreadRequestSchema.environment.promotion",
     ],
   },
   {
@@ -1232,6 +1234,7 @@ describe("server-contract canonical schemas", () => {
           originPluginId: null,
           visibility: "visible",
           worktreePromotion: "declined",
+          promotionTarget: "worktree",
           archivedAt: null,
           pinnedAt: null,
           pinSortKey: null,

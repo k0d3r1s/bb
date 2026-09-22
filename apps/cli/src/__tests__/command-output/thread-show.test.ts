@@ -52,6 +52,8 @@ describe("bb thread show command output", () => {
 
   it("bb thread show prints archived timestamp for archived threads", async () => {
     const thread: domain.Thread = fixtures.makeThread({
+      promotionTarget: "branch",
+      worktreePromotion: "armed",
       id: "thread-archived-1",
       projectId: "proj-1",
       providerId: "codex",
@@ -78,6 +80,8 @@ describe("bb thread show command output", () => {
     });
     const lines = collectLogLines(vi.mocked(console.log));
     expect(lines.some((line) => line.includes("Archived:"))).toBe(true);
+    expect(lines).toContain("  Promotion target: branch");
+    expect(lines).toContain("  Promotion state: armed");
   });
 
   it("bb thread show prints pinned timestamp for pinned threads", async () => {

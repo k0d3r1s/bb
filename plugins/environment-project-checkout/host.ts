@@ -1,3 +1,4 @@
+import { promoteBranch } from "./host/branch-promotion.js";
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
 import { createHostProgress } from "bb-environment-provider-host/progress";
 import { checkoutHostContract, checkoutHostSignals } from "./contract.js";
@@ -8,6 +9,18 @@ export function createCheckoutHostEntry() {
     contract: checkoutHostContract,
     experimental_signals: checkoutHostSignals,
     handlers: {
+      async promoteBranch(input, context) {
+        return promoteBranch({
+          request: input,
+          dataDir: context.experimental_paths.dataDir,
+          signal: context.signal,
+          onProgress: createHostProgress({
+            operationId: input.intent.operationId,
+            emit: (payload) =>
+              context.experimental_emitSignal("progress", payload),
+          }),
+        });
+      },
       async attach(input, context) {
         try {
           const attached = await attachCheckout({

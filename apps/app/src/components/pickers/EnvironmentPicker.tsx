@@ -34,9 +34,12 @@ import {
   OPTION_MUTED_CLASS_NAME,
   OPTION_TRIGGER_CONTENT_CLASS_NAME,
 } from "@bb/shared-ui/option-display";
+import { PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID } from "@bb/client-core";
 import {
   encodeProviderValue,
   parseEnvironmentValue,
+  PROJECT_DEFAULT_VALUE,
+  PROJECT_BRANCH_VALUE,
 } from "./environment-picker-value";
 import { selectHosts } from "@/hooks/queries/host-queries";
 import { providerInputsControlRequired } from "./environment-provider-inputs";
@@ -91,12 +94,17 @@ export interface EnvironmentPickerUIProps {
   ) => void;
   onSelectHost?: (hostId: string) => void;
   onSelectReuse?: () => void;
+  onSelectProjectDefault?: (promotion: "worktree" | "branch") => void;
 }
 
 export const PROVIDER_INPUTS_CONTROL_MISSING_REASON =
   "Needs its plugin's control";
 
 const NO_INPUTS_CONTROL_PROVIDER_IDS: ReadonlySet<string> = new Set();
+const PROJECT_DEFAULT_LABEL = "Checkout, then worktree";
+const PROJECT_DEFAULT_DESCRIPTION =
+  "Starts in the project checkout; the agent moves to a worktree before the first change";
+const PROJECT_CHECKOUT_DESCRIPTION = "Stays in the project checkout";
 
 function providerValueSelected(
   value: string,
@@ -128,9 +136,14 @@ function providerDescription(
   if (provider.availability?.status === "setup-required") {
     return provider.availability.message;
   }
-  return (
-    providerDisabledReason(provider, inputsControlProviderIds) ?? undefined
+  const disabledReason = providerDisabledReason(
+    provider,
+    inputsControlProviderIds,
   );
+  if (disabledReason !== null) return disabledReason;
+  return provider.id === PROJECT_CHECKOUT_ENVIRONMENT_PROVIDER_ID
+    ? PROJECT_CHECKOUT_DESCRIPTION
+    : undefined;
 }
 
 function scopedProviders(
@@ -190,6 +203,37 @@ function contextualActiveHost({
   );
 }
 
+function ProjectDefaultEnvironmentOption(props: {
+  disabled: boolean;
+  onSelect: ((promotion: "worktree" | "branch") => void) | undefined;
+  projectless: boolean;
+  value: string;
+}) {
+  if (props.projectless || props.onSelect === undefined) return null;
+  return (
+    <CommandGroup>
+      <EnvironmentMenuItem
+        value={PROJECT_DEFAULT_VALUE}
+        label={PROJECT_DEFAULT_LABEL}
+        description={PROJECT_DEFAULT_DESCRIPTION}
+        icon="GitBranch"
+        selected={props.value === PROJECT_DEFAULT_VALUE}
+        disabled={props.disabled}
+        onSelect={() => props.onSelect?.("worktree")}
+      />
+      <EnvironmentMenuItem
+        value={PROJECT_BRANCH_VALUE}
+        label="Checkout, then branch"
+        description="Starts in this checkout; the agent switches it to a generated branch before editing, or an existing branch you request. Shares files with other checkout users; another live thread blocks the switch."
+        icon="GitBranch"
+        selected={props.value === PROJECT_BRANCH_VALUE}
+        disabled={props.disabled}
+        onSelect={() => props.onSelect?.("branch")}
+      />
+    </CommandGroup>
+  );
+}
+
 export function EnvironmentPickerUI({
   value,
   sources,
@@ -213,6 +257,7 @@ export function EnvironmentPickerUI({
   onSelectProvider,
   onSelectHost,
   onSelectReuse,
+  onSelectProjectDefault,
 }: EnvironmentPickerUIProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(
     defaultOpen ?? false,
@@ -310,6 +355,17 @@ export function EnvironmentPickerUI({
           ? `provider:${selectedProviderHostId}:${selectedProvider.id}`
           : "";
   const selected = useMemo((): SelectedEnvironment => {
+    if (parsed?.type === "project-default" && hostUnavailableReason === null) {
+      const label =
+        parsed.promotion === "branch"
+          ? "Checkout, then branch"
+          : PROJECT_DEFAULT_LABEL;
+      return {
+        modeLabel: label,
+        compactModeLabel: label,
+        icon: "GitBranch",
+      };
+    }
     if (
       selectedProvider !== undefined &&
       (selectedProvider.machineProviderId || hostUnavailableReason === null)
@@ -488,6 +544,12 @@ export function EnvironmentPickerUI({
                 showSearch && "flex flex-col overflow-hidden",
               )}
             >
+              <ProjectDefaultEnvironmentOption
+                disabled={hostUnavailableReason !== null}
+                onSelect={onSelectProjectDefault}
+                projectless={projectless}
+                value={value}
+              />
               {isMachineMenu && availableMachines ? (
                 showSearch ? (
                   <MachineContextualEnvironmentOptions

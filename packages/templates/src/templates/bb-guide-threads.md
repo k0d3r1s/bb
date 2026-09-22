@@ -27,6 +27,7 @@ Spawning:
     --model <model>                Model override
     --reasoning-level <level>      Reasoning level: low, medium, high, xhigh, max (provider-dependent)
     --environment <id-or-path>     Attach to an existing environment (ID or workspace path)
+    --promote <worktree|branch>    Start in the shared checkout, then promote before mutation
     --new-environment <kind>       Create a fresh personal workspace or managed worktree
     --base-branch <branch>         Exact Git ref for a new managed worktree
                                    (--new-environment worktree only)
@@ -106,6 +107,7 @@ Forking:
     --lifecycle-owner-thread <id>  Archive/delete with this owner
     --source-seq-end <seq>         Fork after the source turn containing this event sequence (tip by default)
     --environment <id-or-path>     Existing environment ID or unmanaged workspace path
+    --promote <worktree|branch>    Start in the shared checkout, then promote before mutation
     --new-environment <kind>       Create a fresh personal workspace or managed worktree
     --base-branch <branch>         Exact Git ref for a new worktree; omit for the project default
     --title <title>                Thread title
@@ -455,3 +457,27 @@ Lifecycle ownership:
   recursively deletes them after runtime/storage cleanup. Failed cleanup retries
   durably. Unarchive the owner before explicitly restoring a dependent. Stop does
   not cascade. Sidebar parents and ordinary forks retain their existing policies.
+
+Branch promotion recovery
+
+  bb thread promotion inspect <id> [--json]
+  bb thread promotion resolve <id> --operation <id> --observation <token>
+    --accept-current              Accept the requested target at the observed HEAD
+    --keep-current                Decline promotion and stay on the observed branch
+    --json                        Print machine-readable JSON
+
+  Choose exactly one resolution. Inspect supplies the operation and observation;
+  stale observations are rejected. Recovery does not mutate Git. Interrupted
+  operations block the checkout until the host proves process-group termination.
+  There is no force-unlock. thread show reports promotion target and state.
+
+  --promote worktree|branch works on spawn and fork, and conflicts with environment,
+  base-branch, and machine placement flags. No flag preserves existing defaults:
+  spawn uses the project default and fork reuses its source environment.
+  Checkout, then branch keeps a shared checkout, requires macOS/Linux, and refuses
+  another live thread on that checkout. BB generates a new branch name unless the
+  user explicitly requests an existing branch. It provides no filesystem isolation.
+  SDK spawn/fork accept environment: { type: "project-default", promotion: "branch" }
+  (or "worktree"). threads.inspectBranchPromotion({ threadId }) and
+  threads.resolveBranchPromotion({ threadId, operationId, observation, resolution })
+  expose the same recovery; resolution is "accept-current" or "keep-current".

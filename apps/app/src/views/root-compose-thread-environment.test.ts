@@ -50,6 +50,15 @@ const environmentProviders: SystemEnvironmentProvider[] = [
 ];
 
 describe("resolveRootComposeThreadEnvironment", () => {
+  it("preserves the project default for the server policy", () => {
+    expect(
+      resolveRootComposeThreadEnvironment({
+        environmentValue: "project-default",
+        projectId,
+      }),
+    ).toEqual({ type: "project-default" });
+  });
+
   it("submits a composition without a host or machine selector", () => {
     const modal = {
       ...environmentProviders[1],

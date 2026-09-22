@@ -606,13 +606,19 @@ export async function reportQueuedCommandSuccess<
 
 export async function reportNextEnvironmentAttachSuccess(
   harness: TestAppHarness,
-  threadId: string,
+  threadId: string | null,
+  args: {
+    branchName?: string;
+    isWorktree?: boolean;
+    path?: string;
+  } = {},
 ): Promise<void> {
   const queued = await waitForQueuedCommand(
     harness,
     ({ command }) =>
       command.type === "environment.attach" &&
-      command.initiator?.threadId === threadId,
+      (threadId === null || command.initiator?.threadId === threadId) &&
+      (args.path === undefined || command.path === args.path),
   );
   if (queued.command.type !== "environment.attach") {
     throw new Error("Expected environment.attach command");
@@ -620,8 +626,8 @@ export async function reportNextEnvironmentAttachSuccess(
   await reportQueuedCommandSuccess(harness, queued, {
     path: queued.command.path,
     isGitRepo: true,
-    isWorktree: false,
-    branchName: "main",
+    isWorktree: args.isWorktree ?? false,
+    branchName: args.branchName ?? "main",
     defaultBranch: "main",
     transcript: [],
   });

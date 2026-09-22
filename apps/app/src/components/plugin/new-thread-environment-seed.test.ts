@@ -275,7 +275,7 @@ describe("newThreadEnvironmentArgsToSeed round trip", () => {
   it("documented limits: unrepresentable variants seed nothing", () => {
     expect(
       newThreadEnvironmentArgsToSeed({ type: "project-default" }),
-    ).toBeNull();
+    ).toMatchObject({ selectionValue: "project-default" });
     expect(
       newThreadEnvironmentArgsToSeed({
         type: "host",
@@ -283,4 +283,18 @@ describe("newThreadEnvironmentArgsToSeed round trip", () => {
       }),
     ).toBeNull();
   });
+});
+
+it("preserves branch promotion through composer seed and request", () => {
+  const seed = newThreadEnvironmentArgsToSeed({
+    type: "project-default",
+    promotion: "branch",
+  });
+  expect(seed).not.toBeNull();
+  expect(
+    resolveRootComposeThreadEnvironment({
+      projectId: PROJECT_ID,
+      environmentValue: seed!.selectionValue,
+    }),
+  ).toEqual({ type: "project-default", promotion: "branch" });
 });

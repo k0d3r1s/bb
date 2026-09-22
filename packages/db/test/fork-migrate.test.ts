@@ -10,7 +10,12 @@ import { threads } from "../src/schema.js";
 
 const workQuiesceHash =
   "f162a056f845a9e712b63f50351f0651858c5659c6c2fc05cd063f49c15ca87f";
+const worktreePromotionHash =
+  "dbdda013c3b84e828babc97fcebe1761bea42507c6cf8dabcb6dc8b4b392f07d";
+const branchPromotionHash =
+  "9c385da0fe1dc75da9cc083a73b6dff8bd86eb6e23a32250823001138f2fc54a";
 const legacyWorkQuiesceWhen = 1_789_478_684_565;
+const legacyWorktreePromotionWhen = 1_789_478_820_680;
 const threadStorageDeletedAtWhen = 1_789_421_366_079;
 
 interface MigrationRow {
@@ -29,6 +34,15 @@ function migrationRows(
     .all();
 }
 
+function dropBranchPromotionSchema(
+  db: ReturnType<typeof createConnection>,
+): void {
+  db.$client.exec(`
+    DROP TABLE IF EXISTS branch_promotions;
+    ALTER TABLE threads DROP COLUMN promotion_target;
+  `);
+}
+
 describe("fork migrations", () => {
   it("keeps fork history out of the upstream migration ledger", () => {
     const db = createConnection(":memory:");
@@ -42,6 +56,65 @@ describe("fork migrations", () => {
       ).toBe(false);
       expect(migrationRows(db, "__bb_fork_migrations")).toEqual([
         expect.objectContaining({ hash: workQuiesceHash }),
+        expect.objectContaining({ hash: worktreePromotionHash }),
+        expect.objectContaining({ hash: branchPromotionHash }),
+      ]);
+    } finally {
+      db.$client.close();
+    }
+  });
+
+  it("migrates the existing two-entry fork history without losing promotion intent", () => {
+    const db = createConnection(":memory:");
+    try {
+      migrate(db);
+      const host = upsertHost(db, noopNotifier, { name: "host" });
+      const { project } = createProject(db, noopNotifier, {
+        name: "project",
+        source: { type: "local_path", hostId: host.id, path: "/tmp/project" },
+      });
+      const thread = createThread(db, noopNotifier, {
+        projectId: project.id,
+        providerId: "codex",
+      });
+      db.update(threads)
+        .set({ worktreePromotion: "armed" })
+        .where(eq(threads.id, thread.id))
+        .run();
+      dropBranchPromotionSchema(db);
+      db.$client.exec(`
+        DELETE FROM __bb_fork_migrations
+        WHERE hash = '${branchPromotionHash}';
+      `);
+
+      expect(migrationRows(db, "__bb_fork_migrations")).toEqual([
+        expect.objectContaining({ hash: workQuiesceHash }),
+        expect.objectContaining({ hash: worktreePromotionHash }),
+      ]);
+
+      migrate(db);
+
+      expect(
+        db
+          .select({
+            promotionTarget: threads.promotionTarget,
+            worktreePromotion: threads.worktreePromotion,
+          })
+          .from(threads)
+          .where(eq(threads.id, thread.id))
+          .get(),
+      ).toEqual({ promotionTarget: "worktree", worktreePromotion: "armed" });
+      expect(
+        db.$client
+          .prepare<[], { name: string }>(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'branch_promotions'",
+          )
+          .get(),
+      ).toEqual({ name: "branch_promotions" });
+      expect(migrationRows(db, "__bb_fork_migrations")).toEqual([
+        expect.objectContaining({ hash: workQuiesceHash }),
+        expect.objectContaining({ hash: worktreePromotionHash }),
+        expect.objectContaining({ hash: branchPromotionHash }),
       ]);
     } finally {
       db.$client.close();
@@ -79,7 +152,9 @@ describe("fork migrations", () => {
         .set({ storageDeletedAt: 4_242 })
         .where(eq(threads.id, thread.id))
         .run();
+      dropBranchPromotionSchema(db);
       db.$client.exec(`
+        ALTER TABLE threads DROP COLUMN worktree_promotion;
         DELETE FROM __bb_fork_migrations;
         DELETE FROM __drizzle_migrations
         WHERE created_at = ${threadStorageDeletedAtWhen};
@@ -90,7 +165,8 @@ describe("fork migrations", () => {
       migrate(db);
 
       expect(
-        db.select({ storageDeletedAt: threads.storageDeletedAt })
+        db
+          .select({ storageDeletedAt: threads.storageDeletedAt })
           .from(threads)
           .where(eq(threads.id, thread.id))
           .get(),
@@ -107,7 +183,87 @@ describe("fork migrations", () => {
       ).toBe(false);
       expect(migrationRows(db, "__bb_fork_migrations")).toEqual([
         expect.objectContaining({ hash: workQuiesceHash }),
+        expect.objectContaining({ hash: worktreePromotionHash }),
+        expect.objectContaining({ hash: branchPromotionHash }),
       ]);
+    } finally {
+      db.$client.close();
+    }
+  });
+
+  it("adopts legacy worktree promotion without replaying or losing intent", () => {
+    const db = createConnection(":memory:");
+    try {
+      migrate(db);
+      const host = upsertHost(db, noopNotifier, { name: "host" });
+      const { project } = createProject(db, noopNotifier, {
+        name: "project",
+        source: { type: "local_path", hostId: host.id, path: "/tmp/project" },
+      });
+      const thread = createThread(db, noopNotifier, {
+        projectId: project.id,
+        providerId: "codex",
+      });
+      db.update(threads)
+        .set({ worktreePromotion: "armed" })
+        .where(eq(threads.id, thread.id))
+        .run();
+      dropBranchPromotionSchema(db);
+      db.$client.exec(`
+        DELETE FROM __bb_fork_migrations;
+        INSERT INTO __drizzle_migrations (hash, created_at)
+        VALUES
+          ('${workQuiesceHash}', ${legacyWorkQuiesceWhen}),
+          ('${worktreePromotionHash}', ${legacyWorktreePromotionWhen});
+      `);
+
+      migrate(db);
+
+      expect(
+        db
+          .select({ worktreePromotion: threads.worktreePromotion })
+          .from(threads)
+          .where(eq(threads.id, thread.id))
+          .get(),
+      ).toEqual({ worktreePromotion: "armed" });
+      expect(
+        migrationRows(db, "__drizzle_migrations").some(
+          (row) =>
+            row.createdAt === legacyWorkQuiesceWhen ||
+            row.createdAt === legacyWorktreePromotionWhen,
+        ),
+      ).toBe(false);
+      expect(migrationRows(db, "__bb_fork_migrations")).toEqual([
+        expect.objectContaining({ hash: workQuiesceHash }),
+        expect.objectContaining({ hash: worktreePromotionHash }),
+        expect.objectContaining({ hash: branchPromotionHash }),
+      ]);
+    } finally {
+      db.$client.close();
+    }
+  });
+
+  it("retains a legacy promotion row when the fork prefix is missing", () => {
+    const db = createConnection(":memory:");
+    try {
+      migrate(db);
+      db.$client.exec(`
+        DELETE FROM __bb_fork_migrations;
+        INSERT INTO __drizzle_migrations (hash, created_at)
+        VALUES ('${worktreePromotionHash}', ${legacyWorktreePromotionWhen});
+      `);
+
+      expect(() => migrate(db)).toThrow(
+        "Cannot adopt worktree promotion before work quiesce",
+      );
+      expect(migrationRows(db, "__drizzle_migrations")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            createdAt: legacyWorktreePromotionWhen,
+            hash: worktreePromotionHash,
+          }),
+        ]),
+      );
     } finally {
       db.$client.close();
     }
@@ -126,6 +282,36 @@ describe("fork migrations", () => {
 
       expect(() => migrate(db)).toThrow(
         "Legacy fork migration schema does not match",
+      );
+    } finally {
+      db.$client.close();
+    }
+  });
+
+  it("refuses to adopt legacy promotion when the column was altered", () => {
+    const db = createConnection(":memory:");
+    try {
+      migrate(db);
+      db.$client.exec(`
+        ALTER TABLE threads DROP COLUMN worktree_promotion;
+        ALTER TABLE threads ADD worktree_promotion text DEFAULT 'declined';
+        DELETE FROM __bb_fork_migrations;
+        INSERT INTO __drizzle_migrations (hash, created_at)
+        VALUES
+          ('${workQuiesceHash}', ${legacyWorkQuiesceWhen}),
+          ('${worktreePromotionHash}', ${legacyWorktreePromotionWhen});
+      `);
+
+      expect(() => migrate(db)).toThrow(
+        "Legacy fork migration schema does not match 0001_thread_worktree_promotion: worktree_promotion",
+      );
+      expect(migrationRows(db, "__drizzle_migrations")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            createdAt: legacyWorktreePromotionWhen,
+            hash: worktreePromotionHash,
+          }),
+        ]),
       );
     } finally {
       db.$client.close();

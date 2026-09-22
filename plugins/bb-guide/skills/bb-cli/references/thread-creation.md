@@ -10,6 +10,23 @@
   current thread's project ID to add. Omitted execution flags use remembered project defaults;
   without a remembered model, bb resolves the selected provider and its reported
   default model on the target machine.
+- A standard project's default environment starts in its shared checkout for
+  read-only exploration. The agent is instructed to promote to a managed
+  worktree before its first project mutation, and bb queues continuation there.
+  Use `--new-environment worktree` when isolation must exist before the first
+  command.
+- That promotion is armed for the implicit default or an explicit `--promote` choice. `--environment` and
+  `--environment-provider` name a placement and keep the thread there. Use
+  `--environment-provider project-checkout` to choose the checkout; the agent
+  records a mid-thread request to stay put with `bb_keep_checkout`.
+- `--promote worktree|branch` on spawn or fork explicitly starts in the shared
+  project checkout and promotes before mutation. It conflicts with environment,
+  base-branch, and machine placement flags. No flag preserves existing defaults,
+  including source-environment reuse for forks. Branch promotion requires a macOS
+  or Linux host and refuses another live thread on the checkout. It switches the
+  shared checkout without isolation, using a generated name unless the user
+  explicitly requests an existing branch. SDK spawn/fork use
+  `environment: { type: "project-default", promotion: "branch" }` (or `"worktree"`).
 - Select a target with `--environment`, `--new-environment`, `--base-branch`,
   or `--machine`. Select execution with `--provider`, `--model`,
   `--reasoning-level`, `--service-tier`, and `--permission-mode`.

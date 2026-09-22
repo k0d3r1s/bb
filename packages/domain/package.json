@@ -34,6 +34,11 @@
       "types": "./src/thread-visibility.ts",
       "default": "./src/thread-visibility.ts"
     },
+    "./thread-worktree-promotion": {
+      "source": "./src/thread-worktree-promotion.ts",
+      "types": "./src/thread-worktree-promotion.ts",
+      "default": "./src/thread-worktree-promotion.ts"
+    },
     "./update-state": {
       "source": "./src/update-state.ts",
       "types": "./src/update-state.ts",
@@ -68,6 +73,11 @@
       "source": "./src/prompt-attachment-limits.ts",
       "types": "./src/prompt-attachment-limits.ts",
       "default": "./src/prompt-attachment-limits.ts"
+    },
+    "./branch-promotion": {
+      "source": "./src/branch-promotion.fork.ts",
+      "types": "./src/branch-promotion.fork.ts",
+      "default": "./src/branch-promotion.fork.ts"
     }
   },
   "types": "./src/index.ts",
@@ -77,7 +87,8 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "bb-checkout-contract": "workspace:*"
   },
   "devDependencies": {
     "@bb/tsconfig": "workspace:*",

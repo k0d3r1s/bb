@@ -765,9 +765,12 @@ describe("PluginNewThreadComposer seeding", () => {
       latestPromptBoxProps().modeConfig.environment.selectedProviderHostId,
     ).toBe("host_2");
     first.rerender(newThreadElement("proj_2"));
+    expect(latestPromptBoxProps().modeConfig.environment.value).toBe(
+      "project-default",
+    );
     expect(
       latestPromptBoxProps().modeConfig.environment.selectedProviderHostId,
-    ).toBe("host_1");
+    ).toBeNull();
     first.rerender(newThreadElement("proj_1"));
     expect(latestPromptBoxProps().modeConfig.environment.value).toBe(
       "provider:git-worktree",
@@ -819,6 +822,12 @@ describe("PluginNewThreadComposer seeding", () => {
 
   it("selects an unconfigured host immediately and blocks submission", async () => {
     render(newThreadElement("proj_2"));
+    await act(async () => {
+      latestPromptBoxProps().modeConfig.environment.onSelectProvider(
+        CHECKOUT_PROVIDER,
+        "host_1",
+      );
+    });
     await act(async () => {
       latestPromptBoxProps().modeConfig.environment.onSelectHost("host_2");
     });
@@ -1261,11 +1270,7 @@ describe("PluginNewThreadComposer seeding", () => {
       model: "gpt-5.6",
       reasoningLevel: "medium",
       permissionMode: "auto",
-      environment: {
-        type: "provider",
-        environmentProviderId: "project-checkout",
-        inputs: {},
-      },
+      environment: { type: "project-default" },
     });
   });
 

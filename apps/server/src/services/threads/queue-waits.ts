@@ -6,6 +6,7 @@ import {
   type DbConnection,
   type DbNotifier,
   type DbQueryConnection,
+  type DbTransaction,
   type QueuedThreadMessageRow,
 } from "@bb/db";
 import type {
@@ -26,6 +27,10 @@ import {
 } from "../plugins/plugin-thread-events.js";
 import { toThreadQueuedMessage } from "./thread-queued-messages.js";
 import { assertThreadHostAcceptsWork } from "./thread-host-admission.js";
+import {
+  deleteEnterWorktreeContinuations,
+  isSupersedingUserQueueEnvelope,
+} from "./worktree-promotion.js";
 
 type QueueWaitDeps = { db: DbQueryConnection; hub: DbNotifier };
 
@@ -96,6 +101,23 @@ export interface RecordQueuedMessageWaitArgs {
   claimed: readonly ClaimedQueuedThreadMessageRow[] | null;
 }
 
+function deleteSupersededWorktreeContinuation(
+  tx: DbTransaction,
+  args: RecordQueuedMessageWaitArgs,
+): void {
+  const supersedesContinuation = isSupersedingUserQueueEnvelope({
+    payloadKind: args.message.payload.kind,
+    sendAt: args.sendAt,
+    senderThreadId: args.message.senderThreadId,
+    systemNotice: args.message.systemNotice,
+  });
+  if (!supersedesContinuation) return;
+  deleteEnterWorktreeContinuations(
+    { kind: "transaction", db: tx },
+    args.thread.id,
+  );
+}
+
 /**
  * Records that a dispatch is waiting: the single place a queued row comes into
  * existence or has its wait rewritten.
@@ -121,6 +143,7 @@ export function recordQueuedMessageWait(
     row = deps.db.transaction(
       (tx) => {
         assertThreadHostAcceptsWork(tx, args.thread);
+        deleteSupersededWorktreeContinuation(tx, args);
         return createQueuedThreadMessageInTransaction(tx, {
           threadId: args.thread.id,
           content: args.message.input,

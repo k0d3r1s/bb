@@ -74,9 +74,12 @@ const EXTERNAL = [
   /^zod($|\/)/,
 ];
 
-/** Resolve any `@bb/<pkg>[/<sub>]` to its `source` export target on disk. */
 function resolveBbSource(id) {
-  const match = /^@bb\/([^/]+)(\/.*)?$/.exec(id);
+  const workspaceId = id.replace(
+    /^bb-checkout-contract(?=\/|$)/u,
+    "@bb/checkout-contract",
+  );
+  const match = /^@bb\/([^/]+)(\/.*)?$/.exec(workspaceId);
   if (!match) return null;
   const pkgDir = path.join(pkgsDir, match[1]);
   const manifestPath = path.join(pkgDir, "package.json");

@@ -21,6 +21,12 @@ export function resolveRootComposeThreadEnvironment(
   const parsed = parseEnvironmentValue(args.environmentValue);
   if (!parsed) return null;
 
+  if (parsed.type === "project-default") {
+    return parsed.promotion === "branch"
+      ? { type: "project-default", promotion: "branch" }
+      : { type: "project-default" };
+  }
+
   if (parsed.type === "provider") {
     const provider = args.environmentProviders?.find(
       (candidate) => candidate.id === parsed.environmentProviderId,

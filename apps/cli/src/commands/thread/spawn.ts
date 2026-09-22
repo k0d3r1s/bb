@@ -42,6 +42,7 @@ const PROVIDER_HELP =
   "Provider ID for the thread. Omit to use the project's remembered provider choice";
 
 interface ThreadSpawnCommandOptions {
+  promote?: string;
   prompt?: string;
   promptFile?: string;
   json?: boolean;
@@ -73,6 +74,39 @@ interface ThreadSpawnCommandOptions {
   sourceSeqEnd?: string;
   visibility?: string;
   sendAt?: string;
+}
+
+export function parsePromotionOption(opts: {
+  promote?: string;
+  environment?: string;
+  newEnvironment?: string;
+  environmentProvider?: string;
+  environmentInputs?: string;
+  baseBranch?: string;
+  machine?: string;
+  host?: string;
+  newMachine?: string;
+  machineInputs?: string;
+}): "worktree" | "branch" | undefined {
+  if (opts.promote === undefined) return undefined;
+  if (opts.promote !== "worktree" && opts.promote !== "branch") {
+    throw new Error("--promote must be worktree or branch.");
+  }
+  const conflictingFlags = [
+    ["--environment", opts.environment],
+    ["--new-environment", opts.newEnvironment],
+    ["--environment-provider", opts.environmentProvider],
+    ["--environment-inputs", opts.environmentInputs],
+    ["--base-branch", opts.baseBranch],
+    ["--machine", opts.machine],
+    ["--host", opts.host],
+    ["--new-machine", opts.newMachine],
+    ["--machine-inputs", opts.machineInputs],
+  ];
+  const conflict = conflictingFlags.find(([, value]) => value !== undefined);
+  if (conflict)
+    throw new Error(`Cannot combine --promote with ${conflict[0]}.`);
+  return opts.promote;
 }
 
 export function looksLikePath(value: string): boolean {
@@ -120,12 +154,15 @@ function resolveSpawnParentThreadId(args: {
 }
 
 export function buildSpawnEnvironment(args: {
+  promotion?: "worktree" | "branch";
   defaultPersonalWorkspace: boolean;
   environmentValue?: string;
   newEnvironmentKind?: string;
   hostId: string | null;
   baseBranch?: string;
 }): CreateThreadEnvironmentArgs {
+  if (args.promotion)
+    return { type: "project-default", promotion: args.promotion };
   const environmentValue = args.environmentValue?.trim();
   const newEnvironmentKind = args.newEnvironmentKind?.trim();
   const trimmedBaseBranch = args.baseBranch?.trim();
@@ -327,6 +364,10 @@ export function registerSpawnCommand(
     .option("--json", "Print machine-readable JSON output")
     .requiredOption("--project <id>", "Project ID")
     .option(
+      "--promote <target>",
+      "Start in the shared project checkout, then promote to worktree or branch",
+    )
+    .option(
       "--environment <id-or-path>",
       "Existing environment ID or unmanaged workspace path",
     )
@@ -400,6 +441,7 @@ export function registerSpawnCommand(
     )
     .action(
       action(async (opts: ThreadSpawnCommandOptions) => {
+        const promotion = parsePromotionOption(opts);
         const prompt = await requireTextInput({
           file: opts.promptFile,
           fileLabel: "--prompt-file",
@@ -527,6 +569,7 @@ export function registerSpawnCommand(
               resolveDefaultHostId: resolveLocalHostId,
             })
           : buildSpawnEnvironment({
+              promotion,
               defaultPersonalWorkspace: projectId === PERSONAL_PROJECT_ID,
               environmentValue,
               newEnvironmentKind: opts.newEnvironment,
