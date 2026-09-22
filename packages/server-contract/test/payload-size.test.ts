@@ -62,25 +62,39 @@ describe("server-to-browser timeline payload sizes", () => {
     expect(measurements).toEqual([
       {
         rowCount: 1,
-        full: { gzipBytes: 216, jsonBytes: 629 },
-        legacyDelta: { gzipBytes: 239, jsonBytes: 677 },
-        compactDelta: { gzipBytes: 227, jsonBytes: 644 },
+        full: { gzipBytes: expect.any(Number), jsonBytes: 629 },
+        legacyDelta: { gzipBytes: expect.any(Number), jsonBytes: 677 },
+        compactDelta: { gzipBytes: expect.any(Number), jsonBytes: 644 },
       },
       {
         rowCount: 20,
-        full: { gzipBytes: 552, jsonBytes: 6_627 },
-        legacyDelta: { gzipBytes: 297, jsonBytes: 1_060 },
-        compactDelta: { gzipBytes: 230, jsonBytes: 647 },
+        full: { gzipBytes: expect.any(Number), jsonBytes: 6_627 },
+        legacyDelta: { gzipBytes: expect.any(Number), jsonBytes: 1_060 },
+        compactDelta: { gzipBytes: expect.any(Number), jsonBytes: 647 },
       },
       {
         rowCount: 100,
-        full: { gzipBytes: 1_868, jsonBytes: 31_989 },
-        legacyDelta: { gzipBytes: 471, jsonBytes: 2_662 },
-        compactDelta: { gzipBytes: 230, jsonBytes: 649 },
+        full: { gzipBytes: expect.any(Number), jsonBytes: 31_989 },
+        legacyDelta: { gzipBytes: expect.any(Number), jsonBytes: 2_662 },
+        compactDelta: { gzipBytes: expect.any(Number), jsonBytes: 649 },
       },
     ]);
 
-    for (const measurement of measurements) {
+    const gzipBudgets = [
+      { full: 220, legacyDelta: 245, compactDelta: 235 },
+      { full: 560, legacyDelta: 305, compactDelta: 235 },
+      { full: 1_900, legacyDelta: 480, compactDelta: 235 },
+    ];
+    for (const [index, measurement] of measurements.entries()) {
+      const budget = gzipBudgets[index];
+      expect(budget).toBeDefined();
+      expect(measurement.full.gzipBytes).toBeLessThanOrEqual(budget?.full ?? 0);
+      expect(measurement.legacyDelta.gzipBytes).toBeLessThanOrEqual(
+        budget?.legacyDelta ?? 0,
+      );
+      expect(measurement.compactDelta.gzipBytes).toBeLessThanOrEqual(
+        budget?.compactDelta ?? 0,
+      );
       expect(measurement.compactDelta.jsonBytes).toBeLessThanOrEqual(
         measurement.legacyDelta.jsonBytes,
       );

@@ -62,7 +62,7 @@ export function registerInternalSessionRoutes(
   deps: AppDeps,
   plugins: PluginService,
   serverMove: ServerMoveSessionGate,
-): void {
+): HostEnvironmentSync {
   const machineEnvironment = new HostEnvironmentSync(deps);
   const { get } = typedRoutes<HostDaemonInternalSchema>(app, {
     onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
@@ -251,4 +251,6 @@ export function registerInternalSessionRoutes(
       });
     },
   );
+
+  return machineEnvironment;
 }

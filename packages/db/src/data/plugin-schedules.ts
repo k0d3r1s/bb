@@ -1,6 +1,11 @@
 import { and, asc, eq, lte, notInArray } from "drizzle-orm";
-import type { DbConnection } from "../connection.js";
+import type { DbConnection, DbTransaction } from "../connection.js";
 import { pluginSchedules } from "../schema.js";
+import {
+  admitExecutionStartInTransaction,
+  assertWorkAdmissionOpen,
+  type AdmitExecutionStartResult,
+} from "./work-admissions.js";
 
 export interface PluginScheduleRow {
   pluginId: string;
@@ -75,7 +80,7 @@ export function listDuePluginSchedules(
 }
 
 export function claimPluginScheduledRun(
-  db: DbConnection,
+  db: DbConnection | DbTransaction,
   args: {
     pluginId: string;
     name: string;
@@ -102,6 +107,36 @@ export function claimPluginScheduledRun(
     )
     .run();
   return result.changes > 0;
+}
+
+export type ClaimPluginScheduledRunWithAdmissionResult =
+  | AdmitExecutionStartResult
+  | { kind: "not-claimed" };
+
+export function claimPluginScheduledRunWithAdmission(
+  db: DbConnection,
+  args: {
+    pluginId: string;
+    name: string;
+    expectedNextRunAt: number;
+    newNextRunAt: number;
+    now: number;
+  },
+): ClaimPluginScheduledRunWithAdmissionResult {
+  return db.transaction(
+    (tx) => {
+      const admission = assertWorkAdmissionOpen(tx, args.now);
+      if (admission.kind === "quiesced") return admission;
+      if (!claimPluginScheduledRun(tx, args)) return { kind: "not-claimed" };
+      return admitExecutionStartInTransaction(tx, {
+        commandType: "plugin.schedule",
+        transport: "settled",
+        context: { pluginId: args.pluginId, schedule: args.name },
+        now: args.now,
+      });
+    },
+    { behavior: "immediate" },
+  );
 }
 
 export function recordPluginScheduleResult(

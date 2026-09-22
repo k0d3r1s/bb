@@ -197,6 +197,7 @@ export {
 } from "./plugin-storage.js";
 export {
   claimPluginScheduledRun,
+  claimPluginScheduledRunWithAdmission,
   deletePluginSchedules,
   listDuePluginSchedules,
   listPluginSchedules,
@@ -511,3 +512,5 @@ export {
 export * from "./project-attachments.js";
 
 export * from "./project-attachment-backfill.js";
+
+export * from "./index.fork.js";

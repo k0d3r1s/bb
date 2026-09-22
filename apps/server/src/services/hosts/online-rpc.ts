@@ -10,7 +10,15 @@ import {
   parseHostDaemonRpcResultForCommand,
   type HostDaemonRpcCommand,
   type HostDaemonRpcResultForCommand,
+  hostDaemonCommandRegistry,
+  hostDaemonQuiescePolicyForCommand,
 } from "@bb/host-daemon-contract";
+import {
+  admitExecutionStart,
+  markWorkAdmissionActive,
+  settleWorkAdmission,
+  type WorkAdmissionToken,
+} from "@bb/db";
 import { ApiError } from "../../errors.js";
 import type { WorkSessionDeps } from "../../types.js";
 import {
@@ -213,6 +221,50 @@ async function callHostOnlineRpcWithRetry(
     waitForTransportFailure: boolean;
   },
 ): Promise<HostDaemonRpcResultForCommand> {
+  let admissionToken: WorkAdmissionToken | null = null;
+  if (hostDaemonQuiescePolicyForCommand(args.command) === "execution-start") {
+    const admission = admitExecutionStart(deps.db, {
+      commandType: args.command.type,
+      transport: hostDaemonCommandRegistry[args.command.type].transport,
+      hostId: args.hostId,
+    });
+    if (admission.kind === "quiesced") {
+      throw new ApiError(
+        503,
+        admission.code,
+        `Work admission is closed for maintenance: ${admission.lease.reason}`,
+        {
+          retryable: true,
+          details: {
+            operationId: admission.lease.operationId,
+            expiresAt: admission.lease.expiresAt,
+          },
+        },
+      );
+    }
+    admissionToken = admission.token;
+  }
+  try {
+    return await callAdmittedHostOnlineRpcWithRetry(
+      deps,
+      args,
+      options,
+      admissionToken,
+    );
+  } finally {
+    if (admissionToken) settleWorkAdmission(deps.db, admissionToken);
+  }
+}
+
+async function callAdmittedHostOnlineRpcWithRetry(
+  deps: WorkSessionDeps,
+  args: CallHostOnlineRpcArgs<HostDaemonRpcCommand>,
+  options: {
+    retryOnTransportFailure: boolean;
+    waitForTransportFailure: boolean;
+  },
+  admissionToken: WorkAdmissionToken | null,
+): Promise<HostDaemonRpcResultForCommand> {
   const timeoutRetryDeadline =
     options.retryOnTransportFailure && args.timeoutMs > 1
       ? Date.now() + args.timeoutMs
@@ -224,6 +276,7 @@ async function callHostOnlineRpcWithRetry(
           ...args,
           timeoutMs: Math.max(1, Math.floor(args.timeoutMs / 2)),
         };
+  if (admissionToken) markWorkAdmissionActive(deps.db, admissionToken);
   const response = await requestHostOnlineRpcResponse(
     deps,
     firstAttemptArgs,

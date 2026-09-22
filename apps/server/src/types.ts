@@ -19,6 +19,7 @@ import type { ProviderRegistryService } from "./services/providers/provider-regi
 import type { AiServiceRegistry } from "./services/ai/ai-service-registry.js";
 import type { PluginHostArtifactRegistry } from "./services/plugins/plugin-host-artifact-registry.js";
 import type { ProviderNativeRootsCache } from "./services/providers/native-roots.js";
+import type { WorkQuiesceService } from "./services/system/work-quiesce.js";
 
 export type ServerLogger = Pick<Logger, "debug" | "error" | "info" | "warn">;
 
@@ -57,6 +58,7 @@ export interface AppDeps {
   watchInterests: WatchInterestCoordinator;
   sharedPorts: HostSharedPortCoordinator;
   workspaceReadCaches: WorkspaceReadCaches;
+  workQuiesce?: WorkQuiesceService;
 }
 
 export interface ServerAppDeps extends AppDeps {

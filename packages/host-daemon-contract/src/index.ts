@@ -1,4 +1,6 @@
 export * from "./commands.js";
+export * from "./commands.fork.js";
+export * from "./quiesce-policy.fork.js";
 export * from "./local-state.js";
 export * from "./local.js";
 export * from "./server-move.js";

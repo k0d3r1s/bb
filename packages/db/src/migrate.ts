@@ -131,6 +131,10 @@ interface AppliedMigrationCountRow {
   count: number;
 }
 
+interface SchemaSqlRow {
+  sql: string | null;
+}
+
 interface PendingInteractionProviderRequestDuplicateRow {
   duplicateCount: number;
   providerId: string;
@@ -150,6 +154,11 @@ interface AppliedMigrationHistoryViolation {
 const migrationModuleFilename = fileURLToPath(import.meta.url);
 const migrationModuleDirname = dirname(migrationModuleFilename);
 const migrationJournalPath = join("meta", "_journal.json");
+const forkMigrationsTable = "__bb_fork_migrations";
+const legacyWorkQuiesceMigration = {
+  createdAts: [1_789_145_421_512, 1_789_371_340_185, 1_789_478_684_565],
+  hash: "f162a056f845a9e712b63f50351f0651858c5659c6c2fc05cd063f49c15ca87f",
+} as const;
 const deferredDestructiveCleanupMigrationTags = [
   "0015_good_lila_cheney",
   "0016_salty_arclight",
@@ -241,11 +250,12 @@ function hasMigrationJournal(migrationsFolder: string): boolean {
   return existsSync(resolve(migrationsFolder, migrationJournalPath));
 }
 
-export function resolveMigrationsFolderForModuleDir(
-  args: ResolveMigrationsFolderForModuleDirArgs,
+function resolveMigrationAssetFolder(
+  moduleDir: string,
+  directoryName: "drizzle" | "drizzle-fork",
 ): string {
-  const sourcePackageCandidate = resolve(args.moduleDir, "..", "drizzle");
-  const bundledAssetCandidate = resolve(args.moduleDir, "drizzle");
+  const sourcePackageCandidate = resolve(moduleDir, "..", directoryName);
+  const bundledAssetCandidate = resolve(moduleDir, directoryName);
   const candidates = [sourcePackageCandidate, bundledAssetCandidate];
 
   for (const candidate of candidates) {
@@ -259,10 +269,20 @@ export function resolveMigrationsFolderForModuleDir(
   );
 }
 
+export function resolveMigrationsFolderForModuleDir(
+  args: ResolveMigrationsFolderForModuleDirArgs,
+): string {
+  return resolveMigrationAssetFolder(args.moduleDir, "drizzle");
+}
+
 function resolveMigrationsFolder(): string {
   return resolveMigrationsFolderForModuleDir({
     moduleDir: migrationModuleDirname,
   });
+}
+
+function resolveForkMigrationsFolder(): string {
+  return resolveMigrationAssetFolder(migrationModuleDirname, "drizzle-fork");
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -588,6 +608,272 @@ function applyMigrationStatements(
   });
 
   apply();
+}
+
+function normalizeSchemaSql(value: string): string {
+  return value
+    .toLowerCase()
+    .replaceAll(/\s+/gu, "")
+    .replaceAll(/[`"]+/gu, "")
+    .replace(/;$/u, "");
+}
+
+function requireMigrationObjectSql(
+  migration: ExpectedAppliedMigration,
+  objectName: string,
+): string {
+  const normalizedName = objectName.toLowerCase();
+  const statement = migration.sql.find((candidate) => {
+    const normalized = normalizeSchemaSql(candidate);
+    return (
+      normalized.startsWith(`createtable${normalizedName}(`) ||
+      normalized.startsWith(`createindex${normalizedName}on`) ||
+      normalized.startsWith(`createuniqueindex${normalizedName}on`)
+    );
+  });
+  if (statement === undefined) {
+    throw new Error(
+      `Fork migration ${migration.tag} does not define ${objectName}`,
+    );
+  }
+  return statement;
+}
+
+function validateLegacyWorkQuiesceSchema(
+  db: DbConnection,
+  migration: ExpectedAppliedMigration,
+): void {
+  const objects = [
+    ["table", "work_admissions"],
+    ["index", "work_admissions_state_idx"],
+    ["index", "work_admissions_host_id_idx"],
+    ["table", "work_quiesce"],
+    ["index", "work_quiesce_operation_id_unique"],
+    ["table", "work_quiesce_resolutions"],
+  ] as const;
+  const mismatches = objects.filter(([type, name]) => {
+    const row = db.$client
+      .prepare<[string, string], SchemaSqlRow>(
+        "SELECT sql FROM sqlite_master WHERE type = ? AND name = ?",
+      )
+      .get(type, name);
+    return (
+      row?.sql === null ||
+      row?.sql === undefined ||
+      normalizeSchemaSql(row.sql) !==
+        normalizeSchemaSql(requireMigrationObjectSql(migration, name))
+    );
+  });
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Legacy fork migration schema does not match ${migration.tag}: ${mismatches
+        .map(([, name]) => name)
+        .join(", ")}`,
+    );
+  }
+}
+
+function upstreamMigrationIsReflected(
+  db: DbConnection,
+  tag: string,
+): boolean {
+  switch (tag) {
+    case "0117_machine_providers":
+      return (
+        tableExists(db, "environment_hook_operations") &&
+        columnExists(db, "hosts", "machine_provider_id") &&
+        columnExists(db, "hosts", "launch_key") &&
+        columnExists(db, "project_sources", "owns_path") &&
+        !columnExists(db, "host_daemon_sessions", "host_type")
+      );
+    case "0118_brave_marvel_zombies":
+      return tableExists(db, "thread_plugin_metadata");
+    case "0119_provider_model_catalogs":
+      return tableExists(db, "provider_model_catalogs");
+    case "0120_perfect_clint_barton":
+      return columnExists(db, "threads", "storage_deleted_at");
+    case "0121_fluffy_major_mapleleaf":
+      return (
+        columnExists(db, "threads", "lifecycle_owner_thread_id") &&
+        indexExists(db, "threads", "threads_lifecycle_owner_idx")
+      );
+    case "0122_attachment_accounting":
+      return (
+        tableExists(db, "project_attachment_backfills") &&
+        tableExists(db, "project_attachment_threads") &&
+        tableExists(db, "project_attachments") &&
+        indexExists(db, "threads", "threads_project_id_idx")
+      );
+    case "0123_cheerful_tomorrow_man":
+      return tableExists(db, "environment_variables");
+    case "0124_thread_pruning":
+      return tableExists(db, "thread_pruning_cursors");
+    case "0125_silent_guardian":
+      return indexExists(db, "events", "events_provider_identity_idx");
+    case "0126_overconfident_vin_gonzales":
+      return columnExists(db, "queued_thread_messages", "origin");
+    default:
+      return false;
+  }
+}
+
+function repairLegacySkippedUpstreamMigrations(
+  db: DbConnection,
+  migrationsFolder: string,
+): void {
+  const expectedMigrations = readExpectedAppliedMigrations(migrationsFolder);
+  const appliedCreatedAts = readAppliedMigrationCreatedAts(db);
+  for (const tag of [
+    "0117_machine_providers",
+    "0118_brave_marvel_zombies",
+    "0119_provider_model_catalogs",
+    "0120_perfect_clint_barton",
+    "0121_fluffy_major_mapleleaf",
+    "0122_attachment_accounting",
+    "0123_cheerful_tomorrow_man",
+    "0124_thread_pruning",
+    "0125_silent_guardian",
+    "0126_overconfident_vin_gonzales",
+  ]) {
+    const migration = requireExpectedAppliedMigration(expectedMigrations, tag);
+    if (appliedCreatedAts.has(migration.createdAt)) {
+      continue;
+    }
+    if (upstreamMigrationIsReflected(db, tag)) {
+      markMigrationApplied(db, migration);
+    } else {
+      applyMigrationStatements(db, migration);
+    }
+    appliedCreatedAts.add(migration.createdAt);
+  }
+}
+
+function ensureForkMigrationLedger(db: DbConnection): void {
+  db.$client.exec(`
+    CREATE TABLE IF NOT EXISTS ${forkMigrationsTable} (
+      id SERIAL PRIMARY KEY,
+      hash text NOT NULL,
+      created_at numeric
+    )
+  `);
+}
+
+function readForkMigrationRows(db: DbConnection): AppliedMigrationIdentityRow[] {
+  if (!tableExists(db, forkMigrationsTable)) {
+    return [];
+  }
+  return db.$client
+    .prepare<[], AppliedMigrationIdentityRow>(
+      `SELECT hash, created_at AS createdAt FROM ${forkMigrationsTable} ORDER BY created_at, id`,
+    )
+    .all();
+}
+
+function validateForkMigrationHistory(
+  db: DbConnection,
+  expectedMigrations: ExpectedAppliedMigration[],
+  requireComplete: boolean,
+): void {
+  const appliedMigrations = readForkMigrationRows(db);
+  const invalid =
+    appliedMigrations.length > expectedMigrations.length ||
+    appliedMigrations.some((migration, index) => {
+      const expected = expectedMigrations[index];
+      return (
+        expected === undefined ||
+        migration.createdAt !== expected.createdAt ||
+        migration.hash !== expected.hash
+      );
+    }) ||
+    (requireComplete && appliedMigrations.length !== expectedMigrations.length);
+  if (invalid) {
+    throw new Error(
+      "Fork migration history is invalid: expected a contiguous, hash-matching migration prefix",
+    );
+  }
+}
+
+function adoptLegacyWorkQuiesceMigration(
+  db: DbConnection,
+  migrationsFolder: string,
+  forkMigrations: ExpectedAppliedMigration[],
+): void {
+  if (!tableExists(db, "__drizzle_migrations")) {
+    return;
+  }
+  const legacy = db.$client
+    .prepare<[], AppliedMigrationIdentityRow>(
+      `
+        SELECT hash, created_at AS createdAt
+        FROM __drizzle_migrations
+        WHERE hash = '${legacyWorkQuiesceMigration.hash}'
+          AND created_at IN (${legacyWorkQuiesceMigration.createdAts.join(", ")})
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+    )
+    .get();
+  if (legacy?.createdAt === null || legacy?.createdAt === undefined) {
+    return;
+  }
+  const legacyCreatedAt = legacy.createdAt;
+  const workQuiesceMigration = forkMigrations[0];
+  if (
+    workQuiesceMigration === undefined ||
+    workQuiesceMigration.hash !== legacyWorkQuiesceMigration.hash
+  ) {
+    throw new Error("Fork work-quiesce migration identity changed unexpectedly");
+  }
+  validateLegacyWorkQuiesceSchema(db, workQuiesceMigration);
+
+  const adopt = db.$client.transaction(() => {
+    repairLegacySkippedUpstreamMigrations(db, migrationsFolder);
+    const forkRows = readForkMigrationRows(db);
+    if (forkRows.length === 0) {
+      db.$client
+        .prepare<[string, number]>(
+          `INSERT INTO ${forkMigrationsTable} (hash, created_at) VALUES (?, ?)`,
+        )
+        .run(workQuiesceMigration.hash, workQuiesceMigration.createdAt);
+    }
+    db.$client
+      .prepare<[string, number]>(
+        "DELETE FROM __drizzle_migrations WHERE hash = ? AND created_at = ?",
+      )
+      .run(legacy.hash, legacyCreatedAt);
+  });
+  adopt();
+}
+
+function prepareForkMigrations(
+  db: DbConnection,
+  migrationsFolder: string,
+  forkMigrationsFolder: string,
+): ExpectedAppliedMigration[] {
+  const expectedForkMigrations = readExpectedAppliedMigrations(
+    forkMigrationsFolder,
+  );
+  ensureForkMigrationLedger(db);
+  validateForkMigrationHistory(db, expectedForkMigrations, false);
+  adoptLegacyWorkQuiesceMigration(
+    db,
+    migrationsFolder,
+    expectedForkMigrations,
+  );
+  validateForkMigrationHistory(db, expectedForkMigrations, false);
+  return expectedForkMigrations;
+}
+
+function applyForkMigrations(
+  db: DbConnection,
+  migrationsFolder: string,
+  expectedMigrations: ExpectedAppliedMigration[],
+): void {
+  drizzleMigrate(db, {
+    migrationsFolder,
+    migrationsTable: forkMigrationsTable,
+  });
+  validateForkMigrationHistory(db, expectedMigrations, true);
 }
 
 function hasPublishedTimestampFallback(
@@ -1546,6 +1832,7 @@ function validateAppliedMigrationHistory(
 
 export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
   const migrationsFolder = resolveMigrationsFolder();
+  const forkMigrationsFolder = resolveForkMigrationsFolder();
   const sqlite = db.$client;
 
   sqlite.exec(
@@ -1564,6 +1851,11 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
   }
   sqlite.pragma("foreign_keys = OFF");
   try {
+    const expectedForkMigrations = prepareForkMigrations(
+      db,
+      migrationsFolder,
+      forkMigrationsFolder,
+    );
     assertNoDuplicatePendingInteractionProviderRequests(db);
     if (options.deferDestructiveLegacyCleanup === true) {
       applyDeferredDestructiveLegacyCleanup(db, migrationsFolder);
@@ -1594,6 +1886,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
     applyReorderedCleanupMigrations(db, migrationsFolder);
     applyQueuedMessageGroupingSchema(db);
     seedKeepAwakePluginConfiguration(db);
+    applyForkMigrations(db, forkMigrationsFolder, expectedForkMigrations);
   } finally {
     sqlite.pragma("foreign_keys = ON");
   }

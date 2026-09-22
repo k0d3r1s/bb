@@ -57,6 +57,7 @@ Run `bb guide <chapter>` for command details:
   projects             Project CRUD and sources
   machines             Listing and targeting execution machines, moving the
                        server
+  maintenance          Headless Linux ARM64 updates and local admission control
   terminals            Persistent PTY sessions across all supported scopes
   browser              Experimental built-in browser tabs and control leases
   customization        Theming the app palette, settings, mobile push

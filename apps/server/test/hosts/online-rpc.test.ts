@@ -4,7 +4,11 @@ import {
   type HostDaemonOnlineRpcRequestMessage,
   type HostDaemonOnlineRpcResult,
 } from "@bb/host-daemon-contract";
-import { hostDaemonSessions, updateHost } from "@bb/db";
+import {
+  acquireWorkQuiesceLease,
+  hostDaemonSessions,
+  updateHost,
+} from "@bb/db";
 import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../src/errors.js";
@@ -112,6 +116,44 @@ describe("host online RPC retry semantics", () => {
         },
       });
       expect(request).not.toHaveBeenCalled();
+    });
+  });
+
+  it("records and rejects execution-start RPC admission after quiesce commits", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-online-rpc-quiesced",
+      });
+      const send = vi.fn();
+      harness.hub.unregisterDaemon(session.id);
+      harness.hub.registerDaemon(session.id, host.id, { close() {}, send });
+      acquireWorkQuiesceLease(harness.db, {
+        operationId: "update-1",
+        ownerSecretHash: "owner-hash",
+        reason: "VPS update",
+        now: Date.now(),
+        expiresAt: Date.now() + 60_000,
+      });
+
+      await expect(
+        callHostOnlineRpc(harness.deps, {
+          hostId: host.id,
+          timeoutMs: 1_000,
+          command: {
+            type: "environment.hook.run",
+            contributedEnv: [],
+            resumeOnly: false,
+            operationId: "hook-1",
+            path: "/tmp/env",
+            kind: "setup",
+            timeoutMs: 1_000,
+          },
+        }),
+      ).rejects.toMatchObject({
+        status: 503,
+        body: { code: "work_quiesced", retryable: true },
+      });
+      expect(send).not.toHaveBeenCalled();
     });
   });
 

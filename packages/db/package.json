@@ -16,13 +16,15 @@
   },
   "types": "./src/index.ts",
   "files": [
-    "drizzle"
+    "drizzle",
+    "drizzle-fork"
   ],
   "scripts": {
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",
     "db:generate": "drizzle-kit generate",
+    "db:generate:fork": "drizzle-kit generate --config drizzle-fork.config.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

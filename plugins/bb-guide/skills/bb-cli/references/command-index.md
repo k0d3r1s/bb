@@ -6,6 +6,18 @@ This index lists every command path that the core CLI registers, including alias
 
 - `bb status`
 
+## maintenance
+
+- `bb maintenance`
+- `bb maintenance identity`
+- `bb maintenance status`
+- `bb maintenance acquire`
+- `bb maintenance renew`
+- `bb maintenance seal`
+- `bb maintenance transition`
+- `bb maintenance release`
+- `bb maintenance recover`
+
 ## settings
 
 - `bb settings`

@@ -34,6 +34,12 @@
       "types": "./src/node-websocket.ts",
       "import": "./dist/node-websocket.js",
       "default": "./dist/node-websocket.js"
+    },
+    "./node-admin": {
+      "source": "./src/node-admin.ts",
+      "types": "./src/node-admin.ts",
+      "import": "./dist/node-admin.js",
+      "default": "./dist/node-admin.js"
     }
   },
   "types": "./src/node.ts",

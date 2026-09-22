@@ -38,6 +38,7 @@ import {
   throwThreadNotWritable,
 } from "../lib/lifecycle-api-errors.js";
 import { validatePromptAttachmentReferences } from "../projects/attachments.js";
+import { requireWorkAdmissionOpen } from "../system/work-admission.js";
 import {
   dispatchEnvironmentAndHost,
   dispatchExecutionSources,
@@ -737,6 +738,7 @@ async function admitPendingThread(
   try {
     startingThread = deps.db.transaction(
       (tx) => {
+        requireWorkAdmissionOpen(tx);
         // The row is consumed and the thread flipped in ONE transaction: a
         // flip that loses to a concurrent attempt rolls the consumption back,
         // so the row stays claimed for the caller to hand back rather than

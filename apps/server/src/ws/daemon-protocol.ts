@@ -93,44 +93,86 @@ export const SERVER_MOVE_FENCED_DAEMON_MESSAGE_TYPES: ReadonlySet<
 
 export function onDaemonSocketOpen(
   deps: LoggedPendingInteractionWorkSessionDeps &
-    Pick<AppDeps, "hub" | "logger" | "sharedPorts" | "terminalSessions">,
+    Pick<
+      AppDeps,
+      "hub" | "logger" | "sharedPorts" | "terminalSessions" | "workQuiesce"
+    >,
   args: { hostId: string; sessionId: string; socket: DaemonSocket },
-): void {
+): Promise<void> {
   deps.logger.info(
     { sessionId: args.sessionId, hostId: args.hostId },
     "Daemon WebSocket opened",
   );
-  deps.hub.registerDaemon(args.sessionId, args.hostId, args.socket);
-  deps.sharedPorts.pushCurrentSharedPortsForHost(args.hostId);
-  if (!isServerMoveSnapshotFenced(deps.db)) {
-    deps.terminalSessions.expireDisconnectedHostTerminals({
-      daemonSessionId: args.sessionId,
+  const resumeProvisioning = (): void => {
+    void resumeEnvironmentProvisioningForHost(deps, {
       hostId: args.hostId,
+    }).catch((error) => {
+      deps.logger.warn(
+        {
+          err: error,
+          hostId: args.hostId,
+          sessionId: args.sessionId,
+        },
+        "Environment provisioning reconnect resume failed",
+      );
     });
-  }
-  if (isServerMoveFrozen(deps.db)) {
-    return;
-  }
+  };
   // A dispatch that arrived while this machine was away parked its row on a
   // `host-offline` wait with no schedule, so no sweep can see it — the
   // machine coming back is that wait's release signal, and this socket
   // opening is where core hears it.
-  requestQueuedMessageDispatch(deps, {
-    hostId: args.hostId,
-    kind: "host-connected",
-  });
-  void resumeEnvironmentProvisioningForHost(deps, {
-    hostId: args.hostId,
-  }).catch((error) => {
-    deps.logger.warn(
-      {
-        err: error,
+  const finishHostConnect = (): void => {
+    if (!isServerMoveSnapshotFenced(deps.db)) {
+      deps.terminalSessions.expireDisconnectedHostTerminals({
+        daemonSessionId: args.sessionId,
         hostId: args.hostId,
-        sessionId: args.sessionId,
-      },
-      "Environment provisioning reconnect resume failed",
-    );
+      });
+    }
+    if (isServerMoveFrozen(deps.db)) {
+      return;
+    }
+    requestQueuedMessageDispatch(deps, {
+      hostId: args.hostId,
+      kind: "host-connected",
+    });
+    resumeProvisioning();
+  };
+  if (!deps.workQuiesce) {
+    deps.hub.registerDaemon(args.sessionId, args.hostId, args.socket);
+    deps.sharedPorts.pushCurrentSharedPortsForHost(args.hostId);
+    finishHostConnect();
+    return Promise.resolve();
+  }
+  deps.hub.registerDaemon(args.sessionId, args.hostId, args.socket, {
+    dispatchable: false,
   });
+  return deps.workQuiesce
+    .applyToConnectingDaemon(args.hostId)
+    .then((maintenanceActive) => {
+      deps.hub.markDaemonDispatchable(args.sessionId);
+      deps.sharedPorts.pushCurrentSharedPortsForHost(args.hostId);
+      if (!isServerMoveSnapshotFenced(deps.db)) {
+        deps.terminalSessions.expireDisconnectedHostTerminals({
+          daemonSessionId: args.sessionId,
+          hostId: args.hostId,
+        });
+      }
+      if (isServerMoveFrozen(deps.db)) {
+        return;
+      }
+      if (!maintenanceActive) {
+        requestQueuedMessageDispatch(deps, {
+          hostId: args.hostId,
+          kind: "host-connected",
+        });
+        resumeProvisioning();
+      }
+    })
+    .catch((error) => {
+      deps.hub.unregisterDaemon(args.sessionId);
+      args.socket.close(1011, "maintenance-gate-failed");
+      throw error;
+    });
 }
 
 export function onDaemonSocketMessage(

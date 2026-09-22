@@ -1,6 +1,7 @@
 import { replaceMachineEnvironment } from "../../src/services/machines/environment-settings.js";
 import * as gitCredentials from "../../src/services/machines/git-credentials.js";
 import {
+  acquireWorkQuiesceLease,
   createTerminalSession,
   getTerminalSession,
   listTerminalSessions,
@@ -43,6 +44,7 @@ import {
   handleHostSessionOpened,
 } from "../../src/internal/session-owner-side-effects.js";
 import { onDaemonSocketOpen } from "../../src/ws/daemon-protocol.js";
+import { WorkQuiesceService } from "../../src/services/system/work-quiesce.js";
 
 interface FakeDaemonSocket {
   close(code?: number, reason?: string): void;
@@ -644,6 +646,65 @@ describe("public terminal routes", () => {
       await readJson(threadListResponse),
     );
     expect(threadList.sessions).toEqual([]);
+  });
+
+  it("rejects terminal creation when maintenance commits before the start", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+    acquireWorkQuiesceLease(fixture.harness.db, {
+      operationId: "update-1",
+      ownerSecretHash: "owner-hash",
+      reason: "VPS update",
+      now: Date.now(),
+      expiresAt: Date.now() + 60_000,
+    });
+
+    const response = await fixture.harness.app.request("/api/v1/terminals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cols: 100,
+        rows: 30,
+        target: { kind: "thread", threadId: fixture.thread.id },
+      }),
+    });
+
+    expect(response.status).toBe(503);
+    expect(apiErrorSchema.parse(await readJson(response))).toMatchObject({
+      code: "work_quiesced",
+      retryable: true,
+      details: { operationId: "update-1" },
+    });
+    expect(fixture.socket.sentMessages).toEqual([]);
+    expect(
+      listTerminalSessionsByThread(fixture.harness.db, fixture.thread.id),
+    ).toEqual([]);
+  });
+
+  it("reports a terminal start that commits before maintenance acquisition", async () => {
+    const fixture = await createTerminalRouteFixture();
+    harnesses.push(fixture.harness);
+    const pending = await startPendingTerminalOpen(fixture);
+    const service = new WorkQuiesceService({
+      db: fixture.harness.db,
+      transport: {
+        listConnectedHostIds: () => [],
+        send: async () => {
+          throw new Error("no host barrier is expected");
+        },
+      },
+    });
+
+    const acquired = await service.acquire({
+      operationId: "update-1",
+      ownerSecret: "owner-secret",
+      reason: "VPS update",
+      ttlMs: 60_000,
+    });
+
+    expect(acquired.activity.activeByKind).toMatchObject({ terminals: 1 });
+    acknowledgeTerminalOpen(fixture, pending.openMessage);
+    expect((await pending.responsePromise).status).toBe(201);
   });
 
   it("creates and lists terminal sessions for a host path without an environment", async () => {

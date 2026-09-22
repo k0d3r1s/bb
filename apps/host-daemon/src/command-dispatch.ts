@@ -445,6 +445,21 @@ async function readAvailableWorkspace<TAvailable extends object>(
 }
 
 const commandHandlers: CommandHandlerMap = {
+  "work.quiesce": async () => {
+    throw new Error(
+      "work barrier command was not handled by the command router",
+    );
+  },
+  "work.seal": async () => {
+    throw new Error(
+      "work barrier command was not handled by the command router",
+    );
+  },
+  "work.unquiesce": async () => {
+    throw new Error(
+      "work barrier command was not handled by the command router",
+    );
+  },
   "thread.rewind.discard": (command, options) =>
     withRetainedThreadEnvironment(command, options, () =>
       discardThreadRewind(command, options),

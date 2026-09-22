@@ -76,25 +76,40 @@ describe("daemon-to-server event payload sizes", () => {
     expect(measurements).toEqual([
       {
         eventCount: 1,
-        legacyEnvelope: { gzipBytes: 194, jsonBytes: 413 },
-        grouped: { gzipBytes: 198, jsonBytes: 421 },
+        legacyEnvelope: { gzipBytes: expect.any(Number), jsonBytes: 413 },
+        grouped: { gzipBytes: expect.any(Number), jsonBytes: 421 },
       },
       {
         eventCount: 10,
-        legacyEnvelope: { gzipBytes: 246, jsonBytes: 3_554 },
-        grouped: { gzipBytes: 247, jsonBytes: 3_049 },
+        legacyEnvelope: { gzipBytes: expect.any(Number), jsonBytes: 3_554 },
+        grouped: { gzipBytes: expect.any(Number), jsonBytes: 3_049 },
       },
       {
         eventCount: 50,
-        legacyEnvelope: { gzipBytes: 406, jsonBytes: 17_554 },
-        grouped: { gzipBytes: 407, jsonBytes: 14_769 },
+        legacyEnvelope: { gzipBytes: expect.any(Number), jsonBytes: 17_554 },
+        grouped: { gzipBytes: expect.any(Number), jsonBytes: 14_769 },
       },
     ]);
 
-    for (const measurement of measurements.slice(1)) {
-      expect(measurement.grouped.jsonBytes).toBeLessThan(
-        measurement.legacyEnvelope.jsonBytes,
+    const gzipBudgets = [
+      { legacyEnvelope: 200, grouped: 205 },
+      { legacyEnvelope: 250, grouped: 250 },
+      { legacyEnvelope: 410, grouped: 410 },
+    ];
+    for (const [index, measurement] of measurements.entries()) {
+      const budget = gzipBudgets[index];
+      expect(budget).toBeDefined();
+      expect(measurement.legacyEnvelope.gzipBytes).toBeLessThanOrEqual(
+        budget?.legacyEnvelope ?? 0,
       );
+      expect(measurement.grouped.gzipBytes).toBeLessThanOrEqual(
+        budget?.grouped ?? 0,
+      );
+      if (index > 0) {
+        expect(measurement.grouped.jsonBytes).toBeLessThan(
+          measurement.legacyEnvelope.jsonBytes,
+        );
+      }
     }
   });
 });

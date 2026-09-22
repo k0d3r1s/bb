@@ -2,6 +2,7 @@ import { emitPluginTerminalInput } from "../plugins/plugin-thread-events.js";
 import { resolveHostEnvironment } from "../hosts/host-environment.js";
 import { randomUUID } from "node:crypto";
 import {
+  assertWorkAdmissionOpen,
   createTerminalSession,
   getTerminalSession,
   listTerminalSessions,
@@ -718,17 +719,42 @@ export class TerminalSessionLifecycle {
       launchTarget.hostId,
     );
     const start = args.payload.start ?? DEFAULT_TERMINAL_START;
-    const startingSession = createTerminalSession(this.options.db, {
-      cols: args.payload.cols,
-      daemonSessionId: daemonSession.id,
-      environmentId: launchTarget.environmentId,
-      hostId: launchTarget.hostId,
-      initialCwd: launchTarget.initialCwd,
-      rows: args.payload.rows,
-      status: "starting",
-      threadId: args.threadId,
-      title: args.title,
-    });
+    const creation = this.options.db.transaction(
+      (tx) => {
+        const admission = assertWorkAdmissionOpen(tx);
+        if (admission.kind === "quiesced") return admission;
+        return {
+          kind: "created" as const,
+          session: createTerminalSession(tx, {
+            cols: args.payload.cols,
+            daemonSessionId: daemonSession.id,
+            environmentId: launchTarget.environmentId,
+            hostId: launchTarget.hostId,
+            initialCwd: launchTarget.initialCwd,
+            rows: args.payload.rows,
+            status: "starting",
+            threadId: args.threadId,
+            title: args.title,
+          }),
+        };
+      },
+      { behavior: "immediate" },
+    );
+    if (creation.kind === "quiesced") {
+      throw new ApiError(
+        503,
+        creation.code,
+        `Work admission is closed for maintenance: ${creation.lease.reason}`,
+        {
+          retryable: true,
+          details: {
+            operationId: creation.lease.operationId,
+            expiresAt: creation.lease.expiresAt,
+          },
+        },
+      );
+    }
+    const startingSession = creation.session;
     const requestId = randomUUID();
     const openMessage: HostDaemonServerWsMessage = {
       type: "terminal.open",

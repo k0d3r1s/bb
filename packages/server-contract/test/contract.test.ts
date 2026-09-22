@@ -989,6 +989,40 @@ describe("public terminal contracts", () => {
 });
 
 describe("server-contract canonical schemas", () => {
+  it("parses local maintenance acquisition and status payloads", () => {
+    expect(
+      contract.maintenanceAcquireRequestSchema.parse({
+        operationId: "update-1",
+        ownerSecret: "secret",
+        reason: "VPS update",
+        ttlMs: 60_000,
+      }),
+    ).toMatchObject({ operationId: "update-1", ttlMs: 60_000 });
+    expect(
+      contract.maintenanceStatusResponseSchema.parse({
+        lease: null,
+        barrier: [],
+        activity: { activeByKind: {} },
+      }),
+    ).toEqual({
+      lease: null,
+      barrier: [],
+      activity: { activeByKind: {} },
+    });
+    expect(
+      contract.maintenanceIdentityResponseSchema.parse({
+        service: "bb-maintenance",
+        protocolVersion: 2,
+        releaseIdentity: "/srv/releases/abc123",
+        connectedHostIds: ["host-1"],
+      }),
+    ).toEqual({
+      service: "bb-maintenance",
+      protocolVersion: 2,
+      releaseIdentity: "/srv/releases/abc123",
+      connectedHostIds: ["host-1"],
+    });
+  });
   it("parses lifecycle API error envelopes by code", () => {
     expect(
       contract.lifecycleApiErrorSchema.parse({
@@ -1197,6 +1231,7 @@ describe("server-contract canonical schemas", () => {
           originKind: null,
           originPluginId: null,
           visibility: "visible",
+          worktreePromotion: "declined",
           archivedAt: null,
           pinnedAt: null,
           pinSortKey: null,

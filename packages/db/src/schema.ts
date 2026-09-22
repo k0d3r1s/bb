@@ -1326,3 +1326,5 @@ export const projectAttachmentBackfills = sqliteTable(
     error: text("error"),
   },
 );
+
+export * from "./schema.fork.js";

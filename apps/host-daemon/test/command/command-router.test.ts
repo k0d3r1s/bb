@@ -2,6 +2,11 @@ import type {
   HostDaemonCommand,
   HostDaemonOnlineRpcRequestMessage,
   HostDaemonOnlineRpcResponseMessage,
+  HostDaemonRpcCommand,
+} from "@bb/host-daemon-contract";
+import {
+  hostDaemonCommandQuiescePolicyByType,
+  hostDaemonCommandRegistry,
 } from "@bb/host-daemon-contract";
 import { WorkspaceError } from "@bb/host-workspace";
 import {
@@ -41,7 +46,7 @@ type ThreadStartCommand = Extract<HostDaemonCommand, { type: "thread.start" }>;
 type TurnSubmitCommand = Extract<HostDaemonCommand, { type: "turn.submit" }>;
 
 interface RunRouterCommandArgs {
-  command: HostDaemonCommand;
+  command: HostDaemonRpcCommand;
   requestId: string;
   router: CommandRouter;
 }
@@ -210,6 +215,137 @@ async function runRouterCommand({
 }
 
 describe("CommandRouter", () => {
+  it("rejects execution starts after the work barrier while allowing stop", async () => {
+    const harness = createHarness({ workspacePath: "/tmp/env-router" });
+    const router = createRouter(harness);
+
+    const quiesce = await runRouterCommand({
+      command: {
+        type: "work.quiesce",
+        operationId: "update-1",
+        expiresAt: Date.now() + 60_000,
+      },
+      requestId: "quiesce-env-router",
+      router,
+    });
+    expect(quiesce).toMatchObject({
+      ok: true,
+      result: { operationId: "update-1", gatePhase: "draining" },
+    });
+
+    const start = await runRouterCommand({
+      command: createThreadStartCommand(),
+      requestId: "start-during-quiesce",
+      router,
+    });
+    expect(start).toMatchObject({ ok: false, errorCode: "work_quiesced" });
+
+    const executionStartDescriptors = Object.values(
+      hostDaemonCommandRegistry,
+    ).filter(
+      (descriptor) =>
+        hostDaemonCommandQuiescePolicyByType[descriptor.type] ===
+        "execution-start",
+    );
+    for (const descriptor of executionStartDescriptors) {
+      const response = await runRouterCommand({
+        command: { type: descriptor.type } as HostDaemonRpcCommand,
+        requestId: `quiesced-${descriptor.type}`,
+        router,
+      });
+      expect(response, descriptor.type).toMatchObject({
+        ok: false,
+        errorCode: "work_quiesced",
+      });
+    }
+
+    const stop = await runRouterCommand({
+      command: {
+        type: "thread.stop",
+        intent: "interrupt",
+        environmentId: "env-router",
+        threadId: "thread-router-start",
+      },
+      requestId: "stop-during-quiesce",
+      router,
+    });
+    expect(stop).not.toMatchObject({ errorCode: "work_quiesced" });
+  });
+
+  it("rejects a start queued immediately behind the work barrier", async () => {
+    const harness = createHarness({ workspacePath: "/tmp/env-router" });
+    const router = createRouter(harness);
+    const barrierTask = runRouterCommand({
+      command: {
+        type: "work.quiesce",
+        operationId: "update-1",
+        expiresAt: Date.now() + 60_000,
+      },
+      requestId: "quiesce-before-start",
+      router,
+    });
+    const startTask = runRouterCommand({
+      command: createThreadStartCommand(),
+      requestId: "start-behind-quiesce",
+      router,
+    });
+
+    await expect(barrierTask).resolves.toMatchObject({ ok: true });
+    await expect(startTask).resolves.toMatchObject({
+      ok: false,
+      errorCode: "work_quiesced",
+    });
+  });
+
+  it("acknowledges a work barrier behind an earlier start admission", async () => {
+    const harness = createHarness({ workspacePath: "/tmp/env-router" });
+    await harness.manager.ensureEnvironment({
+      environmentId: "env-router",
+      workspacePath: "/tmp/env-router",
+    });
+    const startEntered = createDeferredPromise<void>();
+    const releaseStart = createDeferredPromise<void>();
+    const originalStartThread = harness.runtime.startThread;
+    harness.runtime.startThread = async (args) => {
+      startEntered.resolve();
+      await releaseStart.promise;
+      return originalStartThread(args);
+    };
+    const router = createRouter(harness);
+    const startTask = runRouterCommand({
+      command: createThreadStartCommand(),
+      requestId: "start-before-quiesce",
+      router,
+    });
+    await startEntered.promise;
+
+    let barrierResolved = false;
+    const barrierTask = runRouterCommand({
+      command: {
+        type: "work.quiesce",
+        operationId: "update-1",
+        expiresAt: Date.now() + 60_000,
+      },
+      requestId: "quiesce-behind-start",
+      router,
+    }).then((response) => {
+      barrierResolved = true;
+      return response;
+    });
+    await flushAsyncWork();
+    expect(barrierResolved).toBe(false);
+
+    releaseStart.resolve();
+    expect((await startTask).ok).toBe(true);
+    expect(await barrierTask).toMatchObject({
+      ok: true,
+      result: {
+        gatePhase: "draining",
+        activity: { activeByKind: { thread: 1 } },
+      },
+    });
+  });
+
   it("does not warn for expected provision cancellation RPC failures", async () => {
     const harness = createHarness({ workspacePath: "/tmp/env-router" });
     const logger = {
