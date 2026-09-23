@@ -141,7 +141,7 @@ test("parses updater modes", () => {
 async function createCurrentUpdaterFixture({
   branch = "main",
   forkHead = "fork123",
-  pushUrl = "https://github.com/k0d3r1s/bb.git",
+  pushUrl = "https://github.com/lettland/bb.git",
 } = {}) {
   const binDirectory = await mkdtemp(
     path.join(os.tmpdir(), "bb-local-updater-current-bin-"),
@@ -158,7 +158,7 @@ case "$*" in
   "branch --show-current") printf '%s\n' "$BB_TEST_BRANCH" ;;
   "status --porcelain=v1 --untracked-files=all") ;;
   "rev-parse --short HEAD") printf '%s\n' abc1234 ;;
-  "remote -v") printf '%s\n' 'origin https://github.com/k0d3r1s/bb.git (fetch)' ;;
+  "remote -v") printf '%s\n' 'origin https://github.com/lettland/bb.git (fetch)' ;;
   "remote get-url --push --all origin") printf '%s\n' "$BB_TEST_PUSH_URL" ;;
   "rev-parse --verify refs/remotes/origin/main")
     if [ -n "$BB_TEST_FORK_HEAD" ]; then printf '%s\n' "$BB_TEST_FORK_HEAD"; else exit 1; fi
@@ -293,7 +293,7 @@ test("installs, updates, or reinstalls an external plugin by current source", ()
   assert.equal(externalPluginSyncAction(null), "install");
   assert.equal(
     externalPluginSyncAction(
-      "git:https://github.com/k0d3r1s/bb-plugins.git@main",
+      "git:https://github.com/lettland/bb-plugins.git@main",
     ),
     "update",
   );
@@ -301,25 +301,56 @@ test("installs, updates, or reinstalls an external plugin by current source", ()
   assert.equal(externalPluginSyncAction("path:/some/dir"), "reinstall");
 });
 
+test("reinstalls a git plugin whose collection repository moved", () => {
+  assert.equal(
+    externalPluginSyncAction(
+      "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      "git:https://github.com/lettland/bb-plugins.git@master",
+    ),
+    "reinstall",
+  );
+  assert.equal(
+    externalPluginSyncAction(
+      "git:https://github.com/lettland/bb-plugins.git@master",
+      "git:https://github.com/lettland/bb-plugins.git@master",
+    ),
+    "update",
+  );
+  assert.equal(
+    externalPluginSyncAction(
+      "git:https://github.com/lettland/bb-plugins.git@30f91fd977ba1ce60532af27a68534464fb62516",
+      "git:https://github.com/lettland/bb-plugins.git@master",
+    ),
+    "update",
+  );
+  assert.equal(
+    externalPluginSyncAction(
+      "git:https://git.example.com/lettland/bb-plugins.git@master",
+      "git:https://github.com/lettland/bb-plugins.git@master",
+    ),
+    "update",
+  );
+});
+
 test("derives the raw collection manifest URL from a git source", () => {
   assert.equal(
     collectionManifestUrl(
-      "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      "git:https://github.com/lettland/bb-plugins.git@master",
     ),
-    "https://raw.githubusercontent.com/k0d3r1s/bb-plugins/master/.bb/plugins.json",
+    "https://raw.githubusercontent.com/lettland/bb-plugins/master/.bb/plugins.json",
   );
   assert.equal(
-    collectionManifestUrl("git:https://github.com/k0d3r1s/bb-plugins@main"),
-    "https://raw.githubusercontent.com/k0d3r1s/bb-plugins/main/.bb/plugins.json",
+    collectionManifestUrl("git:https://github.com/lettland/bb-plugins@main"),
+    "https://raw.githubusercontent.com/lettland/bb-plugins/main/.bb/plugins.json",
   );
   assert.equal(
     collectionManifestUrl(
-      "git:https://github.com/k0d3r1s/bb-plugins.git@release/1.2",
+      "git:https://github.com/lettland/bb-plugins.git@release/1.2",
     ),
-    "https://raw.githubusercontent.com/k0d3r1s/bb-plugins/release/1.2/.bb/plugins.json",
+    "https://raw.githubusercontent.com/lettland/bb-plugins/release/1.2/.bb/plugins.json",
   );
   assert.throws(
-    () => collectionManifestUrl("npm:@k0d3r1s/bb-plugin-k0d3"),
+    () => collectionManifestUrl("npm:@lettland/bb-plugin-k0d3"),
     /collection manifest URL/u,
   );
 });
@@ -328,7 +359,7 @@ test("reads plugin names from a collection manifest", () => {
   assert.deepEqual(
     collectionEntryNames({
       schemaVersion: 1,
-      name: "k0d3r1s-plugins",
+      name: "lettland-plugins",
       plugins: [
         { name: "auto-review", source: "./plugins/auto-review" },
         { name: "k0d3", source: "./plugins/k0d3" },
@@ -372,14 +403,14 @@ test("reads plugin names from a collection manifest", () => {
 test("expands a collection into one install spec per plugin", async () => {
   const requested = [];
   const plugins = await resolveExternalPlugins(
-    [{ source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" }],
+    [{ source: "git:https://github.com/lettland/bb-plugins.git@master" }],
     async (url) => {
       requested.push(url);
       return {
         ok: true,
         json: async () => ({
           schemaVersion: 1,
-          name: "k0d3r1s-plugins",
+          name: "lettland-plugins",
           plugins: [
             { name: "auto-review", source: "./plugins/auto-review" },
             { name: "k0d3", source: "./plugins/k0d3" },
@@ -389,18 +420,18 @@ test("expands a collection into one install spec per plugin", async () => {
     },
   );
   assert.deepEqual(requested, [
-    "https://raw.githubusercontent.com/k0d3r1s/bb-plugins/master/.bb/plugins.json",
+    "https://raw.githubusercontent.com/lettland/bb-plugins/master/.bb/plugins.json",
   ]);
   assert.deepEqual(plugins, [
     {
       id: "auto-review",
       plugin: "auto-review",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
     {
       id: "k0d3",
       plugin: "k0d3",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
   ]);
 });
@@ -408,7 +439,7 @@ test("expands a collection into one install spec per plugin", async () => {
 test("fails loudly when a collection manifest is unreachable", async () => {
   await assert.rejects(
     resolveExternalPlugins(
-      [{ source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" }],
+      [{ source: "git:https://github.com/lettland/bb-plugins.git@master" }],
       async () => ({ ok: false, status: 404, json: async () => ({}) }),
     ),
     /HTTP 404/u,
@@ -418,7 +449,7 @@ test("fails loudly when a collection manifest is unreachable", async () => {
 test("labels a network failure with the manifest URL", async () => {
   await assert.rejects(
     resolveExternalPlugins(
-      [{ source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" }],
+      [{ source: "git:https://github.com/lettland/bb-plugins.git@master" }],
       async () => {
         throw new Error("getaddrinfo ENOTFOUND");
       },
@@ -430,7 +461,7 @@ test("labels a network failure with the manifest URL", async () => {
 test("labels a non-JSON manifest body with the manifest URL", async () => {
   await assert.rejects(
     resolveExternalPlugins(
-      [{ source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" }],
+      [{ source: "git:https://github.com/lettland/bb-plugins.git@master" }],
       async () => ({
         ok: true,
         json: async () => {
@@ -444,35 +475,37 @@ test("labels a non-JSON manifest body with the manifest URL", async () => {
 
 test("keys a collection source by owner, repo, and ref, ignoring .git", () => {
   assert.equal(
-    collectionSourceKey("git:https://github.com/k0d3r1s/bb-plugins.git@master"),
-    "k0d3r1s/bb-plugins@master",
+    collectionSourceKey(
+      "git:https://github.com/lettland/bb-plugins.git@master",
+    ),
+    "lettland/bb-plugins@master",
   );
   assert.equal(
-    collectionSourceKey("git:https://github.com/k0d3r1s/bb-plugins@master"),
-    "k0d3r1s/bb-plugins@master",
+    collectionSourceKey("git:https://github.com/lettland/bb-plugins@master"),
+    "lettland/bb-plugins@master",
   );
   assert.equal(collectionSourceKey("builtin:auto-review"), null);
 });
 
 test("flags installed collection plugins that left the manifest", () => {
   const collections = [
-    { source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" },
+    { source: "git:https://github.com/lettland/bb-plugins.git@master" },
   ];
   const desired = [
     {
       id: "k0d3",
       plugin: "k0d3",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
   ];
   const installed = [
     {
       id: "auto-review",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
     {
       id: "k0d3",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
     { id: "advisor", source: "git:https://github.com/salemsayed/x.git@main" },
     { id: "connect", source: "builtin:connect" },
@@ -485,12 +518,12 @@ test("flags installed collection plugins that left the manifest", () => {
 
 test("never removes plugins from another repo or a different ref", () => {
   const collections = [
-    { source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" },
+    { source: "git:https://github.com/lettland/bb-plugins.git@master" },
   ];
   const installed = [
     {
       id: "same-repo-other-ref",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@next",
+      source: "git:https://github.com/lettland/bb-plugins.git@next",
     },
     {
       id: "other-repo",
@@ -502,12 +535,12 @@ test("never removes plugins from another repo or a different ref", () => {
 
 test("flags every collection plugin when the desired set is empty", () => {
   const collections = [
-    { source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" },
+    { source: "git:https://github.com/lettland/bb-plugins.git@master" },
   ];
   const installed = [
     {
       id: "auto-review",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
     { id: "connect", source: "builtin:connect" },
   ];
@@ -518,20 +551,20 @@ test("flags every collection plugin when the desired set is empty", () => {
 
 test("scopes desired ids per collection source, not as a flat union", () => {
   const collections = [
-    { source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" },
-    { source: "git:https://github.com/k0d3r1s/other-plugins.git@master" },
+    { source: "git:https://github.com/lettland/bb-plugins.git@master" },
+    { source: "git:https://github.com/lettland/other-plugins.git@master" },
   ];
   const desired = [
     {
       id: "shared",
       plugin: "shared",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
   ];
   const installed = [
     {
       id: "shared",
-      source: "git:https://github.com/k0d3r1s/other-plugins.git@master",
+      source: "git:https://github.com/lettland/other-plugins.git@master",
     },
   ];
   assert.deepEqual(
@@ -542,19 +575,19 @@ test("scopes desired ids per collection source, not as a flat union", () => {
 
 test("throws instead of mass-removing when desired and collections are swapped", () => {
   const collections = [
-    { source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" },
+    { source: "git:https://github.com/lettland/bb-plugins.git@master" },
   ];
   const desired = [
     {
       id: "k0d3",
       plugin: "k0d3",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
   ];
   const installed = [
     {
       id: "k0d3",
-      source: "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+      source: "git:https://github.com/lettland/bb-plugins.git@master",
     },
   ];
   assert.deepEqual(
@@ -584,7 +617,7 @@ test("pins a rewritten fork push to the fetched remote head", () => {
 
 test("reads the repository slug from either remote URL form", () => {
   assert.equal(remoteSlug("https://github.com/get-bb/bb.git"), "get-bb/bb");
-  assert.equal(remoteSlug("git@github.com:k0d3r1s/bb.git"), "k0d3r1s/bb");
+  assert.equal(remoteSlug("git@github.com:lettland/bb.git"), "lettland/bb");
   assert.equal(remoteSlug("https://token@github.com/GET-BB/BB"), "get-bb/bb");
 });
 
@@ -592,14 +625,14 @@ test("classifies remotes by URL rather than by name", () => {
   assert.deepEqual(
     resolveRemoteNames([
       { name: "origin", url: "https://github.com/get-bb/bb.git" },
-      { name: "fork", url: "https://github.com/k0d3r1s/bb.git" },
+      { name: "fork", url: "https://github.com/lettland/bb.git" },
     ]),
     { fork: "fork", upstream: "origin" },
   );
   assert.deepEqual(
     resolveRemoteNames([
       { name: "_get-bb", url: "https://github.com/get-bb/bb.git" },
-      { name: "origin", url: "https://github.com/k0d3r1s/bb.git" },
+      { name: "origin", url: "https://github.com/lettland/bb.git" },
     ]),
     { fork: "origin", upstream: "_get-bb" },
   );
@@ -608,7 +641,7 @@ test("classifies remotes by URL rather than by name", () => {
 test("resolves a fork without requiring an upstream remote", () => {
   assert.equal(
     resolveForkRemote([
-      { name: "origin", url: "https://github.com/k0d3r1s/bb.git" },
+      { name: "origin", url: "https://github.com/lettland/bb.git" },
     ]),
     "origin",
   );
@@ -625,7 +658,7 @@ test("resolves a fork without requiring an upstream remote", () => {
         {
           name: "origin",
           pushUrls: ["https://github.com/get-bb/bb.git"],
-          url: "https://github.com/k0d3r1s/bb.git",
+          url: "https://github.com/lettland/bb.git",
         },
       ]),
     /refusing to force-push to upstream/u,
@@ -637,8 +670,8 @@ test("lets the environment override remote discovery", () => {
     resolveRemoteNames(
       [
         { name: "_get-bb", url: "https://github.com/get-bb/bb.git" },
-        { name: "origin", url: "https://github.com/k0d3r1s/bb.git" },
-        { name: "mirror", url: "https://github.com/k0d3r1s/bb-mirror.git" },
+        { name: "origin", url: "https://github.com/lettland/bb.git" },
+        { name: "mirror", url: "https://github.com/lettland/bb-mirror.git" },
       ],
       { fork: "mirror" },
     ),
@@ -660,7 +693,7 @@ test("refuses to guess upstream when no remote matches the slug", () => {
   assert.throws(
     () =>
       resolveRemoteNames([
-        { name: "origin", url: "https://github.com/k0d3r1s/bb.git" },
+        { name: "origin", url: "https://github.com/lettland/bb.git" },
         { name: "_get-bb", url: "https://ghe.example.com/mirror/bb.git" },
       ]),
     /no remote matches get-bb\/bb/u,
@@ -668,7 +701,7 @@ test("refuses to guess upstream when no remote matches the slug", () => {
   assert.deepEqual(
     resolveRemoteNames(
       [
-        { name: "origin", url: "https://github.com/k0d3r1s/bb.git" },
+        { name: "origin", url: "https://github.com/lettland/bb.git" },
         { name: "_get-bb", url: "https://ghe.example.com/mirror/bb.git" },
       ],
       { upstream: "_get-bb" },
@@ -683,7 +716,7 @@ test("refuses overrides that collapse fork and upstream onto one remote", () => 
       resolveRemoteNames(
         [
           { name: "_get-bb", url: "https://github.com/get-bb/bb.git" },
-          { name: "mirror", url: "https://github.com/k0d3r1s/bb-mirror.git" },
+          { name: "mirror", url: "https://github.com/lettland/bb-mirror.git" },
         ],
         { fork: "mirror", upstream: "mirror" },
       ),
@@ -697,7 +730,7 @@ test("refuses a fork override that points at upstream", () => {
       resolveRemoteNames(
         [
           { name: "_get-bb", url: "https://github.com/get-bb/bb.git" },
-          { name: "origin", url: "https://github.com/k0d3r1s/bb.git" },
+          { name: "origin", url: "https://github.com/lettland/bb.git" },
         ],
         { fork: "_get-bb" },
       ),

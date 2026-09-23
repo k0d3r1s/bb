@@ -24,11 +24,15 @@ import {
   readVpsOperation,
 } from "./local-vps-operation.mjs";
 import {
-  externalPluginSyncAction,
+  externalPluginCollections,
   gitOutput,
   npmEnvironment,
+  parseInstalledPlugins,
   pushArguments,
+  resolveExternalPlugins,
   resolveRemoteNames,
+  syncCollectionPlugin,
+  unlistedCollectionPluginIds,
 } from "./update-local-desktop.mjs";
 import { canonicalizeExistingDataDir } from "./install-local-vps-service.mjs";
 
@@ -40,9 +44,6 @@ const upstreamBranch = process.env.BB_LOCAL_UPSTREAM_BRANCH ?? "main";
 const forkBranch = process.env.BB_LOCAL_FORK_BRANCH ?? "main";
 const defaultTtlMs = 300_000;
 export const VPS_NODE_ENGINE = "^22.19.0";
-const vpsPluginCollection =
-  "git:https://github.com/k0d3r1s/bb-plugins.git@master";
-const vpsCollectionPlugins = ["shared-runtime", "dir-skills"];
 
 function healthUrl() {
   const port = process.env.BB_SERVER_PORT ?? "38886";
@@ -918,43 +919,45 @@ function restoreVpsPluginSource(cli, id, source, execute) {
   }
 }
 
-function installVpsCollectionPlugin(cli, id, execute) {
-  execute(cli, [
-    "plugin",
-    "install",
-    "--yes",
-    "--plugin",
-    id,
-    vpsPluginCollection,
-  ]);
-}
-
-export function syncVpsPlugins({ cli }, execute = run) {
-  const snapshots = vpsCollectionPlugins.map((id) => ({
-    id,
-    source: readVpsPluginSource(cli, id, execute),
-  }));
-  const touched = new Set();
+export function syncVpsPlugins({ cli, plugins, collections }, execute = run) {
+  const readSource = (id) => readVpsPluginSource(cli, id, execute);
+  const unlisted = unlistedCollectionPluginIds(
+    parseInstalledPlugins(
+      execute(cli, ["plugin", "list", "--json"], { capture: true }).stdout,
+    ),
+    collections,
+    plugins,
+  );
+  const snapshots = new Map(
+    [...plugins.map((plugin) => plugin.id), ...unlisted].map((id) => [
+      id,
+      readSource(id),
+    ]),
+  );
+  const touched = [];
   try {
-    for (const { id, source } of snapshots) {
-      touched.add(id);
-      const action = externalPluginSyncAction(source?.requested ?? null);
-      if (action === "update") {
-        execute(cli, ["plugin", "update", id]);
-        continue;
-      }
-      if (action === "reinstall") {
-        execute(cli, ["plugin", "remove", id]);
-      }
-      installVpsCollectionPlugin(cli, id, execute);
+    for (const plugin of plugins) {
+      touched.push(plugin.id);
+      syncCollectionPlugin(
+        plugin,
+        snapshots.get(plugin.id)?.requested ?? null,
+        { command: (args) => execute(cli, args), readSource },
+      );
+    }
+    if (unlisted.length > 0) {
+      console.log(
+        `Removing ${unlisted.length} external plugin(s) no longer in the collection manifest; their settings, secrets, and schedules are dropped: ${unlisted.join(", ")}`,
+      );
+    }
+    for (const id of unlisted) {
+      touched.push(id);
+      execute(cli, ["plugin", "remove", id]);
     }
   } catch (error) {
     const restorationErrors = [];
-    for (const plugin of snapshots
-      .filter((entry) => touched.has(entry.id))
-      .toReversed()) {
+    for (const id of touched.toReversed()) {
       try {
-        restoreVpsPluginSource(cli, plugin.id, plugin.source, execute);
+        restoreVpsPluginSource(cli, id, snapshots.get(id), execute);
       } catch (restorationError) {
         restorationErrors.push(restorationError);
       }
@@ -1726,6 +1729,7 @@ export async function updateLocalVps(argv) {
   let previousForkHead;
   let remotes;
   let upstreamRef;
+  let externalPlugins = [];
   try {
     branch = requireCleanPrimary();
     assertPushBranch(branch, forkBranch, options.push);
@@ -1778,6 +1782,14 @@ export async function updateLocalVps(argv) {
     requireCleanPrimary();
     commit = gitOutput(["rev-parse", "HEAD"]);
     await validateToolchain(releaseRoot);
+    if (options.plugins && !options.stageOnly && !options.bootstrap) {
+      externalPlugins = await resolveExternalPlugins(externalPluginCollections);
+      console.log(
+        `External plugin(s) to synchronize: ${externalPlugins
+          .map((plugin) => plugin.id)
+          .join(", ")}`,
+      );
+    }
     await store.transition("validating", {
       branch,
       upstreamRef,
@@ -1993,7 +2005,11 @@ export async function updateLocalVps(argv) {
                   "dist",
                   "bb",
                 );
-              syncVpsPlugins({ cli });
+              syncVpsPlugins({
+                cli,
+                plugins: externalPlugins,
+                collections: externalPluginCollections,
+              });
             },
           },
         },

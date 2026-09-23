@@ -28,8 +28,8 @@ const officialApp = "/Applications/bb.app";
 const officialProcessPattern = "^/Applications/bb\\.app/Contents/MacOS/bb( |$)";
 const localProcessPattern =
   "^/Applications/bb Local\\.app/Contents/MacOS/bb( |$)";
-const externalPluginCollections = [
-  { source: "git:https://github.com/k0d3r1s/bb-plugins.git@master" },
+export const externalPluginCollections = [
+  { source: "git:https://github.com/lettland/bb-plugins.git@master" },
 ];
 const npmScriptPolicyEnvironmentKeys = new Set([
   "npm_config_allow_scripts",
@@ -57,10 +57,16 @@ export function parseLocalUpdateArgs(argv) {
   return options;
 }
 
-export function externalPluginSyncAction(requested) {
+export function externalPluginSyncAction(requested, desired = null) {
   if (requested === null) return "install";
-  if (requested.startsWith("git:")) return "update";
-  return "reinstall";
+  if (!requested.startsWith("git:")) return "reinstall";
+  const requestedRepository = collectionRepositoryKey(requested);
+  const desiredRepository =
+    desired === null ? null : collectionRepositoryKey(desired);
+  if (requestedRepository === null || desiredRepository === null) {
+    return "update";
+  }
+  return requestedRepository === desiredRepository ? "update" : "reinstall";
 }
 
 function parseGithubGitSource(source) {
@@ -88,6 +94,11 @@ export function collectionSourceKey(source) {
   return parsed === null
     ? null
     : `${parsed.owner}/${parsed.repository}@${parsed.ref}`;
+}
+
+export function collectionRepositoryKey(source) {
+  const parsed = parseGithubGitSource(source);
+  return parsed === null ? null : `${parsed.owner}/${parsed.repository}`;
 }
 
 export function unlistedCollectionPluginIds(installed, collections, desired) {
@@ -619,35 +630,46 @@ export async function ensurePluginServerAvailable({
   }
 }
 
-function syncExternalPlugin(cli, plugin) {
-  const action = externalPluginSyncAction(readPluginSource(cli, plugin.id));
+export function syncCollectionPlugin(
+  plugin,
+  requested,
+  { command, readSource },
+) {
+  const action = externalPluginSyncAction(requested, plugin.source);
   if (action === "update") {
-    run(cli, ["plugin", "update", plugin.id], { env: { BB_CLI: cli } });
+    command(["plugin", "update", plugin.id]);
     return;
   }
   if (action === "reinstall") {
-    run(cli, ["plugin", "remove", plugin.id], { env: { BB_CLI: cli } });
+    command(["plugin", "remove", plugin.id]);
   }
-  run(
-    cli,
-    ["plugin", "install", "--yes", "--plugin", plugin.plugin, plugin.source],
-    { env: { BB_CLI: cli } },
-  );
-  if (readPluginSource(cli, plugin.id) === null) {
+  command([
+    "plugin",
+    "install",
+    "--yes",
+    "--plugin",
+    plugin.plugin,
+    plugin.source,
+  ]);
+  if (readSource(plugin.id) === null) {
     throw new Error(
       `installed collection plugin "${plugin.plugin}" is not registered as id "${plugin.id}"; its .bb/plugins.json entry name must match the plugin's derived id`,
     );
   }
 }
 
-function readInstalledPlugins(cli) {
-  const result = run(cli, ["plugin", "list", "--json"], {
-    env: { BB_CLI: cli },
-    capture: true,
+function syncExternalPlugin(cli, plugin) {
+  const readSource = (id) => readPluginSource(cli, id);
+  syncCollectionPlugin(plugin, readSource(plugin.id), {
+    command: (args) => run(cli, args, { env: { BB_CLI: cli } }),
+    readSource,
   });
+}
+
+export function parseInstalledPlugins(stdout) {
   let parsed;
   try {
-    parsed = JSON.parse(result.stdout);
+    parsed = JSON.parse(stdout);
   } catch (error) {
     throw new Error(
       `cannot parse \`bb plugin list --json\` output: ${error instanceof Error ? error.message : String(error)}`,
@@ -655,6 +677,15 @@ function readInstalledPlugins(cli) {
     );
   }
   return Array.isArray(parsed.plugins) ? parsed.plugins : [];
+}
+
+function readInstalledPlugins(cli) {
+  return parseInstalledPlugins(
+    run(cli, ["plugin", "list", "--json"], {
+      env: { BB_CLI: cli },
+      capture: true,
+    }).stdout,
+  );
 }
 
 function removeUnlistedCollectionPlugins(cli, collections, desired) {

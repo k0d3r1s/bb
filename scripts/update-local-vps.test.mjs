@@ -991,59 +991,203 @@ test("plugin source restoration failure retains sealed maintenance", async () =>
   assert.equal(harness.calls.at(-1), "transition:rollback-failed");
 });
 
-test("partial VPS plugin synchronization restores every previous source", () => {
-  const sources = new Map([
-    ["shared-runtime", "path:/old/shared-runtime"],
-    ["dir-skills", "path:/old/dir-skills"],
-  ]);
-  const collection = "git:https://github.com/k0d3r1s/bb-plugins.git@master";
+const vpsCollection = "git:https://github.com/lettland/bb-plugins.git@master";
+const vpsCollections = [{ source: vpsCollection }];
+
+function collectionPlugins(...ids) {
+  return ids.map((id) => ({ id, plugin: id, source: vpsCollection }));
+}
+
+function fakeVpsPluginCli(
+  initial,
+  { failInstall = null, failRemove = null } = {},
+) {
+  const sources = new Map(
+    Object.entries(initial).map(([id, requested]) => [
+      id,
+      requested === vpsCollection
+        ? { requested, subdirectory: `plugins/${id}` }
+        : { requested },
+    ]),
+  );
+  let removeFailed = false;
   const calls = [];
   const execute = (_cli, args) => {
     calls.push(args.join(" "));
     const [group, action] = args;
     assert.equal(group, "plugin");
+    const ok = (stdout = "") => ({ status: 0, stdout, stderr: "" });
+    if (action === "list") {
+      return ok(
+        JSON.stringify({
+          plugins: [...sources].map(([id, source]) => ({
+            id,
+            source: source.requested,
+          })),
+        }),
+      );
+    }
     if (action === "source") {
       const source = sources.get(args[2]);
       return source === undefined
         ? { status: 1, stdout: "", stderr: "unknown plugin" }
-        : {
-            status: 0,
-            stdout: JSON.stringify({ requested: source }),
-            stderr: "",
-          };
+        : ok(JSON.stringify(source));
     }
     if (action === "remove") {
-      sources.delete(args[2]);
-      return { status: 0, stdout: "", stderr: "" };
-    }
-    if (action === "install") {
-      const pluginFlag = args.indexOf("--plugin");
-      const source = args.at(-1);
-      const id =
-        pluginFlag === -1
-          ? source.endsWith("/shared-runtime")
-            ? "shared-runtime"
-            : "dir-skills"
-          : args[pluginFlag + 1];
-      if (id === "dir-skills" && source === collection) {
-        throw new Error("candidate dir-skills failed");
+      if (args[2] === failRemove && !removeFailed) {
+        removeFailed = true;
+        throw new Error(`remove ${args[2]} failed`);
       }
-      sources.set(id, source);
-      return { status: 0, stdout: "", stderr: "" };
+      sources.delete(args[2]);
+      return ok();
+    }
+    if (action === "update") return ok();
+    if (action === "install") {
+      const requested = args.at(-1);
+      const pluginFlag = args.indexOf("--plugin");
+      const subdirectoryFlag = args.indexOf("--subdirectory");
+      const id =
+        pluginFlag !== -1
+          ? args[pluginFlag + 1]
+          : subdirectoryFlag !== -1
+            ? args[subdirectoryFlag + 1].split("/").at(-1)
+            : requested.split("/").at(-1);
+      if (id === failInstall && requested === vpsCollection) {
+        throw new Error(`candidate ${id} failed`);
+      }
+      sources.set(
+        id,
+        pluginFlag !== -1
+          ? { requested, subdirectory: `plugins/${id}` }
+          : subdirectoryFlag !== -1
+            ? { requested, subdirectory: args[subdirectoryFlag + 1] }
+            : { requested },
+      );
+      return ok();
     }
     throw new Error(`unexpected command: ${args.join(" ")}`);
   };
+  const requested = () =>
+    Object.fromEntries(
+      [...sources].map(([id, source]) => [id, source.requested]),
+    );
+  return { calls, execute, requested };
+}
+
+test("partial VPS plugin synchronization restores every previous source", () => {
+  const cli = fakeVpsPluginCli(
+    {
+      "shared-runtime": "path:/old/shared-runtime",
+      "dir-skills": "path:/old/dir-skills",
+    },
+    { failInstall: "dir-skills" },
+  );
 
   assert.throws(
-    () => syncVpsPlugins({ cli: "bb" }, execute),
+    () =>
+      syncVpsPlugins(
+        {
+          cli: "bb",
+          plugins: collectionPlugins("shared-runtime", "dir-skills"),
+          collections: vpsCollections,
+        },
+        cli.execute,
+      ),
     /candidate dir-skills failed/u,
   );
-  assert.deepEqual(Object.fromEntries(sources), {
+  assert.deepEqual(cli.requested(), {
     "shared-runtime": "path:/old/shared-runtime",
     "dir-skills": "path:/old/dir-skills",
   });
-  assert.ok(calls.includes("plugin install --yes path:/old/shared-runtime"));
-  assert.ok(calls.includes("plugin install --yes path:/old/dir-skills"));
+  assert.ok(
+    cli.calls.includes("plugin install --yes path:/old/shared-runtime"),
+  );
+  assert.ok(cli.calls.includes("plugin install --yes path:/old/dir-skills"));
+});
+
+test("VPS plugin synchronization re-points plugins from a moved collection", () => {
+  const cli = fakeVpsPluginCli({
+    "shared-runtime": "git:https://github.com/k0d3r1s/bb-plugins.git@master",
+    "dir-skills": vpsCollection,
+  });
+
+  syncVpsPlugins(
+    {
+      cli: "bb",
+      plugins: collectionPlugins("shared-runtime", "dir-skills"),
+      collections: vpsCollections,
+    },
+    cli.execute,
+  );
+  assert.ok(cli.calls.includes("plugin remove shared-runtime"));
+  assert.ok(
+    cli.calls.includes(
+      `plugin install --yes --plugin shared-runtime ${vpsCollection}`,
+    ),
+  );
+  assert.ok(cli.calls.includes("plugin update dir-skills"));
+  assert.ok(!cli.calls.includes("plugin remove dir-skills"));
+  assert.equal(cli.requested()["shared-runtime"], vpsCollection);
+});
+
+test("VPS plugin synchronization installs every manifest plugin and prunes unlisted collection plugins", () => {
+  const cli = fakeVpsPluginCli({
+    "shared-runtime": vpsCollection,
+    retired: vpsCollection,
+    "local-tool": "path:/opt/local-tool",
+  });
+
+  syncVpsPlugins(
+    {
+      cli: "bb",
+      plugins: collectionPlugins("shared-runtime", "auto-review", "devkit"),
+      collections: vpsCollections,
+    },
+    cli.execute,
+  );
+  assert.deepEqual(cli.requested(), {
+    "shared-runtime": vpsCollection,
+    "auto-review": vpsCollection,
+    devkit: vpsCollection,
+    "local-tool": "path:/opt/local-tool",
+  });
+  assert.ok(cli.calls.includes("plugin remove retired"));
+  assert.ok(!cli.calls.includes("plugin remove local-tool"));
+});
+
+test("failed VPS plugin synchronization removes newly added plugins and reinstalls pruned ones", () => {
+  const cli = fakeVpsPluginCli(
+    {
+      "shared-runtime": vpsCollection,
+      retired: vpsCollection,
+      stale: vpsCollection,
+    },
+    { failRemove: "stale" },
+  );
+
+  assert.throws(
+    () =>
+      syncVpsPlugins(
+        {
+          cli: "bb",
+          plugins: collectionPlugins("shared-runtime", "devkit"),
+          collections: vpsCollections,
+        },
+        cli.execute,
+      ),
+    /remove stale failed/u,
+  );
+  assert.deepEqual(cli.requested(), {
+    "shared-runtime": vpsCollection,
+    retired: vpsCollection,
+    stale: vpsCollection,
+  });
+  assert.ok(cli.calls.includes("plugin remove devkit"));
+  assert.ok(
+    cli.calls.includes(
+      `plugin install --yes --subdirectory plugins/retired ${vpsCollection}`,
+    ),
+  );
 });
 
 test("rollback failure retains fail-closed maintenance", async () => {

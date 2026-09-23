@@ -142,7 +142,7 @@ is stopped. It starts the official BB app when its server is unavailable,
 fetches upstream `main`, rebases the private commit stack, installs dependencies,
 packages and smoke-tests the local desktop app, ad-hoc signs it, installs it
 beside the official app, and syncs the private plugins from the
-`k0d3r1s/bb-plugins` Git collection. It then stops the official app, starts
+`lettland/bb-plugins` Git collection. It then stops the official app, starts
 `bb Local`, waits for its server to become healthy, and pushes the result to
 the fork's `main` with a force-with-lease. `--check` only fetches and reports
 the upstream and patch counts. `--skip-install`, `--skip-plugins`, and
@@ -166,10 +166,10 @@ name explicitly, `BB_LOCAL_UPSTREAM_SLUG` to track a different upstream
 repository, and `BB_LOCAL_UPSTREAM_BRANCH` or `BB_LOCAL_FORK_BRANCH` to use
 branches other than `main`.
 
-The updater installs the complete `k0d3r1s/bb-plugins` collection. It updates
-plugins already installed from a Git source, replaces plugins installed from
-another source, and removes collection-managed plugins no longer present in
-the manifest.
+The updater installs the complete `lettland/bb-plugins` collection. It updates
+plugins already installed from the collection's own GitHub repository, replaces
+plugins installed from another source or another GitHub repository, and removes
+collection-managed plugins no longer present in the manifest.
 
 To use the dev app from another machine over Tailscale, run `pnpm dev`, note the
 printed app port, and publish the loopback Vite listener:
