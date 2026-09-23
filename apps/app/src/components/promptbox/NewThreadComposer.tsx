@@ -674,7 +674,11 @@ export function NewThreadComposer({
         threads: [],
       },
     ];
-  }, [seededReuseEnvironmentRow, threadDerivedReuseOptions, worktreeHostNameById]);
+  }, [
+    seededReuseEnvironmentRow,
+    threadDerivedReuseOptions,
+    worktreeHostNameById,
+  ]);
   const { value: storedMachineId, setValue: setStoredMachineId } =
     usePromptBoxMachinePreference(projectId);
   const [activeSeedSignature, setActiveSeedSignature] = useState(seedSignature);
@@ -822,7 +826,12 @@ export function NewThreadComposer({
     preferenceProjectId: projectId,
     resetKey: `${projectId}\0${seedSignature}`,
     resolveProviderRouting,
-    initialProviderId: seed?.providerId ?? projectDefaults?.providerId,
+    initialProviderId:
+      seed?.providerId ??
+      (projectDefaults === null
+        ? (systemConfigQuery.data?.generalSettings.defaultProviderId ??
+          undefined)
+        : projectDefaults?.providerId),
     preferReadyProviderWhenUnset:
       preferReadyProviderWhenUnset && projectDefaults === null,
     initialModel: seed?.model ?? projectDefaults?.model,
@@ -1355,7 +1364,13 @@ export function NewThreadComposer({
         setIsUploading(pendingUploadCountRef.current > 0);
       }
     },
-    [projectId, promptDraft, uploadPromptAttachment, startUploads, finishUploads],
+    [
+      projectId,
+      promptDraft,
+      uploadPromptAttachment,
+      startUploads,
+      finishUploads,
+    ],
   );
   const changeProject = useCallback(
     async (nextProjectId: string | null): Promise<ProjectChangeOutcome> => {

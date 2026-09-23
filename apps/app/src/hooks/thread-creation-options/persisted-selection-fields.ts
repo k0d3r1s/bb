@@ -100,6 +100,14 @@ const providerIdAtom = atomWithStorage<string>(
   stringSelectionStorage,
   { getOnInit: true },
 );
+const projectProviderIdAtomFamily = atomFamily((projectId: string) =>
+  atomWithStorage<string>(
+    getProjectScopedStorageKey(PROVIDER_STORAGE_KEY, projectId),
+    "",
+    stringSelectionStorage,
+    { getOnInit: true },
+  ),
+);
 const emptyModelAtom = atom("");
 const emptyReasoningLevelAtom = atom<StoredReasoningLevel>("");
 
@@ -236,8 +244,15 @@ export function usePromptBoxMachinePreference(
   return { value, setValue };
 }
 
-export function usePromptBoxProviderPreference(): PersistedStringSelectionField {
-  const [value, setAtomValue] = useAtom(providerIdAtom);
+export function usePromptBoxProviderPreference(
+  projectId?: string | null,
+): PersistedStringSelectionField {
+  const normalizedProjectId = projectId?.trim();
+  const [value, setAtomValue] = useAtom(
+    normalizedProjectId && normalizedProjectId.length > 0
+      ? projectProviderIdAtomFamily(normalizedProjectId)
+      : providerIdAtom,
+  );
   const setValue = useCallback(
     (nextValue: string) => {
       if (nextValue !== value) {

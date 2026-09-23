@@ -13,7 +13,7 @@ import {
   readServerMovedFile,
   SERVER_MOVED_FILE_NAME,
   type ServerMovedFile,
-} from "@bb/server-archive";
+} from "@bb/server-archive/markers";
 import { z } from "zod";
 import type { ServerProbeFetch } from "./server-probe.js";
 import {

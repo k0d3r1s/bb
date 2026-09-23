@@ -234,7 +234,7 @@ export function useThreadCreationOptions(
     scope = "new-thread",
   } = options ?? {};
   const { setValue: setStoredProviderId, value: storedProviderId } =
-    usePromptBoxProviderPreference();
+    usePromptBoxProviderPreference(preferenceProjectId);
   const setStoredProviderModelReasoning =
     useSetPromptBoxProviderModelReasoningPreference();
   const { setValue: setStoredServiceTier, value: storedServiceTier } =
