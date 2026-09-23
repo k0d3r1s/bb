@@ -156,14 +156,10 @@ const migrationModuleFilename = fileURLToPath(import.meta.url);
 const migrationModuleDirname = dirname(migrationModuleFilename);
 const migrationJournalPath = join("meta", "_journal.json");
 const forkMigrationsTable = "__bb_fork_migrations";
-const legacyWorkQuiesceMigration = {
-  createdAts: [1_789_145_421_512, 1_789_371_340_185, 1_789_478_684_565],
-  hash: "f162a056f845a9e712b63f50351f0651858c5659c6c2fc05cd063f49c15ca87f",
-} as const;
-const legacyWorktreePromotionMigration = {
-  createdAts: [1_789_372_194_462, 1_789_478_820_680],
-  hash: "dbdda013c3b84e828babc97fcebe1761bea42507c6cf8dabcb6dc8b4b392f07d",
-} as const;
+const legacyWorkQuiesceMigrationHash =
+  "f162a056f845a9e712b63f50351f0651858c5659c6c2fc05cd063f49c15ca87f";
+const legacyWorktreePromotionMigrationHash =
+  "dbdda013c3b84e828babc97fcebe1761bea42507c6cf8dabcb6dc8b4b392f07d";
 const deferredDestructiveCleanupMigrationTags = [
   "0015_good_lila_cheney",
   "0016_salty_arclight",
@@ -797,33 +793,20 @@ function readForkMigrationRows(db: DbConnection): AppliedMigrationIdentityRow[] 
     .all();
 }
 
-function readLegacyMigrationRow(
-  db: DbConnection,
-  migration: { createdAts: readonly number[]; hash: string },
-): AppliedMigrationIdentityRow | undefined {
-  return db.$client
-    .prepare<[], AppliedMigrationIdentityRow>(
-      `
-        SELECT hash, created_at AS createdAt
-        FROM __drizzle_migrations
-        WHERE hash = '${migration.hash}'
-          AND created_at IN (${migration.createdAts.join(", ")})
-        ORDER BY created_at DESC
-        LIMIT 1
-      `,
-    )
-    .get();
+function hasLegacyMigrationRow(db: DbConnection, hash: string): boolean {
+  return (
+    db.$client
+      .prepare<[string], { found: number }>(
+        "SELECT 1 AS found FROM __drizzle_migrations WHERE hash = ? AND created_at IS NOT NULL LIMIT 1",
+      )
+      .get(hash) !== undefined
+  );
 }
 
-function deleteLegacyMigrationRow(
-  db: DbConnection,
-  migration: AppliedMigrationRow,
-): void {
+function deleteLegacyMigrationRows(db: DbConnection, hash: string): void {
   db.$client
-    .prepare<[string, number]>(
-      "DELETE FROM __drizzle_migrations WHERE hash = ? AND created_at = ?",
-    )
-    .run(migration.hash, migration.createdAt);
+    .prepare<[string]>("DELETE FROM __drizzle_migrations WHERE hash = ?")
+    .run(hash);
 }
 
 function validateForkMigrationHistory(
@@ -857,7 +840,7 @@ function adoptLegacyForkMigration(
     beforeAdopt?: () => void;
     expectedIndex: number;
     identityError: string;
-    legacy: { createdAts: readonly number[]; hash: string };
+    legacyHash: string;
     missingPrefixError: string;
     validate: (db: DbConnection, migration: ExpectedAppliedMigration) => void;
   },
@@ -865,13 +848,11 @@ function adoptLegacyForkMigration(
   if (!tableExists(db, "__drizzle_migrations")) {
     return;
   }
-  const legacy = readLegacyMigrationRow(db, args.legacy);
-  if (legacy?.createdAt === null || legacy?.createdAt === undefined) {
+  if (!hasLegacyMigrationRow(db, args.legacyHash)) {
     return;
   }
-  const legacyCreatedAt = legacy.createdAt;
   const expectedMigration = forkMigrations[args.expectedIndex];
-  if (expectedMigration?.hash !== args.legacy.hash) {
+  if (expectedMigration?.hash !== args.legacyHash) {
     throw new Error(args.identityError);
   }
   const forkRows = readForkMigrationRows(db);
@@ -889,7 +870,7 @@ function adoptLegacyForkMigration(
         )
         .run(expectedMigration.hash, expectedMigration.createdAt);
     }
-    deleteLegacyMigrationRow(db, { ...legacy, createdAt: legacyCreatedAt });
+    deleteLegacyMigrationRows(db, args.legacyHash);
   });
   adopt();
 }
@@ -909,7 +890,7 @@ function prepareForkMigrations(
       repairLegacySkippedUpstreamMigrations(db, migrationsFolder),
     expectedIndex: 0,
     identityError: "Fork work-quiesce migration identity changed unexpectedly",
-    legacy: legacyWorkQuiesceMigration,
+    legacyHash: legacyWorkQuiesceMigrationHash,
     missingPrefixError: "Cannot adopt work quiesce before its fork prefix",
     validate: (connection, migration) =>
       validateLegacyWorkQuiesceSchema(connection, migration),
@@ -918,7 +899,7 @@ function prepareForkMigrations(
     expectedIndex: 1,
     identityError:
       "Fork worktree-promotion migration identity changed unexpectedly",
-    legacy: legacyWorktreePromotionMigration,
+    legacyHash: legacyWorktreePromotionMigrationHash,
     missingPrefixError: "Cannot adopt worktree promotion before work quiesce",
     validate: (connection, migration) =>
       validateLegacyWorktreePromotionSchema(connection, migration),

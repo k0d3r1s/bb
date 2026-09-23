@@ -382,6 +382,7 @@ describe("builtin plugin reconciliation", () => {
     service = createService({ db, dataDir });
     await service.start();
     expect(service.list()[0]?.isOrphanedBuiltin).toBe(false);
+    expect(service.isBundledBuiltin("builtin-fixture")).toBe(true);
     await service.stop();
     setPluginSettingsValues(db, "builtin-fixture", { mode: "on" });
     upsertPluginSchedule(db, {
@@ -411,6 +412,7 @@ describe("builtin plugin reconciliation", () => {
     expect(service.list()).toMatchObject([
       { id: "builtin-fixture", enabled: true, isOrphanedBuiltin: false },
     ]);
+    expect(service.isBundledBuiltin("builtin-fixture")).toBe(true);
   });
 
   it("retries orphaned builtin cleanup after secret removal fails", async () => {

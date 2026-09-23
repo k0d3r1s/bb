@@ -14,8 +14,8 @@ const worktreePromotionHash =
   "dbdda013c3b84e828babc97fcebe1761bea42507c6cf8dabcb6dc8b4b392f07d";
 const branchPromotionHash =
   "9c385da0fe1dc75da9cc083a73b6dff8bd86eb6e23a32250823001138f2fc54a";
-const legacyWorkQuiesceWhen = 1_789_478_684_565;
-const legacyWorktreePromotionWhen = 1_789_478_820_680;
+const legacyWorkQuiesceWhen = 1_789_631_822_477;
+const legacyWorktreePromotionWhen = 1_789_631_836_275;
 const threadStorageDeletedAtWhen = 1_789_421_366_079;
 
 interface MigrationRow {

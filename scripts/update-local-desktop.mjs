@@ -794,6 +794,7 @@ async function updateLocalDesktop(argv) {
   });
   run("codesign", ["--force", "--deep", "--sign", "-", packagedApp]);
   run("codesign", ["--verify", "--deep", "--strict", packagedApp]);
+  if (options.install) await installAndActivateLocalApp();
   if (options.plugins) {
     console.log(
       `Syncing ${externalPlugins.length} external plugin(s): ${externalPlugins
@@ -807,7 +808,6 @@ async function updateLocalDesktop(argv) {
       externalPlugins,
     );
   }
-  if (options.install) await installAndActivateLocalApp();
   if (options.push) {
     if (remotes === null) throw new Error("fork remote was not resolved");
     run("git", pushArguments(previousForkHead, remotes.fork));
