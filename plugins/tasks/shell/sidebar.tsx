@@ -254,8 +254,22 @@ export function TasksSidebar({
             onClick={() => onNavigate({ kind: "all" })}
           >
             <Icon name="ListView" className="size-3.5 shrink-0" />
-            <span className="flex-1">All tasks</span>
+            <span className="flex-1">Focus</span>
             {summaries ? <RowCount value={totalTasks} /> : null}
+          </SidebarRow>
+          <SidebarRow
+            active={route.kind === "recent"}
+            onClick={() => onNavigate({ kind: "recent", projectId: null })}
+          >
+            <Icon name="TimeSchedule" className="size-3.5 shrink-0" />
+            <span className="flex-1">Recently closed</span>
+          </SidebarRow>
+          <SidebarRow
+            active={route.kind === "archive"}
+            onClick={() => onNavigate({ kind: "archive", projectId: null })}
+          >
+            <Icon name="Archive" className="size-3.5 shrink-0" />
+            <span className="flex-1">Archive</span>
           </SidebarRow>
           <SidebarRow
             active={route.kind === "active"}

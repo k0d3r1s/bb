@@ -279,6 +279,13 @@ import type {
   WorkspaceFileListResponse,
   WorkspacePathListResponse,
 } from "./api-types.js";
+import type { ThreadExecutionProfileResponse } from "./api/threads.js";
+import {
+  spendRollupQuerySchema,
+  type SpendBackfillResponse,
+  type SpendRollupQuery,
+  type SpendRollupResponse,
+} from "./api/spend.js";
 import type {
   ThreadTabsWireResponse,
   UpdateThreadTabsRequest,
@@ -1633,6 +1640,12 @@ export const publicApiRoutes = {
       request: noRequest<PathId>(),
       response: jsonResponse<ResolvedThreadExecutionOptions | null>(),
     }),
+    executionProfile: defineRoute({
+      path: "/threads/:id/execution-profile",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<ThreadExecutionProfileResponse>(),
+    }),
     storageFiles: defineRoute({
       path: "/threads/:id/thread-storage/files",
       method: "get",
@@ -1690,6 +1703,23 @@ export const publicApiRoutes = {
         threadFilesRawQuerySchema,
       ),
       response: binaryResponse<Uint8Array>(),
+    }),
+  },
+
+  spend: {
+    rollup: defineRoute({
+      path: "/spend/rollup",
+      method: "get",
+      request: optionalQueryRequest<EmptyInput, SpendRollupQuery>(
+        spendRollupQuerySchema,
+      ),
+      response: jsonResponse<SpendRollupResponse>(),
+    }),
+    backfill: defineRoute({
+      path: "/spend/backfill",
+      method: "post",
+      request: noRequest(),
+      response: jsonResponse<SpendBackfillResponse>(),
     }),
   },
 

@@ -30,6 +30,9 @@ For task dispatch and execution presets, read
    same filters/sort and `--cursor <value>`. A task-list mutation makes an old
    cursor stale, so restart without it.
 
+   Normal lists omit archived tasks. Use `bb tasks list --archived` to inspect
+   archived records or `--include-archived` when both visibility states matter.
+
 2. Fetch every relevant attachment before making assumptions about it:
 
    ```sh
@@ -77,6 +80,20 @@ For task dispatch and execution presets, read
    If the work cannot proceed, leave the status accurate and comment with the
    specific blocker, what you tried, and what would unblock it. Do not mark a
    blocked task complete.
+
+   Archiving is separate from status and is allowed only for Done or Canceled
+   top-level tasks within one project, once every sub-task is closed. It
+   preserves all task history and is recoverable:
+
+   ```sh
+   bb tasks archive ABC-12
+   bb tasks restore ABC-12
+   ```
+
+   Archive and restore carry the task's sub-tasks with it; archive or restore
+   the parent rather than a sub-task. Restoring resets the seven-day
+   auto-archive clock, so a restored task stays in Recently closed for another
+   seven days.
 
 6. Delegated threads are attached automatically. If this thread was not
    delegated from Tasks, attach it yourself so the task shows the active work:

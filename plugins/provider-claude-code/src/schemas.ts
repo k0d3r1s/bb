@@ -209,6 +209,19 @@ export const claudeModelFallbackSystemMessageSchema = claudeSystemMessageSchema
   })
   .passthrough();
 
+export const claudeInitSystemMessageSchema = claudeSystemMessageSchema
+  .extend({
+    subtype: z.literal("init"),
+    model: z.string().min(1),
+    permissionMode: z.string().optional(),
+    effort: z.string().nullable().optional(),
+    fast_mode_state: z.string().optional(),
+  })
+  .passthrough();
+export type ClaudeInitSystemMessage = z.infer<
+  typeof claudeInitSystemMessageSchema
+>;
+
 export const claudeModelRefusalNoFallbackSystemMessageSchema =
   claudeSystemMessageSchema
     .extend({

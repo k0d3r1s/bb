@@ -18,6 +18,8 @@ import {
   queuedMessageWaitReasonSchema,
   reasoningLevelSchema,
   rawThreadIdSchema,
+  recordedThreadExecutionOptionsSchema,
+  resolvedThreadExecutionOptionsSchema,
   serviceTierSchema,
   startedOnBehalfOfSchema,
   threadCreateOriginSchema,
@@ -30,6 +32,7 @@ import {
   threadTimelineGoalSchema,
   threadTimelineModelFallbackSchema,
   threadTimelinePendingTodosSchema,
+  threadExecutionReportSchema,
   threadEventTypeValues,
   threadVisibilitySchema,
   threadWithRuntimeSchema,
@@ -262,6 +265,19 @@ export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
  * message, and there is only one now — so the useful half of that answer, WHY
  * it is waiting, moved onto the queued arm where it can be typed.
  */
+export const threadExecutionProfileResponseSchema = z.object({
+  lastRequested: recordedThreadExecutionOptionsSchema.nullable(),
+  overrides: z.object({
+    model: z.string().nullable(),
+    reasoningLevel: reasoningLevelSchema.nullable(),
+  }),
+  nextTurn: resolvedThreadExecutionOptionsSchema.nullable(),
+  executed: threadExecutionReportSchema.nullable(),
+});
+export type ThreadExecutionProfileResponse = z.infer<
+  typeof threadExecutionProfileResponseSchema
+>;
+
 export const sendMessageDeliverySchema = z.enum(["sent", "queued"]);
 export type SendMessageDelivery = z.infer<typeof sendMessageDeliverySchema>;
 

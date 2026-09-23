@@ -49,6 +49,8 @@ export interface Task {
   position: number;
   createdAt: string;
   updatedAt: string;
+  archivedAt: string | null;
+  closedAt: string | null;
 }
 
 export interface Label {
@@ -174,6 +176,7 @@ export interface ListTasksFilters {
   priorities?: readonly TaskPriority[];
   labelIds?: readonly string[];
   activeOnly?: boolean;
+  archive?: "active" | "archived" | "all";
   parentTaskId?: string | null;
   search?: string;
   sort?: TaskSort;

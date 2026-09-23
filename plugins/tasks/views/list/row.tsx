@@ -102,6 +102,10 @@ interface TaskRowProps {
   onEdit: EditFn;
   onOpen: () => void;
   pending: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  selectionDisabled?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
 }
 
 export function TaskRow({
@@ -114,6 +118,10 @@ export function TaskRow({
   onEdit,
   onOpen,
   pending,
+  selectable = false,
+  selected = false,
+  selectionDisabled = false,
+  onSelectedChange,
 }: TaskRowProps) {
   const [openMenu, setOpenMenu] = useState<"status" | "priority" | null>(null);
 
@@ -125,9 +133,22 @@ export function TaskRow({
         className={cn(
           "relative grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 border-b border-border-hairline px-3.5 py-1.5 text-left transition-opacity hover:bg-state-hover",
           "@md:flex @md:h-[34px] @md:py-0",
+          selectable && "pl-8",
           pending && "opacity-70",
         )}
       >
+        {selectable ? (
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={selectionDisabled}
+            onChange={(event) =>
+              onSelectedChange?.(event.currentTarget.checked)
+            }
+            aria-label={`Select ${task.key}`}
+            className="absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 accent-primary"
+          />
+        ) : null}
         <button
           type="button"
           aria-label={`Open ${task.key}: ${task.title}`}

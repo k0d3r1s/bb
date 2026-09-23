@@ -24,6 +24,7 @@ import { delegationRpcContract } from "../delegate/contract";
 import { handlers as delegationHandlers } from "../delegate";
 import {
   presetReasoningLevelSchema,
+  TASK_ARCHIVE_BATCH_MAX,
   tasksRpcContract,
   PRESET_PERMISSION_MODES,
   TASK_PRIORITIES,
@@ -94,6 +95,48 @@ interface PluginStatus {
 
 type TasksDomain = ReturnType<typeof registerHandlers>;
 type ListTasksInput = Parameters<TasksDomain["listTasks"]>[0];
+
+async function runArchiveAction(
+  domain: TasksDomain,
+  ctx: PluginCliContext,
+  addresses: readonly string[],
+  action: "archive" | "restore",
+  json: boolean,
+): Promise<string> {
+  if (addresses.length > TASK_ARCHIVE_BATCH_MAX) {
+    throw new CliError(
+      `${action} accepts at most ${TASK_ARCHIVE_BATCH_MAX} tasks at a time; received ${addresses.length}`,
+    );
+  }
+  const tasks = await Promise.all(
+    addresses.map((address) => resolveTask(domain, address)),
+  );
+  const first = tasks[0];
+  if (!first) throw new CliError(`${action} requires at least one task`);
+  if (tasks.some((task) => task.projectId !== first.projectId)) {
+    throw new CliError(`${action} is limited to one project at a time`);
+  }
+  const request = {
+    projectId: first.projectId,
+    taskIds: tasks.map((task) => task.id),
+    authorName: taskAuthor(ctx),
+  };
+  const result =
+    action === "archive"
+      ? tasksRpcContract.archiveTasks.output.parse(
+          await domain.archiveTasks(
+            tasksRpcContract.archiveTasks.input.parse(request),
+          ),
+        )
+      : tasksRpcContract.restoreTasks.output.parse(
+          await domain.restoreTasks(
+            tasksRpcContract.restoreTasks.input.parse(request),
+          ),
+        );
+  return json
+    ? JSON.stringify({ tasks: result.tasks })
+    : `${action === "archive" ? "Archived" : "Restored"} ${result.tasks.map((task) => task.key).join(", ")}`;
+}
 
 class CliError extends PluginCliError {
   constructor(
@@ -1348,6 +1391,14 @@ export function registerTasksCli(
               type: "boolean",
               description: "Keep only tasks with a live agent thread",
             },
+            archived: {
+              type: "boolean",
+              description: "Show only archived tasks",
+            },
+            "include-archived": {
+              type: "boolean",
+              description: "Show active and archived tasks",
+            },
             search: {
               type: "string",
               placeholder: "query",
@@ -1375,6 +1426,12 @@ export function registerTasksCli(
             },
             json: JSON_OPTION,
           },
+          constraints: [
+            {
+              kind: "at-most-one",
+              options: ["archived", "include-archived"],
+            },
+          ],
           run(input, ctx) {
             return guard(async () => {
               const project = await selectedProject(
@@ -1418,6 +1475,11 @@ export function registerTasksCli(
                         : undefined,
                     labelIds: labelIds.length > 0 ? labelIds : undefined,
                     activeOnly: input.options.active,
+                    archive: input.options.archived
+                      ? "archived"
+                      : input.options["include-archived"]
+                        ? "all"
+                        : "active",
                     search: input.options.search,
                     sort: input.options.sort,
                     limit,
@@ -1503,6 +1565,7 @@ export function registerTasksCli(
               const subtasks = await listAllTasks(
                 domain,
                 tasksRpcContract.listTasks.input.parse({
+                  archive: "all",
                   parentTaskId: task.id,
                 }),
               );
@@ -1553,6 +1616,7 @@ export function registerTasksCli(
                   ["Project", `${project.prefix} — ${project.name}`],
                   ["Status", task.status],
                   ["Priority", task.priority],
+                  ["Archived", task.archivedAt ?? "-"],
                   ["Due", task.dueDate ?? "-"],
                   ["Parent", task.parentTaskId ?? "-"],
                   [
@@ -1784,6 +1848,54 @@ export function registerTasksCli(
                 ? JSON.stringify({ task: updated })
                 : `Updated ${updated.key}  ${updated.title}`;
             });
+          },
+        }),
+
+        archive: cliCommand({
+          summary: "Archive terminal tasks",
+          positionals: [
+            {
+              name: "key-or-id",
+              description: `Task keys or ids, at most ${TASK_ARCHIVE_BATCH_MAX}`,
+              required: true,
+              variadic: true,
+            },
+          ],
+          options: { json: JSON_OPTION },
+          run(input, ctx) {
+            return guard(() =>
+              runArchiveAction(
+                domain,
+                ctx,
+                input.positionals["key-or-id"],
+                "archive",
+                input.options.json,
+              ),
+            );
+          },
+        }),
+
+        restore: cliCommand({
+          summary: "Restore archived terminal tasks",
+          positionals: [
+            {
+              name: "key-or-id",
+              description: `Task keys or ids, at most ${TASK_ARCHIVE_BATCH_MAX}`,
+              required: true,
+              variadic: true,
+            },
+          ],
+          options: { json: JSON_OPTION },
+          run(input, ctx) {
+            return guard(() =>
+              runArchiveAction(
+                domain,
+                ctx,
+                input.positionals["key-or-id"],
+                "restore",
+                input.options.json,
+              ),
+            );
           },
         }),
 

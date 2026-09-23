@@ -11,7 +11,11 @@ import { readFile, stat } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { extname, join, resolve } from "node:path";
 import { Hono } from "hono";
-import { terminalWebSocketQuerySchema } from "@bb/server-contract";
+import {
+  terminalWebSocketQuerySchema,
+  type CreateQueuedMessageRequest,
+} from "@bb/server-contract";
+import { getThread } from "@bb/db";
 import { compress } from "hono/compress";
 import { cors } from "hono/cors";
 import type { ServerAppDeps } from "./types.js";
@@ -26,6 +30,7 @@ import { registerUiPreferenceRoutes } from "./routes/ui-preferences.js";
 import { registerTerminalRoutes } from "./routes/terminals.js";
 import { registerThreadRoutes } from "./routes/threads/index.js";
 import { registerQueueRoutes } from "./routes/queue.js";
+import { registerSpendRoutes } from "./routes/spend.js";
 import { registerPluginRoutes } from "./routes/plugins.js";
 import { registerPluginCatalogRoutes } from "./routes/plugin-catalog.js";
 import { registerSkillsRegistryRoutes } from "./routes/skills-registry.js";
@@ -49,7 +54,9 @@ import {
 import { setPluginMachineProviderBridge } from "./services/plugins/plugin-machine-provider-registry.js";
 import { invalidateEnvironmentProviderMachineAvailability } from "./services/environments/provider-machine-availability.js";
 import { requestQueuedMessageDispatch } from "./services/threads/queued-message-dispatch.js";
+import { createQueuedMessageForThread } from "./services/threads/queued-messages.js";
 import { haltThreadForUnansweredQuestion } from "./services/threads/thread-lifecycle.js";
+import { planUnclaimedAnswerDelivery } from "./services/interactions/deliver-unclaimed-answer.js";
 import { registerInternalEventRoutes } from "./internal/events.js";
 import { registerInternalHostRoutes } from "./internal/hosts.js";
 import { registerInternalInteractiveRequestRoutes } from "./internal/interactive-requests.js";
@@ -735,6 +742,30 @@ export function createApp(
       haltThreadForUnansweredQuestion(deps, interaction);
     },
   );
+  deps.pendingInteractions.setUnclaimedPluginAnswerListener(
+    ({ interaction, value }) => {
+      const delivery = planUnclaimedAnswerDelivery({ interaction, value });
+      if (delivery === null) return;
+      const thread = getThread(deps.db, delivery.threadId);
+      if (!thread) return;
+      const payload: CreateQueuedMessageRequest = {
+        input: [{ type: "text", text: delivery.text, mentions: [] }],
+      };
+      void createQueuedMessageForThread(deps, { payload, thread })
+        .then(() => {
+          requestQueuedMessageDispatch(deps, {
+            kind: "interaction-settled",
+            threadId: delivery.threadId,
+          });
+        })
+        .catch((error: unknown) => {
+          deps.logger.warn(
+            { err: error, threadId: delivery.threadId },
+            "Could not queue an answer that arrived after its tool call ended",
+          );
+        });
+    },
+  );
   setPluginThreadEventEmitter(pluginService.events);
   // Bridge the dispatch pipeline to this service's hooks. Until this runs
   // there are no hooks, which is exactly the zero-overhead path.
@@ -822,6 +853,7 @@ export function createApp(
   registerEnvironmentRoutes(publicApi, deps);
   registerThreadRoutes(publicApi, deps);
   registerQueueRoutes(publicApi, deps);
+  registerSpendRoutes(publicApi, deps);
   registerSystemRoutes(publicApi, deps, pluginService);
   registerUiPreferenceRoutes(publicApi, deps);
   registerPluginCatalogRoutes(publicApi, pluginCatalogService);

@@ -1942,6 +1942,17 @@ export function createDeltaAssembler(
         return;
       }
 
+      case "thread.execution": {
+        events.push({
+          type: "thread/execution/reported",
+          threadId: UNSTAMPED_THREAD_ID,
+          providerThreadId: "",
+          scope: threadScope(),
+          execution: { ...delta.execution },
+        });
+        return;
+      }
+
       case "provider.warning": {
         const turnId =
           delta.vouchedTurn === true ? state.currentTurnId : undefined;

@@ -161,6 +161,11 @@ const threadEventScopeDefinitionByType = {
     rationale:
       "Provider model fallback signals can occur while a turn is active or at session scope before a turn is established.",
   },
+  "thread/execution/reported": {
+    policy: "thread",
+    rationale:
+      "What the provider reports it runs with is session state, reported when a session is constructed, before or between turns.",
+  },
   "provider/unhandled": {
     policy: "thread-or-turn",
     rationale:

@@ -392,6 +392,23 @@ async function runScriptFileTurn(threadId) {
   }
 }
 
+function resolvedSessionSettings(params) {
+  return {
+    model: params.model ?? "fake-codex-model",
+    modelProvider: "openai",
+    serviceTier: params.serviceTier ?? null,
+    approvalPolicy: params.approvalPolicy ?? "on-request",
+    approvalsReviewer: params.approvalsReviewer ?? "user",
+    sandbox:
+      params.sandbox === "workspace-write"
+        ? { type: "workspaceWrite" }
+        : params.sandbox === "read-only"
+          ? { type: "readOnly" }
+          : { type: "dangerFullAccess" },
+    reasoningEffort: "medium",
+  };
+}
+
 function replayLastTurnUsage(threadId) {
   notify("thread/tokenUsage/updated", {
     threadId,
@@ -445,7 +462,7 @@ async function handleRequest(message) {
       threadCounter += 1;
       const threadId = `codex-fx-${process.pid}-${threadCounter}`;
       notify("thread/started", { thread: { id: threadId } });
-      respond(id, { thread: { id: threadId } });
+      respond(id, { thread: { id: threadId }, ...resolvedSessionSettings(params) });
       return;
     }
     case "thread/resume": {
@@ -475,7 +492,10 @@ async function handleRequest(message) {
       if (String(params.threadId).startsWith("usage-replay-")) {
         replayLastTurnUsage(params.threadId);
       }
-      respond(id, { thread: { id: params.threadId } });
+      respond(id, {
+        thread: { id: params.threadId },
+        ...resolvedSessionSettings(params),
+      });
       return;
     }
     case "thread/fork": {
@@ -497,8 +517,7 @@ async function handleRequest(message) {
       const threadId = replaysUsage
         ? `usage-replay-fork-${process.pid}-${threadCounter}`
         : `codex-fx-${process.pid}-fork-${threadCounter}`;
-      respond(id, { thread: { id: threadId } });
-
+      respond(id, { thread: { id: threadId }, ...resolvedSessionSettings(params) });
       if (replaysUsage) {
         replayLastTurnUsage(threadId);
       }

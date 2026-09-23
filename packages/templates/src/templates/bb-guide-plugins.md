@@ -242,7 +242,7 @@ The Tasks plugin is an opt-in official plugin bundled with the app:
 and the `bb tasks` command. Common agent operations are:
 
   bb tasks show <key-or-id> [--json]
-  bb tasks list [--project <prefix-or-id>] [filters...] [--sort manual|priority|due] [--limit 1-500] [--cursor <opaque>] [--json]
+  bb tasks list [--project <prefix-or-id>] [filters...] [--archived | --include-archived] [--sort manual|priority|due] [--limit 1-500] [--cursor <opaque>] [--json]
   bb tasks comment <key-or-id> (--body <markdown> | --body-file <path>) [--json]
   bb tasks attachment add <key-or-comment-id> --file <path> [--json]
   bb tasks attachment get <attachment-id> --out <path> [--json]
@@ -250,6 +250,8 @@ and the `bb tasks` command. Common agent operations are:
   bb tasks detach <key-or-id> [--thread <thread-id>] [--json]
   bb tasks update <key-or-id> --status in_review [--json]
   bb tasks update <key-or-id> (--parent <parent-key-or-id> | --no-parent) [--json]
+  bb tasks archive <key-or-id>... [--json]
+  bb tasks restore <key-or-id>... [--json]
 
 Run `bb tasks --help` for project, folder, task, label, attachment, and demo-data
 commands, plus preset management, delegation, and attached-thread inspection.
@@ -261,6 +263,13 @@ threads first, newest first. Task update resolves both task keys and IDs for
 in tasks commands resolve on the invoking machine (the thread's machine inside
 an agent thread, otherwise the server's); pass `--machine <id-or-name>` to
 target another enrolled machine.
+Done and Canceled tasks move to Recently closed and are archived seven days
+after closing; a parent archives only once all of its sub-tasks are closed, and
+its sub-tasks archive and restore with it. `bb tasks archive` and
+`bb tasks restore` take up to 500 top-level tasks from one project and never
+change status; restoring restarts the seven-day clock. `bb tasks list` hides
+archived tasks unless you pass `--archived` (only archived) or
+`--include-archived` (both).
 Task lists default to 100 rows. JSON pages include `nextCursor`; human pages
 print the exact continuation option when more rows exist. Cursors are bound to
 the filters, sort, and task-list revision. Any add, removal, reorder, update,

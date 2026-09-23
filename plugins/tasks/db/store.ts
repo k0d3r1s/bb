@@ -55,6 +55,21 @@ const ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const POSITION_STEP = 1_024;
 const MIN_POSITION_GAP = 0.000_001;
 
+function isTerminalStatus(status: Task["status"]): boolean {
+  return status === "done" || status === "canceled";
+}
+
+const NO_OPEN_SUBTASKS = `NOT EXISTS (
+  SELECT 1 FROM tasks s
+  WHERE s.parent_task_id = t.id AND s.status NOT IN ('done', 'canceled')
+)`;
+
+function nextClosedAt(current: Task, status: Task["status"]): string | null {
+  if (!isTerminalStatus(status)) return null;
+  if (isTerminalStatus(current.status)) return current.closedAt;
+  return nowIso();
+}
+
 interface FolderRow {
   id: string;
   name: string;
@@ -87,6 +102,8 @@ interface TaskRow {
   position: number;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
+  closed_at: string | null;
 }
 
 interface TaskPageRow extends TaskRow {
@@ -212,6 +229,7 @@ function taskQueryFingerprint(
     priorities: normalizedFilterValues(filters.priorities),
     labelIds: normalizedFilterValues(filters.labelIds),
     activeOnly: filters.activeOnly === true,
+    archive: filters.archive ?? "active",
     parentTaskId:
       filters.parentTaskId === undefined
         ? { specified: false, value: null }
@@ -372,6 +390,8 @@ function taskFromRow(row: TaskRow): Task {
     position: row.position,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    archivedAt: row.archived_at,
+    closedAt: row.closed_at,
   };
 }
 
@@ -755,6 +775,11 @@ export function createTasksStore(db: PluginDatabase) {
     if (parent.parentTaskId !== null) {
       throw new Error("Tasks support at most one level of sub-tasks");
     }
+    if (parent.archivedAt !== null) {
+      throw new Error(
+        `Restore task ${parent.key} before changing its sub-tasks`,
+      );
+    }
     if (ownId) {
       const hasChildren = db
         .prepare<[string], { found: number }>(
@@ -816,13 +841,14 @@ export function createTasksStore(db: PluginDatabase) {
           number,
           string,
           string,
+          string | null,
         ]
       >(
         `
       INSERT INTO tasks (
         id, project_id, number, title, description, status, priority, due_date,
-        parent_task_id, position, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        parent_task_id, position, created_at, updated_at, closed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       ).run(
         id,
@@ -837,6 +863,7 @@ export function createTasksStore(db: PluginDatabase) {
         position,
         createdAt,
         createdAt,
+        isTerminalStatus(status) ? createdAt : null,
       );
       return requireTask(id);
     },
@@ -899,6 +926,9 @@ export function createTasksStore(db: PluginDatabase) {
         WHERE tt.task_id = t.id AND tt.live_status IN ('starting', 'working')
       )`);
     }
+    const archive = filters.archive ?? "active";
+    if (archive === "active") clauses.push("t.archived_at IS NULL");
+    if (archive === "archived") clauses.push("t.archived_at IS NOT NULL");
     if (filters.parentTaskId !== undefined) {
       if (filters.parentTaskId === null) {
         clauses.push("t.parent_task_id IS NULL");
@@ -1089,11 +1119,19 @@ export function createTasksStore(db: PluginDatabase) {
     (id: string, input: UpdateTaskInput): Task => {
       const current = requireTask(id);
       const status = input.status ?? current.status;
+      if (current.archivedAt !== null && !isTerminalStatus(status)) {
+        throw new Error(`Restore task ${current.key} before reopening it`);
+      }
       const parentTaskId =
         input.parentTaskId === undefined
           ? current.parentTaskId
           : input.parentTaskId;
-      validateTaskParent(current.projectId, parentTaskId, id);
+      if (parentTaskId !== current.parentTaskId) {
+        if (current.archivedAt !== null) {
+          throw new Error(`Restore task ${current.key} before moving it`);
+        }
+        validateTaskParent(current.projectId, parentTaskId, id);
+      }
 
       let position = current.position;
       if (status !== current.status) {
@@ -1117,6 +1155,7 @@ export function createTasksStore(db: PluginDatabase) {
           string | null,
           string | null,
           number,
+          string | null,
           string,
           string,
         ]
@@ -1124,7 +1163,7 @@ export function createTasksStore(db: PluginDatabase) {
         `
         UPDATE tasks SET
           title = ?, description = ?, status = ?, priority = ?, due_date = ?,
-          parent_task_id = ?, position = ?, updated_at = ?
+          parent_task_id = ?, position = ?, closed_at = ?, updated_at = ?
         WHERE id = ?
       `,
       ).run(
@@ -1139,6 +1178,7 @@ export function createTasksStore(db: PluginDatabase) {
           : validateDueDate(input.dueDate),
         parentTaskId,
         position,
+        nextClosedAt(current, status),
         nowIso(),
         id,
       );
@@ -1148,6 +1188,125 @@ export function createTasksStore(db: PluginDatabase) {
 
   function updateTask(id: string, input: UpdateTaskInput): Task {
     return updateTaskTransaction(id, input);
+  }
+
+  function requireTopLevelArchiveTarget(
+    task: Task,
+    action: "archive" | "restore",
+  ): void {
+    if (task.parentTaskId === null) return;
+    throw new Error(
+      `Task ${task.key} is a sub-task; ${action} its parent ${requireTask(task.parentTaskId).key} instead`,
+    );
+  }
+
+  function requireArchivableUnit(task: Task): void {
+    requireTopLevelArchiveTarget(task, "archive");
+    const open = db
+      .prepare<[string], { id: string }>(
+        "SELECT id FROM tasks WHERE parent_task_id = ? AND status NOT IN ('done', 'canceled') LIMIT 1",
+      )
+      .get(task.id);
+    if (open !== undefined) {
+      throw new Error(
+        `Task ${task.key} has open sub-tasks; close them before archiving`,
+      );
+    }
+  }
+
+  function archiveTasks(projectId: string, taskIds: readonly string[]): Task[] {
+    const archivedAt = nowIso();
+    const archive = db.transaction(() => {
+      const tasks = taskIds.map(requireTask);
+      for (const task of tasks) {
+        if (task.projectId !== projectId) {
+          throw new Error(`Task ${task.key} does not belong to this project`);
+        }
+        if (!isTerminalStatus(task.status)) {
+          throw new Error(
+            `Task ${task.key} must be Done or Canceled before archiving`,
+          );
+        }
+        if (task.archivedAt !== null) {
+          throw new Error(`Task ${task.key} is already archived`);
+        }
+        requireArchivableUnit(task);
+      }
+      const update = db.prepare<[string, string, string, string]>(
+        "UPDATE tasks SET archived_at = ?, updated_at = ? WHERE id = ? OR parent_task_id = ?",
+      );
+      for (const task of tasks) {
+        update.run(archivedAt, archivedAt, task.id, task.id);
+      }
+      return tasks.map((task) => requireTask(task.id));
+    });
+    return archive();
+  }
+
+  function restoreTasks(projectId: string, taskIds: readonly string[]): Task[] {
+    const restoredAt = nowIso();
+    const restore = db.transaction(() => {
+      const tasks = taskIds.map(requireTask);
+      for (const task of tasks) {
+        if (task.projectId !== projectId) {
+          throw new Error(`Task ${task.key} does not belong to this project`);
+        }
+        if (!isTerminalStatus(task.status)) {
+          throw new Error(`Task ${task.key} is not terminal`);
+        }
+        if (task.archivedAt === null) {
+          throw new Error(`Task ${task.key} is not archived`);
+        }
+        requireTopLevelArchiveTarget(task, "restore");
+      }
+      const update = db.prepare<[string, string, string]>(
+        "UPDATE tasks SET archived_at = NULL, closed_at = ?, updated_at = ? WHERE id = ?",
+      );
+      const clearSubtask = db.prepare<[string, string]>(
+        "UPDATE tasks SET archived_at = NULL, updated_at = ? WHERE parent_task_id = ?",
+      );
+      for (const task of tasks) {
+        update.run(restoredAt, restoredAt, task.id);
+        clearSubtask.run(restoredAt, task.id);
+      }
+      return tasks.map((task) => requireTask(task.id));
+    });
+    return restore();
+  }
+
+  function archiveClosedBefore(cutoff: string): Task[] {
+    const archivedAt = nowIso();
+    const archive = db.transaction(() => {
+      const candidates = db
+        .prepare<[string], TaskRow>(
+          `${taskSelect} WHERE t.parent_task_id IS NULL AND t.archived_at IS NULL AND t.closed_at IS NOT NULL AND t.closed_at <= ? AND t.status IN ('done', 'canceled') AND ${NO_OPEN_SUBTASKS}`,
+        )
+        .all(cutoff);
+      const update = db.prepare<[string, string, string, string]>(
+        `
+          UPDATE tasks SET archived_at = ?, updated_at = ?
+          WHERE id = ? AND parent_task_id IS NULL AND archived_at IS NULL
+            AND closed_at <= ? AND status IN ('done', 'canceled')
+            AND NOT EXISTS (
+              SELECT 1 FROM tasks s
+              WHERE s.parent_task_id = tasks.id
+                AND s.status NOT IN ('done', 'canceled')
+            )
+        `,
+      );
+      const cascade = db.prepare<[string, string, string]>(
+        "UPDATE tasks SET archived_at = ?, updated_at = ? WHERE parent_task_id = ?",
+      );
+      const archived: Task[] = [];
+      for (const task of candidates) {
+        if (update.run(archivedAt, archivedAt, task.id, cutoff).changes > 0) {
+          cascade.run(archivedAt, archivedAt, task.id);
+          archived.push(requireTask(task.id));
+        }
+      }
+      return archived;
+    });
+    return archive();
   }
 
   function renormalizeColumn(
@@ -1175,6 +1334,9 @@ export function createTasksStore(db: PluginDatabase) {
   const updatePositionTransaction = db.transaction(
     (id: string, input: UpdateTaskPositionInput): Task => {
       const task = requireTask(id);
+      if (task.archivedAt !== null) {
+        throw new Error(`Restore task ${task.key} before moving it`);
+      }
       if (input.beforeTaskId === id || input.afterTaskId === id) {
         throw new Error("A task cannot be its own reorder neighbor");
       }
@@ -1231,11 +1393,18 @@ export function createTasksStore(db: PluginDatabase) {
             .get(task.projectId, input.status, id)?.position ?? POSITION_STEP;
       }
 
-      db.prepare<[Task["status"], number, string, string]>(
+      db.prepare<[Task["status"], number, string | null, string, string]>(
         `
-        UPDATE tasks SET status = ?, position = ?, updated_at = ? WHERE id = ?
+        UPDATE tasks SET status = ?, position = ?, closed_at = ?, updated_at = ?
+        WHERE id = ?
       `,
-      ).run(input.status, position, nowIso(), id);
+      ).run(
+        input.status,
+        position,
+        nextClosedAt(task, input.status),
+        nowIso(),
+        id,
+      );
       return requireTask(id);
     },
   );
@@ -1827,6 +1996,9 @@ export function createTasksStore(db: PluginDatabase) {
     listTasks,
     listSubtasks,
     updateTask,
+    archiveTasks,
+    restoreTasks,
+    archiveClosedBefore,
     updatePosition,
     deleteTask,
     createLabel,

@@ -25,6 +25,7 @@ interface TaskListQuery {
   priorities?: TaskPriority[];
   labelIds?: string[];
   activeOnly?: boolean;
+  archive?: "active" | "archived" | "all";
   parentTaskId?: string | null;
   search?: string;
   sort?: TaskSort;

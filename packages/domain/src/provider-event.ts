@@ -29,6 +29,7 @@ import {
 import { threadTimelineGoalStatusSchema } from "./thread-timeline-goal.js";
 import { threadEventItemPresentationSchema } from "./item-presentation.js";
 import { extensionKindSchema } from "./provider-extension-kind.js";
+import { threadExecutionReportSchema } from "./shared-types.js";
 
 export const threadEventItemStatusSchema = z.enum([
   "pending",
@@ -690,6 +691,12 @@ const unscopedProviderEventSchema = z.discriminatedUnion("type", [
     fallbackModel: z.string().min(1),
     reason: z.enum(["refusal", "provider"]),
     message: z.string(),
+  }),
+  z.object({
+    type: z.literal("thread/execution/reported"),
+    threadId: z.string(),
+    providerThreadId: z.string(),
+    execution: threadExecutionReportSchema,
   }),
   providerUnhandledEventSchema,
 ]);

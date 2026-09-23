@@ -492,6 +492,14 @@ export type RecordedThreadExecutionOptions = z.infer<
   typeof recordedThreadExecutionOptionsSchema
 >;
 
+export const threadExecutionReportSchema = z.object({
+  model: z.string().min(1),
+  reasoningLevel: reasoningLevelSchema.nullable(),
+  permissionMode: permissionModeSchema.nullable(),
+  serviceTier: serviceTierSchema.nullable(),
+});
+export type ThreadExecutionReport = z.infer<typeof threadExecutionReportSchema>;
+
 export const runtimePermissionScopeValues = ["workspace", "full"] as const;
 const runtimePermissionScopeSchema = z.enum(runtimePermissionScopeValues);
 export type RuntimePermissionScope = z.infer<

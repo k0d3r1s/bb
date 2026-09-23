@@ -17,6 +17,7 @@ import {
   DEFAULT_TURN_RETRY_REASON,
   threadTabsResponseSchema,
 } from "@bb/server-contract";
+import type { ThreadExecutionProfileResponse } from "@bb/server-contract";
 import type {
   CreateQueuedMessageRequest,
   CreateThreadRequest,
@@ -212,6 +213,7 @@ export type ThreadStorageLocationResult = ThreadStorageLocationResponse;
 export type ThreadStoragePathsResult = ThreadStoragePathListResponse;
 export type ThreadChildSummaryResult = ThreadChildSummaryResponse;
 export type ThreadDefaultExecutionOptionsResult = ResolvedThreadExecutionOptions | null;
+export type ThreadExecutionProfileResult = ThreadExecutionProfileResponse;
 export type ThreadConversationOutlineResult = ThreadConversationOutlineResponse;
 export type ThreadTimelineTurnSummaryDetailsResult =
   TimelineTurnSummaryDetailsResponse;
@@ -568,6 +570,9 @@ export interface ThreadsArea {
   defaultExecutionOptions(
     args: ThreadStatusArgs,
   ): Promise<ThreadDefaultExecutionOptionsResult>;
+  executionProfile(
+    args: ThreadStatusArgs,
+  ): Promise<ThreadExecutionProfileResult>;
   delete(args: ThreadDeleteArgs): Promise<ThreadDeleteResult>;
   editMessage(args: ThreadEditMessageArgs): Promise<ThreadEditMessageResult>;
   events: ThreadEventsArea;
@@ -1152,6 +1157,14 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
     async defaultExecutionOptions(input) {
       return transport.readJson(
         transport.api.v1.threads[":id"]["default-execution-options"].$get(
+          { param: { id: input.threadId } },
+          ...signalRequestArgs(input.signal),
+        ),
+      );
+    },
+    async executionProfile(input) {
+      return transport.readJson(
+        transport.api.v1.threads[":id"]["execution-profile"].$get(
           { param: { id: input.threadId } },
           ...signalRequestArgs(input.signal),
         ),

@@ -16,6 +16,7 @@ import {
   threadEventTokenUsageBreakdownSchema,
   threadEventTurnStatusSchema,
   threadEventWarningCategorySchema,
+  threadExecutionReportSchema,
   workflowProgressSnapshotSchema,
 } from "@bb/domain";
 import { z } from "zod";
@@ -378,6 +379,11 @@ export const threadDeltaSchema = z.discriminatedUnion("kind", [
     fallbackModel: z.string().min(1),
     reason: z.enum(["refusal", "provider"]),
     message: z.string(),
+  }),
+
+  z.object({
+    kind: z.literal("thread.execution"),
+    execution: threadExecutionReportSchema,
   }),
 
   z.object({

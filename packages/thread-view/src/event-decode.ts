@@ -42,6 +42,7 @@ export function getEventProviderThreadId(
     case "provider/rateLimits/updated":
     case "provider.env-resolved":
     case "thread/extensionState/updated":
+    case "thread/execution/reported":
     case "provider/unhandled":
       return decoded.providerThreadId;
     case "turn/completed":
@@ -107,6 +108,7 @@ export function getEventParentToolCallId(
     case "provider/rateLimits/updated":
     case "provider.env-resolved":
     case "thread/extensionState/updated":
+    case "thread/execution/reported":
     case "client/thread/start":
     case "client/turn/requested":
     case "client/turn/rejected":

@@ -7,10 +7,86 @@ import {
   check,
   index,
   integer,
+  primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+
+const threadReference = sqliteTable("threads", {
+  id: text("id").primaryKey(),
+});
+
+export const threadExecutionReports = sqliteTable(
+  "fork_thread_execution_reports",
+  {
+    threadId: text("thread_id")
+      .primaryKey()
+      .references(() => threadReference.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    reasoningLevel: text("reasoning_level"),
+    permissionMode: text("permission_mode"),
+    serviceTier: text("service_tier"),
+    reportedAt: integer("reported_at").notNull(),
+  },
+);
+
+export const threadSpendDaily = sqliteTable(
+  "fork_thread_spend_daily",
+  {
+    day: text("day").notNull(),
+    threadId: text("thread_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    cachedInputTokens: integer("cached_input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    reasoningOutputTokens: integer("reasoning_output_tokens")
+      .notNull()
+      .default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    weightedUnits: real("weighted_units").notNull().default(0),
+    turns: integer("turns").notNull().default(0),
+    firstEventAt: integer("first_event_at").notNull(),
+    lastEventAt: integer("last_event_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.day, table.threadId, table.providerId, table.model],
+    }),
+    index("fork_thread_spend_daily_day_idx").on(table.day),
+  ],
+);
+
+export const threadSpendCursor = sqliteTable(
+  "fork_thread_spend_cursor",
+  {
+    threadId: text("thread_id").notNull(),
+    providerThreadId: text("provider_thread_id").notNull(),
+    lastSequence: integer("last_sequence").notNull(),
+    lastTotalTokens: integer("last_total_tokens").notNull(),
+    firstSequence: integer("first_sequence").notNull(),
+    historyComplete: integer("history_complete").notNull().default(0),
+    lastTurnId: text("last_turn_id"),
+    lastModel: text("last_model"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.threadId, table.providerThreadId] }),
+  ],
+);
+
+export const spendPrices = sqliteTable(
+  "fork_spend_prices",
+  {
+    providerId: text("provider_id").notNull(),
+    model: text("model").notNull(),
+    inputUsdPerMtok: real("input_usd_per_mtok").notNull(),
+    cachedInputUsdPerMtok: real("cached_input_usd_per_mtok").notNull(),
+    outputUsdPerMtok: real("output_usd_per_mtok").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.providerId, table.model] })],
+);
 
 export const workQuiescePhaseValues = [
   "draining",

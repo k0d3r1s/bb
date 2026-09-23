@@ -2,6 +2,34 @@ import { installTestPluginRuntime } from "@get-bb/plugin-sdk/testing/app";
 import { configure } from "@testing-library/react";
 import { beforeEach } from "vitest";
 
+function memoryStorage(): Storage {
+  const rows = new Map<string, string>();
+  return {
+    get length() {
+      return rows.size;
+    },
+    clear: () => rows.clear(),
+    getItem: (key) => rows.get(key) ?? null,
+    key: (index) => [...rows.keys()][index] ?? null,
+    removeItem: (key) => {
+      rows.delete(key);
+    },
+    setItem: (key, value) => {
+      rows.set(key, String(value));
+    },
+  };
+}
+
+if (
+  typeof window !== "undefined" &&
+  typeof window.localStorage === "undefined"
+) {
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: memoryStorage(),
+  });
+}
+
 if (typeof window !== "undefined") installTestPluginRuntime();
 
 configure({ asyncUtilTimeout: 8_000 });
@@ -32,5 +60,9 @@ if (typeof window !== "undefined" && !window.matchMedia) {
 }
 
 beforeEach(() => {
-  if (typeof window !== "undefined") window.localStorage.clear();
+  if (
+    typeof window !== "undefined" &&
+    typeof window.localStorage !== "undefined"
+  )
+    window.localStorage.clear();
 });

@@ -127,7 +127,7 @@ BB_HOST_DAEMON_PORT only for an intentional non-default target.
   through `bb settings show` and `bb settings general <key> <value>`.
 - The provider-turn stall watchdog flags (6h) then interrupts (12h) a turn whose
   active operation goes idle. Tune it with `bb settings general
-  providerTurnIdleWatchdogEnabled <on|off>`, `providerTurnIdleNotifyMs <ms>`, and
+providerTurnIdleWatchdogEnabled <on|off>`, `providerTurnIdleNotifyMs <ms>`, and
   `providerTurnIdleInterruptMs <ms>` (interrupt must exceed notify; both floor at
   300000ms / 5 minutes).
 - The server keeps a registry of sidebar layout preferences (organization
@@ -188,6 +188,20 @@ reported; this is not billing/invoice data. Suspension requires idle live thread
 and no open terminals; empty machines can use an opted-in provider idle policy.
 
 `bb thread context` reads recorded context usage without sending a model request. A breakdown is optional; absent usage is returned as `null`.
+
+## Spend and usage
+
+bb records per-thread, per-provider, per-model, per-day token totals before
+usage events can be pruned.
+
+```sh
+bb spend --by provider
+bb spend --by thread --from 2026-09-01 --json
+bb spend backfill
+```
+
+Weighted units are a cost proxy, not invoice data. Coverage reports distinguish
+complete histories from floors where older usage events were already pruned.
 
 `bb machine reconcile <id-or-name> [--json]` asks core to enforce its recorded
 suspended state through the provider and waits for completion. It leaves active

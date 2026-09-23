@@ -1868,7 +1868,9 @@ it("clears the adopted marker once the environment attaches", async () => {
 
     fixture.attach();
 
-    expect(getEnvironment(harness.db, adopted.id)?.adoptedFromStatus).toBeNull();
+    expect(
+      getEnvironment(harness.db, adopted.id)?.adoptedFromStatus,
+    ).toBeNull();
   });
 });
 

@@ -7,6 +7,10 @@ import {
   pendingInteractions as pendingInteractionTable,
 } from "@bb/db";
 import type { PendingInteractionCreate } from "@bb/domain";
+import {
+  ASK_USER_QUESTION_PLUGIN_ID,
+  ASK_USER_QUESTION_RENDERER_ID,
+} from "@bb/plugin-interaction-contracts";
 import { handleHostSessionOpened } from "../../src/internal/session-owner-side-effects.js";
 import { toPendingInteraction } from "../../src/services/interactions/pending-interaction-serialization.js";
 import { PendingInteractionLifecycle } from "../../src/services/interactions/pending-interactions.js";
@@ -97,6 +101,95 @@ function requestPluginInteraction(
 }
 
 describe("pending interaction lifecycle", () => {
+  it("recovers one late AskUserQuestion answer and rejects other interrupted interactions", async () => {
+    await withTestHarness(async (harness) => {
+      const thread = seedPluginInteractionThread(harness.deps, "late-answer");
+      const delivered: string[] = [];
+      harness.deps.pendingInteractions.setUnclaimedPluginAnswerListener(
+        ({ interaction }) => delivered.push(interaction.id),
+      );
+      const late = harness.deps.pendingInteractions.requestPluginInteraction({
+        pluginId: ASK_USER_QUESTION_PLUGIN_ID,
+        rendererId: ASK_USER_QUESTION_RENDERER_ID,
+        threadId: thread.id,
+        title: "Layout",
+        payload: {
+          questions: [
+            {
+              id: "q0",
+              prompt: "Which layout?",
+              shortLabel: "Layout",
+              multiSelect: false,
+              options: [{ value: "q0o0", label: "Inner area" }],
+              allowFreeText: true,
+            },
+          ],
+        },
+        presentation: {
+          label: { pending: "Waiting", completed: "Answered" },
+          icon: { glyph: "Toolbox" },
+        },
+        describeSubmission: null,
+        timeoutMs: 1,
+      });
+      const [lateInteraction] =
+        harness.deps.pendingInteractions.listPendingThreadInteractions(
+          thread.id,
+        );
+      await expect(late).resolves.toEqual({
+        outcome: "cancelled",
+        reason: "timeout",
+      });
+      const answer = { answers: { q0: { selected: ["q0o0"] } } };
+      await expect(
+        harness.deps.pendingInteractions.respondToPluginInteraction({
+          threadId: thread.id,
+          interactionId: lateInteraction!.id,
+          value: answer,
+        }),
+      ).resolves.toMatchObject({ status: "resolved" });
+      expect(delivered).toEqual([lateInteraction!.id]);
+      await expect(
+        harness.deps.pendingInteractions.respondToPluginInteraction({
+          threadId: thread.id,
+          interactionId: lateInteraction!.id,
+          value: answer,
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(delivered).toEqual([lateInteraction!.id]);
+
+      const unrelated =
+        harness.deps.pendingInteractions.requestPluginInteraction({
+          pluginId: "secrets",
+          rendererId: "secret-request",
+          threadId: thread.id,
+          title: "Add secrets",
+          payload: { fields: [{ name: "API_KEY" }] },
+          presentation: {
+            label: { pending: "Waiting", completed: "Submitted" },
+            icon: { glyph: "Toolbox" },
+          },
+          describeSubmission: null,
+          timeoutMs: 1,
+        });
+      const [unrelatedInteraction] =
+        harness.deps.pendingInteractions.listPendingThreadInteractions(
+          thread.id,
+        );
+      await expect(unrelated).resolves.toEqual({
+        outcome: "cancelled",
+        reason: "timeout",
+      });
+      await expect(
+        harness.deps.pendingInteractions.respondToPluginInteraction({
+          threadId: thread.id,
+          interactionId: unrelatedInteraction!.id,
+          value: { values: {} },
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+  });
+
   it("announces each committed plugin prompt once without read duplicates", async () => {
     await withTestHarness(async (harness) => {
       const thread = seedPluginInteractionThread(harness.deps, "pending-event");

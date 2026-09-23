@@ -8,6 +8,7 @@ import {
   listThreadEnvironmentAssignmentsOnHost,
   MissingStoredTurnStartedError,
   events as storedEvents,
+  upsertThreadExecutionReport,
 } from "@bb/db";
 import type {
   AcceptedDaemonEvent,
@@ -24,7 +25,9 @@ import {
   type HostDaemonRejectedEvent,
 } from "@bb/host-daemon-contract";
 import {
+  getThreadEventScopeTurnId,
   requireThreadEventScopeTurnId,
+  type ThreadExecutionReport,
   type ThreadEventType,
   type ThreadEventTurnStatus,
 } from "@bb/domain";
@@ -38,6 +41,10 @@ import {
   isActivePruneTriggerThreadEventType,
   maybePruneActiveThreadEventHistory,
 } from "../services/system/event-pruning.js";
+import {
+  recordSpendForInsertedEvents,
+  type SpendRollupObservationSource,
+} from "../services/system/spend-rollup.js";
 import { queueChildThreadTurnNotificationBestEffort } from "../services/threads/child-thread-notifications.js";
 import { isParentNotifiableChildThread } from "../services/threads/thread-parent.js";
 import {
@@ -272,6 +279,7 @@ function resolveProviderIdentifiers(event: HostDaemonEventEnvelope["event"]): {
     case "provider/modelFallback":
     case "provider/rateLimits/updated":
     case "provider.env-resolved":
+    case "thread/execution/reported":
     case "thread/compacted":
     case "thread/context/cleared":
     case "thread/goal/updated":
@@ -892,6 +900,72 @@ function dropInteractionLifecycleEvents(entries: PostableEventBatchEntry[]): {
   return { entries: kept, droppedLifecycleEvents };
 }
 
+interface ExecutionReportSource {
+  execution: ThreadExecutionReport;
+  threadId: string;
+}
+
+function partitionExecutionReports<
+  TEntry extends { envelope: HostDaemonEventEnvelope },
+>(
+  entries: TEntry[],
+): {
+  entries: TEntry[];
+  reports: ExecutionReportSource[];
+} {
+  const kept: TEntry[] = [];
+  const reports: ExecutionReportSource[] = [];
+  for (const entry of entries) {
+    const { event, threadId } = entry.envelope;
+    if (event.type === "thread/execution/reported") {
+      reports.push({
+        threadId,
+        execution: event.execution,
+      });
+      continue;
+    }
+    kept.push(entry);
+  }
+  return { entries: kept, reports };
+}
+
+function collectSpendObservationSources(
+  deps: AppDeps,
+  args: {
+    acceptedEvents: readonly AcceptedDaemonEvent[];
+    entries: readonly { envelope: HostDaemonEventEnvelope }[];
+    insertedInputIndexes: readonly number[];
+  },
+): SpendRollupObservationSource[] {
+  const sources: SpendRollupObservationSource[] = [];
+  const providerIdByThreadId = new Map<string, string | null>();
+  for (const [position, inputIndex] of args.insertedInputIndexes.entries()) {
+    const entry = args.entries[inputIndex];
+    const accepted = args.acceptedEvents[position];
+    if (entry === undefined || accepted === undefined) continue;
+    const event = entry.envelope.event;
+    if (event.type !== "thread/tokenUsage/updated") continue;
+    const threadId = entry.envelope.threadId;
+    if (!providerIdByThreadId.has(threadId)) {
+      providerIdByThreadId.set(
+        threadId,
+        getThread(deps.db, threadId)?.providerId ?? null,
+      );
+    }
+    const providerId = providerIdByThreadId.get(threadId) ?? null;
+    if (providerId === null) continue;
+    sources.push({
+      createdAt: accepted.createdAt,
+      event,
+      providerId,
+      sequence: accepted.sequence,
+      threadId,
+      turnId: getThreadEventScopeTurnId(event.scope) ?? null,
+    });
+  }
+  return sources;
+}
+
 export function registerInternalEventRoutes(app: Hono, deps: AppDeps): void {
   const { post } = typedRoutes<HostDaemonInternalSchema>(app, {
     onValidationError: (msg) => new ApiError(400, "invalid_request", msg),
@@ -930,8 +1004,11 @@ export function registerInternalEventRoutes(app: Hono, deps: AppDeps): void {
           hostId: session.hostId,
           events,
         });
-      const { entries, droppedLifecycleEvents } =
+      const { entries: lifecycleFilteredEntries, droppedLifecycleEvents } =
         dropInteractionLifecycleEvents(ownedEntries);
+      const { entries, reports: executionReports } = partitionExecutionReports(
+        lifecycleFilteredEntries,
+      );
       if (droppedLifecycleEvents.length > 0) {
         deps.logger.warn(
           {
@@ -983,7 +1060,25 @@ export function registerInternalEventRoutes(app: Hono, deps: AppDeps): void {
       let appendResult: AppendDaemonEventsResult;
       try {
         appendResult = deps.db.transaction(
-          (tx) => appendDaemonEventsInTransaction(tx, eventInputs),
+          (tx) => {
+            const result = appendDaemonEventsInTransaction(tx, eventInputs);
+            const reportedAt = Date.now();
+            for (const report of executionReports) {
+              upsertThreadExecutionReport(tx, {
+                ...report,
+                reportedAt,
+              });
+            }
+            recordSpendForInsertedEvents(
+              tx,
+              collectSpendObservationSources(deps, {
+                acceptedEvents: result.acceptedEvents,
+                entries: labelledEntries,
+                insertedInputIndexes: result.insertedInputIndexes,
+              }),
+            );
+            return result;
+          },
           { behavior: "immediate" },
         );
       } catch (error) {

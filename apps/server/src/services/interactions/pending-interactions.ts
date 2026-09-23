@@ -13,6 +13,7 @@ import {
   listPendingInteractionsByThread,
   setPendingInteractionInterrupted,
   setPendingInteractionResolved,
+  setTimedOutPendingInteractionResolved,
   setPendingInteractionResolving,
   type PendingInteractionRow,
   type DbNotifier,
@@ -34,6 +35,10 @@ import {
   type PendingInteractionResolution,
   type ThreadChangeMetadata,
 } from "@bb/domain";
+import {
+  ASK_USER_QUESTION_PLUGIN_ID,
+  ASK_USER_QUESTION_RENDERER_ID,
+} from "@bb/plugin-interaction-contracts";
 import type { HostDaemonCommand } from "@bb/host-daemon-contract";
 import type { CommandResultReportForType } from "../../internal/command-result-side-effects.js";
 import { ApiError } from "../../errors.js";
@@ -301,6 +306,11 @@ export type ThreadInteractionSettledListener = (
   interaction: PendingInteraction,
 ) => void;
 
+export type UnclaimedPluginAnswerListener = (args: {
+  interaction: PendingInteraction;
+  value: JsonValue;
+}) => void;
+
 function buildInteractionChangeMetadata({
   db,
   hasPendingInteraction,
@@ -338,6 +348,8 @@ export class PendingInteractionLifecycle {
   private pluginDirectory: PendingInteractionPluginDirectory | null = null;
   private started = false;
   private interactionSettledListener: ThreadInteractionSettledListener | null =
+    null;
+  private unclaimedPluginAnswerListener: UnclaimedPluginAnswerListener | null =
     null;
 
   constructor(args: PendingInteractionLifecycleArgs) {
@@ -381,6 +393,12 @@ export class PendingInteractionLifecycle {
     listener: ThreadInteractionSettledListener,
   ): void {
     this.interactionSettledListener = listener;
+  }
+
+  setUnclaimedPluginAnswerListener(
+    listener: UnclaimedPluginAnswerListener,
+  ): void {
+    this.unclaimedPluginAnswerListener = listener;
   }
 
   listPendingThreadInteractions(threadId: string): PendingInteraction[] {
@@ -648,7 +666,27 @@ export class PendingInteractionLifecycle {
     if (!isPluginPendingInteraction(current)) {
       throw new ApiError(400, "invalid_request", "Plugin interaction expected");
     }
-    if (current.status !== "pending") throw buildResolveConflictError(current);
+    if (current.status !== "pending") {
+      if (
+        current.status !== "interrupted" ||
+        current.statusReason !== "timeout" ||
+        current.origin.pluginId !== ASK_USER_QUESTION_PLUGIN_ID ||
+        current.origin.rendererId !== ASK_USER_QUESTION_RENDERER_ID
+      ) {
+        throw buildResolveConflictError(current);
+      }
+      const updated = setTimedOutPendingInteractionResolved(this.deps.db, {
+        id: current.id,
+        resolution: JSON.stringify({ kind: "plugin_submitted" }),
+      });
+      if (!updated) {
+        throw buildResolveConflictError(this.requireInteraction(current.id));
+      }
+      const interaction = toPendingInteraction(updated);
+      this.reportUnclaimedPluginAnswer(interaction, args.value);
+      this.settlePluginInteractionTerminalSideEffects(interaction);
+      return interaction;
+    }
     const waiter = this.pluginWaiters.get(current.id);
     if (waiter === undefined) {
       const interrupted = this.cancelPluginInteraction({
@@ -1034,6 +1072,25 @@ export class PendingInteractionLifecycle {
       this.deps.logger.warn(
         { err: error, threadId: interaction.threadId },
         "Pending interaction settled listener failed",
+      );
+    }
+  }
+
+  private reportUnclaimedPluginAnswer(
+    interaction: PendingInteraction,
+    value: JsonValue,
+  ): void {
+    this.deps.logger.warn(
+      { interactionId: interaction.id, threadId: interaction.threadId },
+      "An answer arrived after the provider stopped waiting for it",
+    );
+    if (!this.unclaimedPluginAnswerListener) return;
+    try {
+      this.unclaimedPluginAnswerListener({ interaction, value });
+    } catch (error) {
+      this.deps.logger.warn(
+        { err: error, interactionId: interaction.id },
+        "Unclaimed plugin answer listener failed",
       );
     }
   }

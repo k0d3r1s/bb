@@ -40,6 +40,43 @@ export {
   upsertProjectExecutionDefaults,
 } from "./project-execution-defaults.js";
 export {
+  getThreadExecutionReport,
+  upsertThreadExecutionReport,
+} from "./thread-execution-reports.js";
+export {
+  applySpendContribution,
+  countSpendCursors,
+  emptySpendCursorState,
+  foldTokenUsageObservation,
+  getSpendCoverage,
+  getSpendCursor,
+  getSpendThreadLatestSequence,
+  hasThreadRewind,
+  isSpendHistoryComplete,
+  SPEND_PRUNE_SAFE_SEQUENCE,
+  listSpendBackfillThreads,
+  listSpendRollupRows,
+  listStoredTokenUsageEvents,
+  normalizeSpendUsage,
+  resolveSpendModel,
+  saveSpendCursor,
+  spendLocalDay,
+  spendWeightedUnits,
+  SPEND_WEIGHTS,
+} from "./thread-spend.js";
+export type {
+  ListSpendRollupArgs,
+  SpendBackfillThreadRow,
+  SpendContribution,
+  SpendCoverage,
+  SpendCursorState,
+  SpendGroupBy,
+  SpendRollupRow,
+  SpendUsageBreakdown,
+  StoredTokenUsageEventRow,
+  TokenUsageObservation,
+} from "./thread-spend.js";
+export {
   createProjectSource,
   countProjectSources,
   getProjectSourceForProject,
@@ -408,6 +445,7 @@ export {
   setPendingInteractionInterrupted,
   setPendingInteractionResolving,
   setPendingInteractionResolved,
+  setTimedOutPendingInteractionResolved,
 } from "./pending-interactions.js";
 export type { PendingInteractionRow } from "./pending-interactions.js";
 

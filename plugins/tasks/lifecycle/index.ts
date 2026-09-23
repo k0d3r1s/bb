@@ -1,5 +1,9 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import { publishCommentsChanged, type TasksApiStore } from "../api";
+import {
+  publishCommentsChanged,
+  publishTasksChanged,
+  type TasksApiStore,
+} from "../api";
 import type { TaskThread, TaskThreadLiveStatus } from "../db";
 import { createSystemComment, publishThreadsChanged } from "../delegate";
 import { errorMessage } from "../shared/errors";
@@ -7,6 +11,8 @@ import { errorMessage } from "../shared/errors";
 const TERMINAL_LIVE_STATUSES = new Set<TaskThreadLiveStatus>(["completed"]);
 export const THREAD_STATUS_RECONCILE_INTERVAL_MS = 5 * 60_000;
 export const THREAD_STATUS_IDLE_INTERVAL_MS = 60_000;
+export const TASK_ARCHIVE_INTERVAL_MS = 60 * 60_000;
+export const TASK_ARCHIVE_AFTER_MS = 7 * 24 * 60 * 60_000;
 
 type SdkThread = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["get"]>>;
 
@@ -28,7 +34,7 @@ function liveStatusFromThread(thread: SdkThread): TaskThreadLiveStatus {
 
 function trackedThreads(store: TasksApiStore): TaskThread[] {
   const tracked: TaskThread[] = [];
-  for (const task of store.tasks.listTasks()) {
+  for (const task of store.tasks.listTasks({ archive: "all" })) {
     for (const thread of store.tasks.listTaskThreads(task.id)) {
       tracked.push(thread);
     }
@@ -188,6 +194,28 @@ export async function registerLifecycle(
         );
         if (signal.aborted) break;
         await reconcileTrackedThreads(bb, store);
+      }
+    },
+  });
+
+  bb.background.service("task-auto-archive", {
+    async start(signal) {
+      while (!signal.aborted) {
+        const cutoff = new Date(
+          Date.now() - TASK_ARCHIVE_AFTER_MS,
+        ).toISOString();
+        const archived = store.tasks.archiveClosedBefore(cutoff);
+        for (const task of archived) {
+          store.tasks.createComment({
+            taskId: task.id,
+            kind: "system",
+            authorName: "Tasks",
+            body: "Archived automatically 7 days after closing",
+          });
+          publishTasksChanged(bb, task.id, task.projectId);
+          publishCommentsChanged(bb, task.id);
+        }
+        await waitForNextReconciliation(signal, TASK_ARCHIVE_INTERVAL_MS);
       }
     },
   });

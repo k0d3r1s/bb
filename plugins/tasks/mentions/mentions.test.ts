@@ -188,6 +188,39 @@ describe("@task mention provider", () => {
     }
   });
 
+  it("lists an archived unit's sub-tasks like the task page and CLI do", async () => {
+    const { harness, provider, store } = setup();
+    try {
+      const project = store.tasks.createProject({
+        name: "Archived mentions",
+        prefix: "AMN",
+        color: "blue",
+      });
+      const parent = store.tasks.createTask({
+        projectId: project.id,
+        title: "Archived unit",
+      });
+      const subtask = store.tasks.createTask({
+        projectId: project.id,
+        parentTaskId: parent.id,
+        title: "Archived child",
+      });
+      store.tasks.updateTask(subtask.id, { status: "done" });
+      store.tasks.updateTask(parent.id, { status: "done" });
+      store.tasks.archiveTasks(project.id, [parent.id]);
+
+      const { context } = await provider.resolve(parent.id);
+      expect(context).toContain("AMN-2 · Archived child — Done");
+      expect(
+        store.tasks
+          .listTasks({ parentTaskId: parent.id, archive: "all" })
+          .map((task) => task.key),
+      ).toEqual(store.tasks.listSubtasks(parent.id).map((task) => task.key));
+    } finally {
+      await harness.dispose();
+    }
+  });
+
   it("rejects an unknown task id", async () => {
     const { harness, provider } = setup();
     try {

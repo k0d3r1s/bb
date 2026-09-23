@@ -14,7 +14,11 @@ import {
   type ThreadTimelinePendingTodos,
   type WorkspaceStatus,
 } from "@bb/domain";
-import { BbHttpError, type BbSdk } from "@bb/sdk";
+import {
+  BbHttpError,
+  type BbSdk,
+  type ThreadExecutionProfileResult,
+} from "@bb/sdk";
 import type {
   EnvironmentDiffQuery,
   ThreadTimelineResponse,
@@ -72,6 +76,7 @@ type ThreadShowEnvironmentJsonPayload = Environment & {
 interface ThreadShowJsonPayload extends ThreadStatusPayload {
   environment: ThreadShowEnvironmentJsonPayload | null;
   pendingTodos: ThreadTimelinePendingTodos | null;
+  execution: ThreadExecutionProfileResult | null;
   workStatus?: WorkspaceStatus | null;
   gitDiff?: ThreadGitDiffResponse | null;
 }
@@ -183,6 +188,34 @@ function threadShowEnvironmentJson(
       message: "Pull request lookup was not run.",
     },
   };
+}
+
+export function printExecutionProfile(
+  execution: ThreadExecutionProfileResult | null,
+): void {
+  if (execution === null) return;
+  const describe = (value: {
+    model: string;
+    reasoningLevel: string;
+    permissionMode: string;
+    serviceTier: string;
+  }) =>
+    `${value.model} · ${value.reasoningLevel} · ${value.permissionMode} · ${value.serviceTier}`;
+  console.log("  Execution:");
+  console.log(
+    `    Next turn:      ${execution.nextTurn ? describe(execution.nextTurn) : "(none)"}`,
+  );
+  const { model, reasoningLevel } = execution.overrides;
+  console.log(
+    `    Overrides:      ${model === null && reasoningLevel === null ? "none (defaults apply)" : `model ${model ?? "default"} · reasoning ${reasoningLevel ?? "default"}`}`,
+  );
+  console.log(
+    `    Last requested: ${execution.lastRequested ? describe(execution.lastRequested) : "(no turn yet)"}`,
+  );
+  const { executed } = execution;
+  console.log(
+    `    Executed:       ${executed ? `${executed.model} · ${executed.reasoningLevel ?? "unreported"} · ${executed.permissionMode ?? "unreported"} · ${executed.serviceTier ?? "unreported"}` : "not reported by the provider"}`,
+  );
 }
 
 export function registerShowCommand(
@@ -316,6 +349,9 @@ export function registerShowCommand(
           sdk,
           threadId,
         });
+        const execution = await sdk.threads
+          .executionProfile({ threadId })
+          .catch(() => null);
 
         if (opts.json) {
           const environment = await getEnvironment();
@@ -326,6 +362,7 @@ export function registerShowCommand(
               fetchedPullRequest,
             ),
             pendingTodos,
+            execution,
           };
           if (fetchedWorkStatus !== undefined) {
             jsonPayload.workStatus = fetchedWorkStatus.available
@@ -342,6 +379,7 @@ export function registerShowCommand(
         }
 
         printThreadStatus(statusPayload, environmentInfo, fetchedPullRequest);
+        printExecutionProfile(execution);
 
         printPendingTodos(pendingTodos);
 

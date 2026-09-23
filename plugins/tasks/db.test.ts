@@ -41,6 +41,7 @@ function cursorForEmptyArrayFilter(
     priorities: filter === "priorities" ? [] : null,
     labelIds: filter === "labelIds" ? [] : null,
     activeOnly: false,
+    archive: "active",
     parentTaskId: { specified: false, value: null },
     search: null,
     sort: "manual",
@@ -62,7 +63,359 @@ describe("tasks storage", () => {
             "SELECT COUNT(*) AS count FROM schema_version",
           )
           .get()?.count,
-      ).toBe(6);
+      ).toBe(7);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it("archives only terminal tasks in one project and restores without changing status", async () => {
+    const { harness, store } = setup();
+    try {
+      const project = createProject(store, "ARC");
+      const other = createProject(store, "OTH");
+      const done = store.createTask({
+        projectId: project.id,
+        title: "Done",
+        status: "done",
+      });
+      const open = store.createTask({ projectId: project.id, title: "Open" });
+      const foreign = store.createTask({
+        projectId: other.id,
+        title: "Foreign",
+        status: "done",
+      });
+
+      expect(() => store.archiveTasks(project.id, [open.id])).toThrow(
+        "must be Done or Canceled",
+      );
+      expect(() => store.archiveTasks(project.id, [foreign.id])).toThrow(
+        "does not belong",
+      );
+      expect(() => store.archiveTasks(project.id, [done.id, open.id])).toThrow(
+        "must be Done or Canceled",
+      );
+      expect(store.getTask(done.id)?.archivedAt).toBeNull();
+
+      const [archived] = store.archiveTasks(project.id, [done.id]);
+      expect(archived).toMatchObject({
+        status: "done",
+        archivedAt: expect.any(String),
+      });
+      expect(() => store.updateTask(done.id, { status: "todo" })).toThrow(
+        "before reopening",
+      );
+      expect(() =>
+        store.updatePosition(done.id, {
+          status: "todo",
+          beforeTaskId: null,
+          afterTaskId: null,
+        }),
+      ).toThrow("before moving");
+      expect(
+        store.listTasks({ projectId: project.id }).map((task) => task.id),
+      ).not.toContain(done.id);
+      expect(
+        store
+          .listTasks({ projectId: project.id, archive: "archived" })
+          .map((task) => task.id),
+      ).toEqual([done.id]);
+
+      const [restored] = store.restoreTasks(project.id, [done.id]);
+      expect(restored).toMatchObject({
+        status: "done",
+        archivedAt: null,
+        closedAt: expect.any(String),
+      });
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it("archives and restores a parent with its sub-tasks as one unit", async () => {
+    const { db, harness, store } = setup();
+    try {
+      const project = createProject(store, "SUB");
+      const parent = store.createTask({
+        projectId: project.id,
+        title: "Ship the feature",
+      });
+      const closedSubtask = store.createTask({
+        projectId: project.id,
+        parentTaskId: parent.id,
+        title: "Closed early",
+      });
+      const openSubtask = store.createTask({
+        projectId: project.id,
+        parentTaskId: parent.id,
+        title: "Still running",
+        status: "in_progress",
+      });
+      store.updateTask(closedSubtask.id, { status: "done" });
+      store.updateTask(parent.id, { status: "done" });
+      db.prepare(
+        "UPDATE tasks SET closed_at = ? WHERE closed_at IS NOT NULL",
+      ).run("2026-01-01T00:00:00.000Z");
+
+      expect(store.archiveClosedBefore("9999-12-31T00:00:00.000Z")).toEqual([]);
+      expect(() => store.archiveTasks(project.id, [parent.id])).toThrow(
+        "has open sub-tasks",
+      );
+      expect(() => store.archiveTasks(project.id, [closedSubtask.id])).toThrow(
+        `archive its parent ${parent.key} instead`,
+      );
+      expect(
+        store
+          .listTasks({ parentTaskId: parent.id })
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual([closedSubtask.id, openSubtask.id].sort());
+
+      store.updateTask(openSubtask.id, { status: "canceled" });
+      expect(
+        store
+          .archiveClosedBefore("9999-12-31T00:00:00.000Z")
+          .map((task) => task.id),
+      ).toEqual([parent.id]);
+      for (const id of [closedSubtask.id, openSubtask.id]) {
+        expect(store.getTask(id)?.archivedAt).toEqual(expect.any(String));
+      }
+      expect(store.listTasks({ parentTaskId: parent.id })).toEqual([]);
+      expect(
+        store
+          .listTasks({ parentTaskId: parent.id, archive: "all" })
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual([closedSubtask.id, openSubtask.id].sort());
+      expect(
+        store
+          .listSubtasks(parent.id)
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual([closedSubtask.id, openSubtask.id].sort());
+
+      expect(() => store.restoreTasks(project.id, [closedSubtask.id])).toThrow(
+        `restore its parent ${parent.key} instead`,
+      );
+      expect(() =>
+        store.updateTask(closedSubtask.id, { parentTaskId: null }),
+      ).toThrow("before moving");
+      expect(store.getTask(closedSubtask.id)?.parentTaskId).toBe(parent.id);
+      expect(
+        store.updateTask(closedSubtask.id, { description: "Retained notes" })
+          .description,
+      ).toBe("Retained notes");
+      const unattached = store.createTask({
+        projectId: project.id,
+        title: "Unattached task",
+      });
+      expect(() =>
+        store.updateTask(unattached.id, { parentTaskId: parent.id }),
+      ).toThrow(`Restore task ${parent.key}`);
+      expect(() =>
+        store.createTask({
+          projectId: project.id,
+          parentTaskId: parent.id,
+          title: "Late addition",
+        }),
+      ).toThrow(`Restore task ${parent.key}`);
+
+      store.restoreTasks(project.id, [parent.id]);
+      expect(store.archiveClosedBefore("2026-01-02T00:00:00.000Z")).toEqual([]);
+      for (const id of [parent.id, closedSubtask.id, openSubtask.id]) {
+        expect(store.getTask(id)?.archivedAt).toBeNull();
+      }
+      expect(
+        store
+          .listTasks({ parentTaskId: parent.id })
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual([closedSubtask.id, openSubtask.id].sort());
+
+      store.archiveTasks(project.id, [parent.id]);
+      expect(store.getTask(closedSubtask.id)?.archivedAt).toEqual(
+        expect.any(String),
+      );
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it("rolls back the whole archive or restore when a child write fails", async () => {
+    const { db, harness, store } = setup();
+    try {
+      const project = createProject(store, "ATM");
+      const parent = store.createTask({
+        projectId: project.id,
+        title: "Parent",
+        status: "done",
+      });
+      const child = store.createTask({
+        projectId: project.id,
+        parentTaskId: parent.id,
+        title: "Child",
+        status: "done",
+      });
+      db.exec(`
+        CREATE TRIGGER reject_child_archive BEFORE UPDATE OF archived_at ON tasks
+        WHEN OLD.parent_task_id IS NOT NULL
+        BEGIN SELECT RAISE(ABORT, 'child write failed'); END;
+      `);
+      expect(() => store.archiveTasks(project.id, [parent.id])).toThrow(
+        "child write failed",
+      );
+      expect(store.getTask(parent.id)?.archivedAt).toBeNull();
+      expect(store.getTask(child.id)?.archivedAt).toBeNull();
+      db.exec("DROP TRIGGER reject_child_archive");
+      store.archiveTasks(project.id, [parent.id]);
+      const archivedParent = store.getTask(parent.id);
+      const archivedChild = store.getTask(child.id);
+      db.exec(`
+        CREATE TRIGGER reject_child_restore BEFORE UPDATE OF archived_at ON tasks
+        WHEN OLD.parent_task_id IS NOT NULL
+        BEGIN SELECT RAISE(ABORT, 'child write failed'); END;
+      `);
+      expect(() => store.restoreTasks(project.id, [parent.id])).toThrow(
+        "child write failed",
+      );
+      expect(store.getTask(parent.id)).toEqual(archivedParent);
+      expect(store.getTask(child.id)).toEqual(archivedChild);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it("auto-archives only eligible future closures", async () => {
+    const { db, harness, store } = setup();
+    try {
+      const project = createProject(store, "AGE");
+      const legacy = store.createTask({
+        projectId: project.id,
+        title: "Legacy",
+      });
+      store.updateTask(legacy.id, { status: "done" });
+      db.prepare("UPDATE tasks SET closed_at = NULL WHERE id = ?").run(
+        legacy.id,
+      );
+      store.updateTask(legacy.id, { title: "Edited legacy task" });
+      expect(store.getTask(legacy.id)?.closedAt).toBeNull();
+      const recent = store.createTask({
+        projectId: project.id,
+        title: "Recent",
+      });
+      store.updateTask(recent.id, { status: "done" });
+
+      expect(
+        store
+          .archiveClosedBefore("9999-12-31T00:00:00.000Z")
+          .map((task) => task.id),
+      ).toEqual([recent.id]);
+      expect(store.getTask(legacy.id)?.archivedAt).toBeNull();
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it("migrates legacy tasks without aging or losing related records", async () => {
+    const { db, harness, store } = setup();
+    try {
+      const project = createProject(store, "LEG");
+      const task = store.createTask({
+        projectId: project.id,
+        title: "Legacy terminal task",
+        status: "canceled",
+      });
+      const comment = store.createComment({
+        taskId: task.id,
+        kind: "user",
+        authorName: "Operator",
+        body: "Keep this history",
+      });
+      store.createAttachment({
+        taskId: task.id,
+        fileName: "evidence.txt",
+        mime: "text/plain",
+        sizeBytes: 8,
+        blobPath: "attachments/evidence.txt",
+        isImage: false,
+      });
+      store.upsertTaskThread({
+        taskId: task.id,
+        threadId: "thr_legacy",
+        presetName: "Attached",
+        title: "Legacy worker",
+        liveStatus: "completed",
+      });
+
+      db.exec(`
+        DROP INDEX idx_tasks_archive;
+        ALTER TABLE tasks DROP COLUMN archived_at;
+        ALTER TABLE tasks DROP COLUMN closed_at;
+        DELETE FROM schema_version WHERE version = 7;
+      `);
+
+      const migrated = createTasksStore(db);
+      expect(migrated.getTask(task.id)).toMatchObject({
+        key: task.key,
+        projectId: project.id,
+        status: "canceled",
+        archivedAt: null,
+        closedAt: null,
+      });
+      expect(migrated.listComments(task.id).map((entry) => entry.id)).toEqual([
+        comment.id,
+      ]);
+      expect(migrated.listAttachmentsForTask(task.id)).toHaveLength(1);
+      expect(migrated.listTaskThreads(task.id)).toHaveLength(1);
+      expect(migrated.archiveClosedBefore("9999-12-31T00:00:00.000Z")).toEqual(
+        [],
+      );
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it("paginates archived tasks and binds cursors to archive visibility", async () => {
+    const { harness, store } = setup();
+    try {
+      const project = createProject(store, "ARP");
+      const tasks = Array.from({ length: 3 }, (_, index) =>
+        store.createTask({
+          projectId: project.id,
+          title: `Archived ${index + 1}`,
+          status: "done",
+        }),
+      );
+      store.archiveTasks(
+        project.id,
+        tasks.map((task) => task.id),
+      );
+
+      const first = store.listTasksPage({
+        projectId: project.id,
+        archive: "archived",
+        limit: 1,
+      });
+      expect(first.tasks).toHaveLength(1);
+      expect(first.nextCursor).not.toBeNull();
+      if (first.nextCursor === null)
+        throw new Error("expected archived cursor");
+      expect(
+        store.listTasksPage({
+          projectId: project.id,
+          archive: "archived",
+          limit: 1,
+          cursor: first.nextCursor,
+        }).tasks,
+      ).toHaveLength(1);
+      expect(() =>
+        store.listTasksPage({
+          projectId: project.id,
+          archive: "active",
+          limit: 1,
+          cursor: first.nextCursor,
+        }),
+      ).toThrow("does not match the current filters");
     } finally {
       await harness.dispose();
     }

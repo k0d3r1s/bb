@@ -239,6 +239,12 @@ const MIGRATIONS = [
     ALTER TABLE presets ADD COLUMN service_tier TEXT
       CHECK (service_tier IN ('default', 'fast'));
   `,
+  `
+    ALTER TABLE tasks ADD COLUMN archived_at TEXT;
+    ALTER TABLE tasks ADD COLUMN closed_at TEXT;
+    CREATE INDEX idx_tasks_archive
+      ON tasks(archived_at, closed_at, project_id, status);
+  `,
 ] as const;
 
 export function initializeTasksSchema(db: PluginDatabase): void {

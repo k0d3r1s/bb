@@ -310,7 +310,9 @@ describe("thread event rewrite generation", () => {
               type: "system/manager/user_message",
             },
           ]).acceptedEvents,
-        ).toEqual([{ sequence: 6, threadId }]);
+        ).toEqual([
+          { createdAt: expect.any(Number), sequence: 6, threadId },
+        ]);
       });
     });
   });

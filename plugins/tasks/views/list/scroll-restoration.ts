@@ -17,15 +17,12 @@ function storage(): Storage | null {
 export function listScrollScopeKey(params: {
   projectId: string | null;
   activeOnly: boolean;
+  mode?: "focus" | "recent" | "archive" | "active";
   filters: ListFilterState;
   sort: TaskSort;
 }): string {
-  const list =
-    params.projectId !== null
-      ? `project:${params.projectId}`
-      : params.activeOnly
-        ? "active"
-        : "all";
+  const mode = params.mode ?? (params.activeOnly ? "active" : "focus");
+  const list = `${mode}:${params.projectId ?? "all"}`;
   const statuses = JSON.stringify([...params.filters.statuses].sort());
   const priorities = JSON.stringify([...params.filters.priorities].sort());
   const labels = JSON.stringify([...params.filters.labelNames].sort());

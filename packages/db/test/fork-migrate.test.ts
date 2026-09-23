@@ -16,6 +16,8 @@ const branchPromotionHash =
   "9c385da0fe1dc75da9cc083a73b6dff8bd86eb6e23a32250823001138f2fc54a";
 const adoptedFromStatusHash =
   "02d9525357114cfa6832d46cfc408b236a75e97e963e755c1934d4ede3cabd28";
+const borrowedFeaturesHash =
+  "3a412357541b0f5c0b06802bb966d8d39dd40cd650a7457e191ebef3853b263b";
 const legacyWorkQuiesceWhen = 1_789_631_822_477;
 const legacyWorktreePromotionWhen = 1_789_631_836_275;
 const threadStorageDeletedAtWhen = 1_789_421_366_079;
@@ -46,6 +48,17 @@ function dropBranchPromotionSchema(
   `);
 }
 
+function dropBorrowedFeatureSchema(
+  db: ReturnType<typeof createConnection>,
+): void {
+  db.$client.exec(`
+    DROP TABLE IF EXISTS fork_spend_prices;
+    DROP TABLE IF EXISTS fork_thread_execution_reports;
+    DROP TABLE IF EXISTS fork_thread_spend_cursor;
+    DROP TABLE IF EXISTS fork_thread_spend_daily;
+  `);
+}
+
 describe("fork migrations", () => {
   it("keeps fork history out of the upstream migration ledger", () => {
     const db = createConnection(":memory:");
@@ -62,6 +75,7 @@ describe("fork migrations", () => {
         expect.objectContaining({ hash: worktreePromotionHash }),
         expect.objectContaining({ hash: branchPromotionHash }),
         expect.objectContaining({ hash: adoptedFromStatusHash }),
+        expect.objectContaining({ hash: borrowedFeaturesHash }),
       ]);
     } finally {
       db.$client.close();
@@ -86,9 +100,10 @@ describe("fork migrations", () => {
         .where(eq(threads.id, thread.id))
         .run();
       dropBranchPromotionSchema(db);
+      dropBorrowedFeatureSchema(db);
       db.$client.exec(`
         DELETE FROM __bb_fork_migrations
-        WHERE hash IN ('${branchPromotionHash}', '${adoptedFromStatusHash}');
+        WHERE hash IN ('${branchPromotionHash}', '${adoptedFromStatusHash}', '${borrowedFeaturesHash}');
       `);
 
       expect(migrationRows(db, "__bb_fork_migrations")).toEqual([
@@ -120,6 +135,7 @@ describe("fork migrations", () => {
         expect.objectContaining({ hash: worktreePromotionHash }),
         expect.objectContaining({ hash: branchPromotionHash }),
         expect.objectContaining({ hash: adoptedFromStatusHash }),
+        expect.objectContaining({ hash: borrowedFeaturesHash }),
       ]);
     } finally {
       db.$client.close();
@@ -158,6 +174,7 @@ describe("fork migrations", () => {
         .where(eq(threads.id, thread.id))
         .run();
       dropBranchPromotionSchema(db);
+      dropBorrowedFeatureSchema(db);
       db.$client.exec(`
         ALTER TABLE threads DROP COLUMN worktree_promotion;
         DELETE FROM __bb_fork_migrations;
@@ -191,6 +208,7 @@ describe("fork migrations", () => {
         expect.objectContaining({ hash: worktreePromotionHash }),
         expect.objectContaining({ hash: branchPromotionHash }),
         expect.objectContaining({ hash: adoptedFromStatusHash }),
+        expect.objectContaining({ hash: borrowedFeaturesHash }),
       ]);
     } finally {
       db.$client.close();
@@ -215,6 +233,7 @@ describe("fork migrations", () => {
         .where(eq(threads.id, thread.id))
         .run();
       dropBranchPromotionSchema(db);
+      dropBorrowedFeatureSchema(db);
       db.$client.exec(`
         DELETE FROM __bb_fork_migrations;
         INSERT INTO __drizzle_migrations (hash, created_at)
@@ -244,6 +263,7 @@ describe("fork migrations", () => {
         expect.objectContaining({ hash: worktreePromotionHash }),
         expect.objectContaining({ hash: branchPromotionHash }),
         expect.objectContaining({ hash: adoptedFromStatusHash }),
+        expect.objectContaining({ hash: borrowedFeaturesHash }),
       ]);
     } finally {
       db.$client.close();

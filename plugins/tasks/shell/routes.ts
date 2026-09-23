@@ -8,6 +8,8 @@ export type TaskViewMode = "list" | "board";
 export type TasksRoute =
   | { kind: "all" }
   | { kind: "active" }
+  | { kind: "recent"; projectId: string | null }
+  | { kind: "archive"; projectId: string | null }
   | { kind: "manage" }
   | { kind: "project"; projectId: string; view: TaskViewMode | null }
   | { kind: "task"; taskKey: string };
@@ -33,6 +35,12 @@ export function parseTasksRoute(rawSubPath: string): TasksRoute {
   const head = segments[0];
   if (head === undefined || head === "all") return { kind: "all" };
   if (head === "active") return { kind: "active" };
+  if (head === "recent") {
+    return { kind: "recent", projectId: segments[1] ?? null };
+  }
+  if (head === "archive") {
+    return { kind: "archive", projectId: segments[1] ?? null };
+  }
   if (head === "manage") return { kind: "manage" };
   if (head === "task") {
     const taskKey = segments[1];
@@ -47,12 +55,27 @@ export function parseTasksRoute(rawSubPath: string): TasksRoute {
   };
 }
 
+export function allowsNewTask(route: TasksRoute): boolean {
+  return (
+    route.kind !== "task" &&
+    route.kind !== "manage" &&
+    route.kind !== "recent" &&
+    route.kind !== "archive"
+  );
+}
+
 export function tasksRouteToSubPath(route: TasksRoute): string {
   switch (route.kind) {
     case "all":
       return "all";
     case "active":
       return "active";
+    case "recent":
+      return route.projectId === null ? "recent" : `recent/${route.projectId}`;
+    case "archive":
+      return route.projectId === null
+        ? "archive"
+        : `archive/${route.projectId}`;
     case "manage":
       return "manage";
     case "task":

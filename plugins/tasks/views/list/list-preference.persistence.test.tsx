@@ -195,6 +195,34 @@ async function selectSort(
 }
 
 describe("list filter/sort preference persistence", () => {
+  it.each([
+    { subPath: PROJECT_A, label: "Todo", statuses: ["todo"], key: "ALP-1" },
+    {
+      subPath: `recent/${PROJECT_A}`,
+      label: "Done",
+      statuses: ["done"],
+      key: "ALP-3",
+    },
+    { subPath: PROJECT_A, label: "Done", statuses: [], key: "ALP-1" },
+  ])(
+    "sends the selected status intersection for $subPath / $label",
+    async ({ subPath, label, statuses, key }) => {
+      const rpc = baseRpc();
+      const slot = renderSlot(app.navPanels[0]!, { subPath }, { rpc });
+      await slot.findByText(key);
+      rpc.listTasksCalls.length = 0;
+      fireEvent.click(slot.getByRole("button", { name: /^Status/ }));
+      fireEvent.click(
+        await slot.findByRole("menuitemcheckbox", { name: label }),
+      );
+      await waitFor(() =>
+        expect(rpc.listTasksCalls).toContainEqual(
+          expect.objectContaining({ projectId: PROJECT_A, statuses }),
+        ),
+      );
+    },
+  );
+
   it("restores sort and filters after unmount (navigation / remount)", async () => {
     const registration = app.navPanels[0]!;
     const slot = renderSlot(
@@ -212,10 +240,10 @@ describe("list filter/sort preference persistence", () => {
     );
 
     fireEvent.click(slot.getByRole("button", { name: /^Status/ }));
-    const doneOption = await slot.findByRole("menuitemcheckbox", {
-      name: /Done/,
+    const todoOption = await slot.findByRole("menuitemcheckbox", {
+      name: /Todo/,
     });
-    fireEvent.click(doneOption);
+    fireEvent.click(todoOption);
 
     await waitFor(() => {
       expect(
@@ -230,16 +258,16 @@ describe("list filter/sort preference persistence", () => {
       { subPath: PROJECT_A },
       { rpc: baseRpc() },
     );
-    await remounted.findByText("ALP-3");
+    await remounted.findByText("ALP-1");
     expect(
       remounted.getByRole("button", { name: /Sort/ }).textContent,
     ).toContain("Priority");
     expect(
       remounted.getByRole("button", { name: /^Status/ }).textContent,
-    ).toContain("Done");
-    expect(remounted.queryByText("ALP-1")).toBeNull();
-    expect(remounted.queryByText("ALP-2")).toBeNull();
-    expect(remounted.getByText("ALP-3")).toBeDefined();
+    ).toContain("Todo");
+    expect(remounted.getByText("ALP-1")).toBeDefined();
+    expect(remounted.getByText("ALP-2")).toBeDefined();
+    expect(remounted.queryByText("ALP-3")).toBeNull();
   });
 
   it("keeps project A and project B preferences independent", async () => {
@@ -298,8 +326,8 @@ describe("list filter/sort preference persistence", () => {
         scopes: {
           [`project:${PROJECT_A}`]: {
             filters: {
-              statuses: ["done"],
-              priorities: [],
+              statuses: [],
+              priorities: ["urgent"],
               labelNames: [],
             },
             sort: "priority",
@@ -313,7 +341,7 @@ describe("list filter/sort preference persistence", () => {
       { subPath: PROJECT_A },
       { rpc: baseRpc() },
     );
-    await slot.findByText("ALP-3");
+    await slot.findByText("ALP-2");
     fireEvent.click(slot.getByRole("button", { name: /Clear/ }));
     await waitFor(() => {
       expect(slot.queryByText("ALP-1")).not.toBeNull();

@@ -15,6 +15,7 @@ export const RESERVED_BB_CLI_COMMANDS: readonly string[] = [
   "server",
   "settings",
   "skill",
+  "spend",
   "status",
   "terminal",
   "theme",

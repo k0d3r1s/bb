@@ -330,6 +330,12 @@ move and downloads the new server's bb-app package for its service.
 - `bb skill cli-skills-status`
 - `bb skill install-cli-skills`
 
+## spend
+
+- `bb spend`
+- `bb spend list`
+- `bb spend backfill`
+
 ## guide
 
 - `bb guide`

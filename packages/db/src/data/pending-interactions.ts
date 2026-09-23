@@ -260,6 +260,36 @@ export function setPendingInteractionResolved(
   });
 }
 
+export function setTimedOutPendingInteractionResolved(
+  db: PendingInteractionWriteConnection,
+  args: {
+    id: string;
+    resolution: string;
+  },
+): PendingInteractionRow | null {
+  const now = Date.now();
+  return (
+    db
+      .update(pendingInteractions)
+      .set({
+        status: "resolved",
+        resolution: args.resolution,
+        statusReason: null,
+        resolvedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(pendingInteractions.id, args.id),
+          eq(pendingInteractions.status, "interrupted"),
+          eq(pendingInteractions.statusReason, "timeout"),
+        ),
+      )
+      .returning()
+      .get() ?? null
+  );
+}
+
 export function setPendingInteractionResolving(
   db: PendingInteractionWriteConnection,
   args: SetPendingInteractionResolvingArgs,

@@ -85,6 +85,10 @@ describe("tasks route grammar", () => {
     const routes = [
       { kind: "all" },
       { kind: "active" },
+      { kind: "recent", projectId: null },
+      { kind: "recent", projectId: PROJECT_ID },
+      { kind: "archive", projectId: null },
+      { kind: "archive", projectId: PROJECT_ID },
       { kind: "manage" },
       { kind: "task", taskKey: "TSK-4" },
       { kind: "project", projectId: PROJECT_ID, view: "list" },
@@ -175,6 +179,83 @@ describe("project view preference", () => {
       path: "tasks",
       options: { subPath: `${PROJECT_ID}?view=board` },
     });
+  });
+});
+
+describe("remembered project focus", () => {
+  it("opens the last focused project from an empty Tasks route", async () => {
+    const focused = renderSlot(
+      app.navPanels[0]!,
+      { subPath: PROJECT_ID },
+      { rpc: seededRpc({ listLabels: () => ({ labels: [] }) }) },
+    );
+    await waitFor(() =>
+      expect(window.localStorage.getItem("bb-tasks:project-focus")).toBe(
+        PROJECT_ID,
+      ),
+    );
+    focused.lifecycle.unmount();
+
+    const reopened = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "" },
+      { rpc: seededRpc({ listLabels: () => ({ labels: [] }) }) },
+    );
+    await waitFor(() =>
+      expect(reopened.navigateCalls).toContainEqual({
+        method: "toPluginPanel",
+        path: "tasks",
+        options: { subPath: PROJECT_ID, replace: true },
+      }),
+    );
+  });
+
+  it("keeps the remembered project when the projects query fails", async () => {
+    window.localStorage.setItem("bb-tasks:project-focus", PROJECT_ID);
+    let rejectProjects!: (reason: Error) => void;
+    const projectsResult = new Promise<never>((_resolve, reject) => {
+      rejectProjects = reject;
+    });
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "" },
+      {
+        rpc: seededRpc({
+          listProjects: () => projectsResult,
+        }),
+      },
+    );
+    await act(async () => {
+      rejectProjects(new Error("transient projects failure"));
+    });
+    expect(slot.navigateCalls).toEqual([]);
+    expect(window.localStorage.getItem("bb-tasks:project-focus")).toBe(
+      PROJECT_ID,
+    );
+  });
+
+  it("forgets a remembered project the loaded list no longer contains", async () => {
+    window.localStorage.setItem("bb-tasks:project-focus", OTHER_PROJECT_ID);
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "" },
+      { rpc: seededRpc({ listLabels: () => ({ labels: [] }) }) },
+    );
+    await waitFor(() =>
+      expect(window.localStorage.getItem("bb-tasks:project-focus")).toBeNull(),
+    );
+    expect(slot.navigateCalls).toEqual([]);
+  });
+
+  it("keeps explicit Focus on the grouped project view", async () => {
+    window.localStorage.setItem("bb-tasks:project-focus", PROJECT_ID);
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "all" },
+      { rpc: seededRpc({ listLabels: () => ({ labels: [] }) }) },
+    );
+    await slot.findByText("Focus");
+    expect(slot.navigateCalls).toEqual([]);
   });
 });
 
@@ -958,7 +1039,7 @@ describe("tasks app shell", () => {
       },
     );
     await slot.findByText("Tasks Plugin");
-    expect(slot.getByRole("button", { name: /^All tasks/ })).toBeDefined();
+    expect(slot.getByRole("button", { name: /^Focus/ })).toBeDefined();
     expect(slot.getByRole("button", { name: "Manage" })).toBeDefined();
 
     fireEvent.click(slot.getByTitle("Tasks Plugin"));
@@ -1027,11 +1108,26 @@ describe("tasks app shell", () => {
         rpc: seededRpc(),
       },
     );
-    await slot.findByText("All tasks");
+    await slot.findByText("Focus");
     fireEvent.keyDown(window, { key: "c" });
     await slot.findByRole("dialog");
     fireEvent.keyDown(window, { key: "c" });
     expect(slot.getAllByRole("dialog")).toHaveLength(1);
+  });
+
+  it("leaves quick-create closed where Recent and Archive hide the button", async () => {
+    for (const subPath of [`recent/${PROJECT_ID}`, `archive/${PROJECT_ID}`]) {
+      const slot = renderSlot(
+        app.navPanels[0]!,
+        { subPath },
+        { rpc: seededRpc({ listLabels: () => ({ labels: [] }) }) },
+      );
+      await slot.findByRole("button", { name: "Focus" });
+      expect(slot.queryByRole("button", { name: "New task" })).toBeNull();
+      fireEvent.keyDown(window, { key: "c" });
+      expect(slot.queryByRole("dialog")).toBeNull();
+      cleanup();
+    }
   });
 
   it("marks only new-worktree presets with the worktree hint", async () => {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useProjects } from "./data.js";
 import {
+  allowsNewTask,
   parseTasksRoute,
   useTasksNavigation,
   type ResolvedTasksRoute,
@@ -9,6 +10,10 @@ import {
   type TasksRoute,
 } from "./routes.js";
 import { loadViewMode, storeViewMode } from "./view-preference.js";
+import {
+  loadProjectFocus,
+  storeProjectFocus,
+} from "./project-focus-preference.js";
 import { TasksTopbar } from "./topbar.js";
 import { ListView } from "../views/list/index.js";
 import { BoardView } from "../views/board/index.js";
@@ -49,9 +54,13 @@ function RouteOutlet({
 }) {
   switch (route.kind) {
     case "all":
-      return <ListView projectId={null} />;
+      return <ListView projectId={null} mode="focus" />;
     case "active":
-      return <ListView projectId={null} activeOnly />;
+      return <ListView projectId={null} mode="active" />;
+    case "recent":
+      return <ListView projectId={route.projectId} mode="recent" />;
+    case "archive":
+      return <ListView projectId={route.projectId} mode="archive" />;
     case "manage":
       return <ManagePanel />;
     case "task":
@@ -60,7 +69,7 @@ function RouteOutlet({
       return route.view === "board" && boardUsable ? (
         <BoardView projectId={route.projectId} />
       ) : (
-        <ListView projectId={route.projectId} />
+        <ListView projectId={route.projectId} mode="focus" />
       );
   }
 }
@@ -103,6 +112,25 @@ function TasksAppShellContent({ subPath }: PluginNavPanelProps) {
   }, []);
   const projects = useProjects();
 
+  useEffect(() => {
+    if (route.kind === "project") storeProjectFocus(route.projectId);
+  }, [route]);
+
+  useEffect(() => {
+    if (subPath.trim() !== "" || projects.isLoading) return;
+    const projectId = loadProjectFocus();
+    if (projectId === null) return;
+    if (projects.error !== null || projects.data === undefined) return;
+    if (!projects.data.some((project) => project.id === projectId)) {
+      storeProjectFocus(null);
+      return;
+    }
+    navigation.go(
+      { kind: "project", projectId, view: null },
+      { replace: true },
+    );
+  }, [navigation, projects.data, projects.error, projects.isLoading, subPath]);
+
   const lastBrowseRouteRef = useRef<TasksRoute | null>(null);
   useEffect(() => {
     if (route.kind !== "task") lastBrowseRouteRef.current = route;
@@ -127,8 +155,10 @@ function TasksAppShellContent({ subPath }: PluginNavPanelProps) {
 
   const noProjects = projects.data !== undefined && projects.data.length === 0;
   const newTaskProjectId = route.kind === "project" ? route.projectId : null;
+  const newTaskAllowed = allowsNewTask(route);
 
   useEffect(() => {
+    if (!newTaskAllowed) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "c" || event.metaKey || event.ctrlKey || event.altKey)
         return;
@@ -140,7 +170,7 @@ function TasksAppShellContent({ subPath }: PluginNavPanelProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [newTaskAllowed]);
 
   return (
     <div className="relative flex h-full min-h-0 bg-background text-foreground">

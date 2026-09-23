@@ -82,6 +82,8 @@ machine; pass `--machine <id-or-name>` to target another enrolled machine.
 | `bb tasks list`                                | Page/filter tasks by project, status, priority, label, active agents, or search text; supports `--sort`, `--limit`, and `--cursor`.        |
 | `bb tasks show <key-or-id>`                    | Show the complete task record, including comments, attachments, subtasks, and attached threads.                                            |
 | `bb tasks update <key-or-id>`                  | Update status, priority, title, description, due date, or labels.                                                                          |
+| `bb tasks archive <key-or-id>...`              | Archive Done or Canceled top-level tasks, and their sub-tasks, from one project without deleting their history.                            |
+| `bb tasks restore <key-or-id>...`              | Restore archived top-level tasks, and their sub-tasks, to Recently closed without changing status.                                         |
 | `bb tasks comment <key-or-id>`                 | Add a Markdown comment from inline text or a file; optionally notify the latest responding task agent.                                     |
 | `bb tasks attachment add\|get\|list\|remove`   | Add, fetch, list, or remove attachments. Referenced attachments require `remove --remove-references`.                                      |
 | `bb tasks preset list\|create\|update\|delete` | Manage reusable agent execution presets.                                                                                                   |
@@ -94,6 +96,31 @@ machine; pass `--machine <id-or-name>` to target another enrolled machine.
 
 Statuses are `backlog`, `todo`, `in_progress`, `in_review`, `done`, and
 `canceled`. Priorities are `urgent`, `high`, `medium`, `low`, and `none`.
+
+The UI opens in the last focused project when one is still available; explicit
+**Focus** shows every project in separate sections. Both contain only Backlog,
+Todo, In Progress, and In Review. Done and Canceled tasks move to **Recently closed** and are archived
+seven days after a new terminal transition. Historical terminal tasks present
+when the archive migration is installed remain visible until explicitly
+archived. **Archive** is recoverable and retains the task key, project, status,
+comments, attachments, and attached threads. Use `bb tasks list --archived` to
+list only archived tasks or `--include-archived` to include both states. Bulk
+archive and restore accept at most 500 tasks and reject mixed-project or open
+selections atomically.
+
+The **Board** also shows only Backlog, Todo, In Progress, and In Review; open a
+task to mark it Done or Canceled. Sub-task progress still counts completed
+children. Project task counts exclude terminal work, while active-agent counts
+include running workers on recently closed tasks until they stop.
+
+Archive is a whole-unit lifecycle owned by top-level tasks. A sub-task is
+archived exactly when its parent is: archiving a parent archives its sub-tasks,
+restoring it restores them, and a sub-task cannot be archived or restored on
+its own. A parent is archivable — manually or by the seven-day sweep — only once
+every sub-task is Done or Canceled, so closed sub-tasks never disappear from an
+open parent. A task page always lists its full sub-task set regardless of
+archive state, as does `bb tasks show`. Restoring resets the seven-day clock, so
+a restored task stays in **Recently closed** for another seven days.
 
 Task lists default to 100 rows and accept `--limit 1-500`. JSON output is
 `{ tasks, nextCursor, limit }`; human output prints the continuation option

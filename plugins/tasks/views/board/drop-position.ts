@@ -5,16 +5,12 @@ export const BOARD_STATUSES = [
   "todo",
   "in_progress",
   "in_review",
-  "done",
 ] as const satisfies readonly TaskStatus[];
 
 export function visibleBoardStatuses(
-  columns: Readonly<Record<TaskStatus, readonly unknown[]>>,
+  _columns: Readonly<Record<TaskStatus, readonly unknown[]>>,
 ): TaskStatus[] {
-  return [
-    ...BOARD_STATUSES,
-    ...(columns.canceled.length > 0 ? (["canceled"] as const) : []),
-  ];
+  return [...BOARD_STATUSES];
 }
 
 interface BoardDropNeighbors {

@@ -28,6 +28,7 @@ import {
 } from "./rail.js";
 import { ThreadsSection } from "./threads.js";
 import { DetailToasts, useDetailToasts } from "./toast.js";
+import { Button } from "@/components/ui/button";
 import { DelayedLoading } from "@/components/ui/delayed-loading";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -192,6 +193,42 @@ function DetailSkeleton() {
   );
 }
 
+function ArchivedBanner({
+  task,
+  parentTask,
+  onRestore,
+}: {
+  task: Task;
+  parentTask: Task | null;
+  onRestore: (target: Task) => void;
+}) {
+  const target = task.parentTaskId === null ? task : parentTask;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
+      <Icon name="Archive" className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1">
+        {task.parentTaskId === null
+          ? "Archived. Restore it to change its status or position."
+          : `Archived with its parent${target === null ? "" : ` ${target.key}`}. Restore the parent to change this sub-task.`}
+      </span>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-6 gap-1.5"
+        disabled={target === null}
+        onClick={() => {
+          if (target !== null) onRestore(target);
+        }}
+      >
+        <Icon name="RotateCcw" className="size-3.5" />
+        {target === null || target.id === task.id
+          ? "Restore"
+          : `Restore ${target.key}`}
+      </Button>
+    </div>
+  );
+}
+
 function TaskDetail({ task }: { task: Task }) {
   const rpc = useTasksRpc();
   const delegationRpc = useRpc<DelegationRpcContract>();
@@ -235,7 +272,8 @@ function TaskDetail({ task }: { task: Task }) {
     [task.parentTaskId],
   );
   const subtasks = useTasksQuery(
-    async (query) => listAllTasks(query, { parentTaskId: task.id }),
+    async (query) =>
+      listAllTasks(query, { parentTaskId: task.id, archive: "all" }),
     ["tasks:changed"],
     [task.id],
   );
@@ -298,6 +336,18 @@ function TaskDetail({ task }: { task: Task }) {
     }
   };
 
+  const restoreTask = async (target: Task) => {
+    try {
+      await rpc.call("restoreTasks", {
+        projectId: target.projectId,
+        taskIds: [target.id],
+        authorName: "You",
+      });
+    } catch (error) {
+      push(errorMessage(error));
+    }
+  };
+
   const onDescriptionChange = (markdown: string) => {
     setDraft({ taskId: task.id, markdown });
     saverRef.current?.onChange(task.id, markdown);
@@ -355,6 +405,14 @@ function TaskDetail({ task }: { task: Task }) {
     <div className="@container flex min-h-full flex-col bg-surface-recessed-solid p-3">
       <div className="flex flex-1 items-stretch rounded-lg border border-border bg-card shadow-2xs">
         <div className="mx-auto w-full min-w-0 max-w-[55rem] flex-1 px-7 pb-16 pt-8 @3xl:px-13 @3xl:pt-11">
+          {task.archivedAt === null ? null : (
+            <ArchivedBanner
+              task={task}
+              parentTask={parentTask}
+              onRestore={(target) => void restoreTask(target)}
+            />
+          )}
+
           {parentTask || subtasks.data?.length ? (
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {parentTask ? (

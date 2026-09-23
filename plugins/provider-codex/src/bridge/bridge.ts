@@ -58,6 +58,7 @@ import {
   extractCodexMacOsPermissionRequest,
   type CodexMacOsPermissionRequest,
 } from "../interactive-requests.js";
+import { toCodexExecutionDelta } from "../execution-report.js";
 import { parseModelsResponse } from "../models.js";
 import { macOsPermissionPresentation } from "../presentation.js";
 import { codexTurnSchema } from "../schemas.js";
@@ -1181,6 +1182,10 @@ async function constructThreadSession(
       threadId: args.threadId,
     });
     announceSessionIdentity(session, codexThreadId);
+    const executionDelta = toCodexExecutionDelta(result);
+    if (executionDelta !== null) {
+      sendThreadDeltas(session, [executionDelta]);
+    }
     return { session, codexThreadId };
   } catch (error) {
     const released = session.closing;
