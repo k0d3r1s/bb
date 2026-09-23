@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildThreadHandoffCreateRequest,
   buildThreadHandoffFollowUpDraft,
+  mergeThreadHandoffComposeDraft,
+  readThreadHandoffComposeSeedFromLocationState,
   stripThreadHandoffPrefix,
+  THREAD_HANDOFF_COMPOSE_SEED_LOCATION_STATE_KEY,
+  type ThreadHandoffComposeSeed,
   type ThreadHandoffCreateSeed,
   type ThreadHandoffExecutionSelection,
 } from "../src/prompt/thread-handoff-request.js";
@@ -269,5 +273,122 @@ describe("buildThreadHandoffCreateRequest", () => {
         seed: SEED,
       }),
     ).toBeNull();
+  });
+});
+
+describe("readThreadHandoffComposeSeedFromLocationState", () => {
+  const COMPOSE_SEED: ThreadHandoffComposeSeed = {
+    draft: {
+      text: "Continue from @thread:thr_source",
+      mentions: [SOURCE_MENTION],
+      attachments: [],
+    },
+    environmentId: "env_source",
+    model: "claude-opus-5",
+    permissionMode: "auto",
+    projectId: "proj_source",
+    providerId: "claude-code",
+    reasoningLevel: "high",
+    serviceTier: "fast",
+    sourceThreadId: "thr_source",
+    sourceThreadTitle: "Source thread",
+  };
+  const stateWith = (seed: unknown) => ({
+    focusPrompt: true,
+    [THREAD_HANDOFF_COMPOSE_SEED_LOCATION_STATE_KEY]: seed,
+  });
+
+  it("round-trips a seed carried through location state", () => {
+    expect(
+      readThreadHandoffComposeSeedFromLocationState(stateWith(COMPOSE_SEED)),
+    ).toEqual(COMPOSE_SEED);
+  });
+
+  it("accepts a source thread without an environment or service tier", () => {
+    const { serviceTier: _serviceTier, ...withoutTier } = COMPOSE_SEED;
+    expect(
+      readThreadHandoffComposeSeedFromLocationState(
+        stateWith({ ...withoutTier, environmentId: null }),
+      ),
+    ).toEqual({ ...COMPOSE_SEED, environmentId: null, serviceTier: undefined });
+  });
+
+  it.each([
+    ["missing state", null],
+    ["no seed", { focusPrompt: true }],
+    [
+      "an empty draft",
+      stateWith({
+        ...COMPOSE_SEED,
+        draft: { text: "", mentions: [], attachments: [] },
+      }),
+    ],
+    ["an empty model", stateWith({ ...COMPOSE_SEED, model: "" })],
+    [
+      "an unknown permission mode",
+      stateWith({ ...COMPOSE_SEED, permissionMode: "yolo" }),
+    ],
+    [
+      "a blank source title",
+      stateWith({ ...COMPOSE_SEED, sourceThreadTitle: "  " }),
+    ],
+    [
+      "a malformed mention",
+      stateWith({
+        ...COMPOSE_SEED,
+        draft: { ...COMPOSE_SEED.draft, mentions: [{ start: 0 }] },
+      }),
+    ],
+  ])("rejects %s", (_label, state) => {
+    expect(readThreadHandoffComposeSeedFromLocationState(state)).toBeNull();
+  });
+});
+
+describe("mergeThreadHandoffComposeDraft", () => {
+  const handoffDraft = {
+    text: "Continue from @thread:thr_source",
+    mentions: [SOURCE_MENTION],
+    attachments: [],
+  };
+
+  it("uses the handoff draft when the composer draft is empty", () => {
+    expect(
+      mergeThreadHandoffComposeDraft(handoffDraft, {
+        text: "",
+        mentions: [],
+        attachments: [],
+      }),
+    ).toBe(handoffDraft);
+  });
+
+  it("keeps an unsent composer draft after the handoff, re-anchoring its mentions", () => {
+    const existingMention = {
+      start: 4,
+      end: 21,
+      resource: {
+        kind: "thread" as const,
+        projectId: "proj_other",
+        threadId: "thr_other",
+        label: "Other",
+      },
+    };
+    const merged = mergeThreadHandoffComposeDraft(handoffDraft, {
+      text: "See @thread:thr_other",
+      mentions: [existingMention],
+      attachments: [],
+    });
+
+    expect(merged.text).toBe(
+      "Continue from @thread:thr_source\n\nSee @thread:thr_other",
+    );
+    const offset = handoffDraft.text.length + 2;
+    expect(merged.mentions).toEqual([
+      SOURCE_MENTION,
+      { ...existingMention, start: 4 + offset, end: 21 + offset },
+    ]);
+    const shifted = merged.mentions[1]!;
+    expect(merged.text.slice(shifted.start, shifted.end)).toBe(
+      "@thread:thr_other",
+    );
   });
 });

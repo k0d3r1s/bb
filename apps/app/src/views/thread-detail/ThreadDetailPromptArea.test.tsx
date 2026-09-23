@@ -33,7 +33,11 @@ import {
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { workflowRow } from "@/test/fixtures/thread-timeline-rows";
-import type { PromptDraftAttachment } from "@bb/client-core";
+import {
+  readThreadHandoffComposeSeedFromLocationState,
+  type PromptDraftAttachment,
+} from "@bb/client-core";
+import { getRootComposeRoutePath } from "@/lib/route-paths";
 import { BbHttpError } from "@/lib/sdk";
 import type { TypeaheadConfig } from "@/components/promptbox/PromptBoxInternal";
 import type { PluginComposerHost } from "@/components/plugin/plugin-composer-host";
@@ -63,6 +67,7 @@ const mocks = vi.hoisted(() => ({
   promptDraft: {
     addAttachment: vi.fn(),
     attachments: [] as PromptDraftAttachment[],
+    clear: vi.fn(),
     clearIfCurrentMatches: vi.fn(),
     getCurrent: vi.fn(),
     mentions: [] as PromptTextMention[],
@@ -166,6 +171,7 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", async () => {
           active: boolean;
           onStart: () => void;
           onExit: () => void;
+          onChangeTarget: () => void;
           onSelect: (selection: {
             providerId: string;
             model: string;
@@ -357,9 +363,17 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", async () => {
         {execution.handoff ? (
           <>
             {execution.handoff.active ? (
-              <button type="button" onClick={execution.handoff.onExit}>
-                Exit handoff
-              </button>
+              <>
+                <button type="button" onClick={execution.handoff.onExit}>
+                  Exit handoff
+                </button>
+                <button
+                  type="button"
+                  onClick={execution.handoff.onChangeTarget}
+                >
+                  Change handoff target
+                </button>
+              </>
             ) : null}
             <button type="button" onClick={execution.handoff.onStart}>
               Start handoff
@@ -928,6 +942,11 @@ beforeEach(() => {
     mentions: mocks.promptDraft.mentions,
     text: mocks.promptDraft.text,
   }));
+  mocks.promptDraft.clear.mockImplementation(() => {
+    mocks.promptDraft.attachments = [];
+    mocks.promptDraft.mentions = [];
+    mocks.promptDraft.text = "";
+  });
   mocks.promptDraft.setDraft.mockImplementation(
     (draft: {
       attachments: PromptDraftAttachment[];
@@ -2237,6 +2256,52 @@ describe("ThreadDetailPromptArea", () => {
     expect(screen.getByTestId("command-suggestions").textContent).toBe(
       "codex:thread",
     );
+  });
+
+  it("moves a handoff to the new-thread composer with its draft and execution", () => {
+    mocks.promptDraft.text = "Implement the plan";
+    renderPromptArea({
+      thread: makeThread({ environmentId: "env_plan", title: "Plan" }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start handoff" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Complete handoff flow" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change handoff target" }),
+    );
+
+    expect(mocks.navigate).toHaveBeenCalledOnce();
+    const [path, options] = mocks.navigate.mock.calls[0] as [
+      string,
+      { state: unknown },
+    ];
+    expect(path).toBe(getRootComposeRoutePath());
+    const seed = readThreadHandoffComposeSeedFromLocationState(options.state);
+    expect(seed).toMatchObject({
+      environmentId: "env_plan",
+      model: "claude-opus-5",
+      projectId: "proj_1",
+      providerId: "claude-code",
+      reasoningLevel: "medium",
+      sourceThreadId: "thr_1",
+      sourceThreadTitle: "Plan",
+    });
+    expect(seed?.draft.text).toBe(
+      "Continue from @thread:thr_1\n\nImplement the plan",
+    );
+    expect(seed?.draft.mentions).toEqual([
+      expect.objectContaining({
+        resource: expect.objectContaining({
+          kind: "thread",
+          threadId: "thr_1",
+        }),
+      }),
+    ]);
+    expect(mocks.promptDraft.getCurrent().text).toBe("");
+    expect(screen.getByTestId("selected-model").textContent).toBe("gpt-5");
+    expect(screen.getByTestId("submit-label").textContent).toBe("");
+    expect(mocks.createThreadMutateAsync).not.toHaveBeenCalled();
   });
 
   it.each(["Switch provider", "Complete handoff flow"])(

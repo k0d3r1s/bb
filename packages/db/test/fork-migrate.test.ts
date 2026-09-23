@@ -14,6 +14,8 @@ const worktreePromotionHash =
   "dbdda013c3b84e828babc97fcebe1761bea42507c6cf8dabcb6dc8b4b392f07d";
 const branchPromotionHash =
   "9c385da0fe1dc75da9cc083a73b6dff8bd86eb6e23a32250823001138f2fc54a";
+const adoptedFromStatusHash =
+  "02d9525357114cfa6832d46cfc408b236a75e97e963e755c1934d4ede3cabd28";
 const legacyWorkQuiesceWhen = 1_789_631_822_477;
 const legacyWorktreePromotionWhen = 1_789_631_836_275;
 const threadStorageDeletedAtWhen = 1_789_421_366_079;
@@ -40,6 +42,7 @@ function dropBranchPromotionSchema(
   db.$client.exec(`
     DROP TABLE IF EXISTS branch_promotions;
     ALTER TABLE threads DROP COLUMN promotion_target;
+    ALTER TABLE environments DROP COLUMN adopted_from_status;
   `);
 }
 
@@ -58,6 +61,7 @@ describe("fork migrations", () => {
         expect.objectContaining({ hash: workQuiesceHash }),
         expect.objectContaining({ hash: worktreePromotionHash }),
         expect.objectContaining({ hash: branchPromotionHash }),
+        expect.objectContaining({ hash: adoptedFromStatusHash }),
       ]);
     } finally {
       db.$client.close();
@@ -84,7 +88,7 @@ describe("fork migrations", () => {
       dropBranchPromotionSchema(db);
       db.$client.exec(`
         DELETE FROM __bb_fork_migrations
-        WHERE hash = '${branchPromotionHash}';
+        WHERE hash IN ('${branchPromotionHash}', '${adoptedFromStatusHash}');
       `);
 
       expect(migrationRows(db, "__bb_fork_migrations")).toEqual([
@@ -115,6 +119,7 @@ describe("fork migrations", () => {
         expect.objectContaining({ hash: workQuiesceHash }),
         expect.objectContaining({ hash: worktreePromotionHash }),
         expect.objectContaining({ hash: branchPromotionHash }),
+        expect.objectContaining({ hash: adoptedFromStatusHash }),
       ]);
     } finally {
       db.$client.close();
@@ -185,6 +190,7 @@ describe("fork migrations", () => {
         expect.objectContaining({ hash: workQuiesceHash }),
         expect.objectContaining({ hash: worktreePromotionHash }),
         expect.objectContaining({ hash: branchPromotionHash }),
+        expect.objectContaining({ hash: adoptedFromStatusHash }),
       ]);
     } finally {
       db.$client.close();
@@ -237,6 +243,7 @@ describe("fork migrations", () => {
         expect.objectContaining({ hash: workQuiesceHash }),
         expect.objectContaining({ hash: worktreePromotionHash }),
         expect.objectContaining({ hash: branchPromotionHash }),
+        expect.objectContaining({ hash: adoptedFromStatusHash }),
       ]);
     } finally {
       db.$client.close();

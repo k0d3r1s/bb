@@ -119,12 +119,15 @@ import {
 } from "@/lib/mutation-errors";
 import { promptHistoryEntriesToDrafts } from "@/lib/prompt-history";
 import { usePromptHistoryEnabled } from "@/hooks/usePromptHistoryEnabled";
-import { getThreadRoutePath } from "@/lib/route-paths";
+import { getRootComposeRoutePath, getThreadRoutePath } from "@/lib/route-paths";
+import { useSetRootComposeProjectId } from "@/lib/root-compose-selection";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
 import {
   buildThreadHandoffCreateRequest,
   buildThreadHandoffFollowUpDraft,
   stripThreadHandoffPrefix,
+  THREAD_HANDOFF_COMPOSE_SEED_LOCATION_STATE_KEY,
+  type ThreadHandoffComposeSeed,
   type ThreadHandoffCreateSeed,
 } from "@bb/client-core";
 import {
@@ -802,6 +805,51 @@ export function ThreadDetailPromptArea({
     setProviderModelReasoning,
     setServiceTier,
     thread.id,
+  ]);
+  const setRootComposeProjectId = useSetRootComposeProjectId();
+  const moveHandoffToNewThreadComposer = useCallback(() => {
+    if (!isHandoffSelection || effectiveSelectedModel.length === 0) return;
+    const composeSeed: ThreadHandoffComposeSeed = {
+      draft: buildThreadHandoffFollowUpDraft(
+        handoffSeed,
+        promptDraft.getCurrent(),
+      ),
+      environmentId: thread.environmentId,
+      model: effectiveSelectedModel,
+      permissionMode,
+      projectId: thread.projectId,
+      providerId: selectedProviderId,
+      reasoningLevel,
+      serviceTier: supportsServiceTier ? serviceTier : undefined,
+      sourceThreadId: thread.id,
+      sourceThreadTitle: sourceThreadDisplayTitle,
+    };
+    promptDraft.clear();
+    exitHandoff();
+    setRootComposeProjectId(thread.projectId);
+    navigate(getRootComposeRoutePath(), {
+      state: {
+        focusPrompt: true,
+        [THREAD_HANDOFF_COMPOSE_SEED_LOCATION_STATE_KEY]: composeSeed,
+      },
+    });
+  }, [
+    effectiveSelectedModel,
+    exitHandoff,
+    handoffSeed,
+    isHandoffSelection,
+    navigate,
+    permissionMode,
+    promptDraft,
+    reasoningLevel,
+    selectedProviderId,
+    serviceTier,
+    setRootComposeProjectId,
+    sourceThreadDisplayTitle,
+    supportsServiceTier,
+    thread.environmentId,
+    thread.id,
+    thread.projectId,
   ]);
   const handleProviderChange = useCallback(
     (providerId: string) => {
@@ -1574,6 +1622,7 @@ export function ThreadDetailPromptArea({
         onStart: beginHandoff,
         onExit: exitHandoff,
         onSelect: handleHandoffSelect,
+        onChangeTarget: moveHandoffToNewThreadComposer,
       },
     }),
     [
@@ -1584,6 +1633,7 @@ export function ThreadDetailPromptArea({
       beginHandoff,
       isHandoffSelection,
       exitHandoff,
+      moveHandoffToNewThreadComposer,
       handleModelChange,
       handleProviderChange,
       isLoadingModels,

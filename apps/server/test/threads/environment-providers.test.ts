@@ -1418,7 +1418,12 @@ describe("environment providers are asked inside provisioning", () => {
       expect(inspected).toEqual(["/tmp/environment-providers-refresh-branch"]);
       expect(getEnvironment(harness.db, attached.id)).toMatchObject({
         environmentProviderInstanceKey: attached.environmentProviderInstanceKey,
-        environmentProviderSelection: attached.environmentProviderSelection,
+      });
+      expect(
+        getEnvironment(harness.db, attached.id)?.environmentProviderSelection,
+      ).toEqual({
+        machine: { type: "existing", hostId: host.id },
+        inputs: null,
       });
     });
   });

@@ -745,6 +745,7 @@ describe("ModelReasoningPicker", () => {
         onStart,
         onExit,
         onSelect,
+        onChangeTarget: vi.fn(),
       },
     });
     fireEvent.click(
@@ -779,6 +780,7 @@ describe("ModelReasoningPicker", () => {
             onStart: vi.fn(),
             onExit: vi.fn(),
             onSelect,
+            onChangeTarget: vi.fn(),
           },
           providerRouting: { environmentId: "env-source" },
           alternateProviderModels: [
@@ -830,6 +832,7 @@ describe("ModelReasoningPicker", () => {
           onStart: vi.fn(),
           onExit: vi.fn(),
           onSelect,
+          onChangeTarget: vi.fn(),
         },
         alternateProviderModels: [
           {
@@ -879,6 +882,7 @@ describe("ModelReasoningPicker", () => {
         onStart: vi.fn(),
         onExit,
         onSelect,
+        onChangeTarget: vi.fn(),
       },
     });
     const trigger = screen.getByRole("button", {

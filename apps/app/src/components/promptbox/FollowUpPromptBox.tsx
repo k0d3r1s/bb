@@ -768,9 +768,19 @@ function FollowUpPromptBoxWithComposer({
               <span>Handoff to new thread</span>
               <Button
                 type="button"
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-6 shrink-0 px-2 text-xs text-subtle-foreground"
+                onClick={execution.handoff.onChangeTarget}
+                disabled={executionControlsDisabled}
+              >
+                Change project or environment
+              </Button>
+              <Button
+                type="button"
                 size="icon"
                 variant="ghost"
-                className="ml-auto size-6 shrink-0 text-subtle-foreground"
+                className="size-6 shrink-0 text-subtle-foreground"
                 onClick={execution.handoff.onExit}
                 disabled={executionControlsDisabled}
                 aria-label="Exit handoff"

@@ -1,11 +1,24 @@
-import type {
-  PermissionMode,
-  PromptTextMention,
-  ReasoningLevel,
-  ServiceTier,
+import {
+  permissionModeSchema,
+  promptTextMentionSchema,
+  reasoningLevelSchema,
+  serviceTierSchema,
+  type PermissionMode,
+  type PromptTextMention,
+  type ReasoningLevel,
+  type ServiceTier,
 } from "@bb/domain";
+import { uploadedPromptAttachmentSchema } from "@bb/server-contract";
+import { z } from "zod";
 import type { AppCreateThreadRequest } from "../api-types.js";
-import { promptDraftToInput, type PromptDraftState } from "./prompt-draft.js";
+import {
+  isPromptDraftEmpty,
+  promptDraftToInput,
+  type PromptDraftState,
+} from "./prompt-draft.js";
+
+export const THREAD_HANDOFF_COMPOSE_SEED_LOCATION_STATE_KEY =
+  "threadHandoffComposeSeed";
 
 export interface ThreadHandoffCreateSeed {
   environmentId: string | null;
@@ -87,21 +100,35 @@ export function buildThreadHandoffFollowUpDraft(
   if (threadHandoffPrefixLength(seed, draft) !== null) {
     return draft;
   }
-  const handoff = buildThreadHandoffPromptDraft(seed);
-  const offset =
-    handoff.text.length + THREAD_HANDOFF_FOLLOW_UP_SEPARATOR.length;
+  return joinPromptDrafts(buildThreadHandoffPromptDraft(seed), draft);
+}
+
+function joinPromptDrafts(
+  head: PromptDraftState,
+  tail: PromptDraftState,
+): PromptDraftState {
+  const offset = head.text.length + THREAD_HANDOFF_FOLLOW_UP_SEPARATOR.length;
   return {
-    text: `${handoff.text}${THREAD_HANDOFF_FOLLOW_UP_SEPARATOR}${draft.text}`,
+    text: `${head.text}${THREAD_HANDOFF_FOLLOW_UP_SEPARATOR}${tail.text}`,
     mentions: [
-      ...handoff.mentions,
-      ...draft.mentions.map((mention) => ({
+      ...head.mentions,
+      ...tail.mentions.map((mention) => ({
         ...mention,
         start: mention.start + offset,
         end: mention.end + offset,
       })),
     ],
-    attachments: draft.attachments,
+    attachments: [...head.attachments, ...tail.attachments],
   };
+}
+
+export function mergeThreadHandoffComposeDraft(
+  handoffDraft: PromptDraftState,
+  existingDraft: PromptDraftState,
+): PromptDraftState {
+  return isPromptDraftEmpty(existingDraft)
+    ? handoffDraft
+    : joinPromptDrafts(handoffDraft, existingDraft);
 }
 
 export function stripThreadHandoffPrefix(
@@ -162,4 +189,49 @@ export function buildThreadHandoffCreateRequest({
     ...(sendAt === undefined ? {} : { sendAt }),
     startedOnBehalfOf: null,
   };
+}
+
+export interface ThreadHandoffComposeSeed {
+  draft: PromptDraftState;
+  environmentId: string | null;
+  model: string;
+  permissionMode: PermissionMode;
+  projectId: string;
+  providerId: string;
+  reasoningLevel: ReasoningLevel;
+  serviceTier: ServiceTier | undefined;
+  sourceThreadId: string;
+  sourceThreadTitle: string;
+}
+
+const nonEmptyStringSchema = z.string().min(1);
+
+const threadHandoffComposeSeedSchema = z.object({
+  draft: z.object({
+    text: nonEmptyStringSchema,
+    mentions: z.array(promptTextMentionSchema),
+    attachments: z.array(uploadedPromptAttachmentSchema),
+  }),
+  environmentId: nonEmptyStringSchema.nullable(),
+  model: nonEmptyStringSchema,
+  permissionMode: permissionModeSchema,
+  projectId: nonEmptyStringSchema,
+  providerId: nonEmptyStringSchema,
+  reasoningLevel: reasoningLevelSchema,
+  serviceTier: serviceTierSchema.optional(),
+  sourceThreadId: nonEmptyStringSchema,
+  sourceThreadTitle: z.string().trim().min(1),
+});
+
+export function readThreadHandoffComposeSeedFromLocationState(
+  state: unknown,
+): ThreadHandoffComposeSeed | null {
+  if (!state || typeof state !== "object") return null;
+  const candidate = (state as Record<string, unknown>)[
+    THREAD_HANDOFF_COMPOSE_SEED_LOCATION_STATE_KEY
+  ];
+  const result = threadHandoffComposeSeedSchema.safeParse(candidate);
+  if (!result.success) return null;
+  const { serviceTier, ...seed } = result.data;
+  return { ...seed, serviceTier };
 }

@@ -547,6 +547,7 @@ export const environments = sqliteTable(
       "running" | "failed" | "removed"
     >(),
     teardownMessage: text("teardown_message"),
+    adoptedFromStatus: text("adopted_from_status").$type<EnvironmentStatus>(),
     resource: text("resource", { mode: "json" }).$type<JsonValue>(),
     ownerThreadId: text("owner_thread_id"),
     attempt: integer("attempt").notNull().default(0),

@@ -59,9 +59,13 @@ worktree` only; a provider takes its branch through `--environment-inputs`.
   the follow-up picker, choose **Handoff to new thread**; **Exit handoff** in
   the picker or composer restores the source execution settings and retains
   draft edits without the automatic source reference. Closing the picker
-  keeps handoff active. Use `bb thread spawn --provider PROVIDER --model MODEL
---environment ENV_ID --prompt 'Continue from @thread:THREAD_ID ...'` for the
-  same thread creation through the CLI, or `threads.spawn` through the SDK.
+  keeps handoff active. **Change project or environment** moves the handoff
+  draft and execution into the new-thread composer to pick another project,
+  environment, or branch. Use `bb thread spawn --project PROJECT --provider
+PROVIDER --model MODEL --environment ENV_ID --prompt 'Continue from
+@thread:THREAD_ID ...'` (or `--new-environment worktree` /
+  `--environment-provider`) for the same thread creation through the CLI, or
+  `threads.spawn` through the SDK.
 - Use `bb thread fork <source-thread-id>` to clone a provider session. The
   fork inherits the source conversation in its timeline. It creates an idle
   fork in the source environment by default; add `--prompt`, select an existing

@@ -1799,6 +1799,79 @@ it("keeps a shared workspace ready when its preparing owner cancels before attac
   });
 });
 
+it.each(["ready", "provisioning"] as const)(
+  "releases an unshared %s workspace it adopted when its owner cancels",
+  async (adoptedStatus) => {
+    await withTestHarness(async (harness) => {
+      const remove = vi.fn(async () => ({ status: "removed" as const }));
+      const fixture = setup(harness, {
+        create: async () => ({
+          status: "created",
+          path: "/tmp/adopted-unshared",
+          ownsPath: false,
+        }),
+        remove,
+      });
+      const adopted = createEnvironment(harness.db, harness.hub, {
+        projectId: fixture.context.project.id,
+        hostId: fixture.host.id,
+        path: "/tmp/adopted-unshared",
+        status: adoptedStatus,
+        providerOwnsPath: false,
+      });
+      fixture.ask();
+      await expect
+        .poll(() => getPreparingEnvironment(harness.db, fixture.thread.id)?.id)
+        .toBe(adopted.id);
+      saveProviderStartup(harness, fixture);
+      requestThreadStopForCurrentState(harness.deps, fixture.thread, null);
+
+      await expect
+        .poll(() => getEnvironment(harness.db, adopted.id)?.ownerThreadId)
+        .toBeNull();
+      expect(getEnvironment(harness.db, adopted.id)).toMatchObject({
+        status: adoptedStatus,
+        path: "/tmp/adopted-unshared",
+        claimPath: null,
+        teardownStatus: null,
+        retireAt: null,
+        adoptedFromStatus: null,
+      });
+      expect(remove).not.toHaveBeenCalled();
+    });
+  },
+);
+
+it("clears the adopted marker once the environment attaches", async () => {
+  await withTestHarness(async (harness) => {
+    const fixture = setup(harness, {
+      create: async () => ({
+        status: "created",
+        path: "/tmp/adopted-attach",
+        ownsPath: false,
+      }),
+    });
+    const adopted = createEnvironment(harness.db, harness.hub, {
+      projectId: fixture.context.project.id,
+      hostId: fixture.host.id,
+      path: "/tmp/adopted-attach",
+      status: "ready",
+      providerOwnsPath: false,
+    });
+    fixture.ask();
+    await expect
+      .poll(() => getPreparingEnvironment(harness.db, fixture.thread.id)?.id)
+      .toBe(adopted.id);
+    expect(getEnvironment(harness.db, adopted.id)?.adoptedFromStatus).toBe(
+      "ready",
+    );
+
+    fixture.attach();
+
+    expect(getEnvironment(harness.db, adopted.id)?.adoptedFromStatus).toBeNull();
+  });
+});
+
 it("serializes concurrent branchless checkout attaches until the first thread is bound", async () =>
   withTestHarness(async (harness) => {
     const fake = createFakePluginHost({
@@ -2210,6 +2283,10 @@ describe("existing-path provider selection", () => {
         environmentProviderId: fixture.record.provider.id,
         environmentProviderPluginId: "test",
         environmentProviderInstanceKey: "original-key",
+        environmentProviderSelection: {
+          machine: { type: "existing", hostId: "retired-host" },
+          inputs: { stale: true },
+        },
         mergeBaseBranch: "release",
       });
       harness.db
@@ -2225,7 +2302,10 @@ describe("existing-path provider selection", () => {
         resource: { original: true },
         mergeBaseBranch: "release",
         environmentProviderInstanceKey: "original-key",
-        environmentProviderSelection: existing.environmentProviderSelection,
+      });
+      expect(fixture.row().environmentProviderSelection).toEqual({
+        machine: { type: "existing", hostId: fixture.host.id },
+        inputs: null,
       });
       fixture.attach();
       await sweepProviderEnvironment(harness.deps, existing.id);
@@ -2236,6 +2316,41 @@ describe("existing-path provider selection", () => {
           resource: { original: true },
         }),
       );
+    }));
+
+  it("keeps an adopted environment when provisioning is asked again", async () =>
+    withTestHarness(async (harness) => {
+      const fixture = setup(harness, {
+        create: async () => ({
+          status: "created",
+          path: "/tmp/existing",
+          ownsPath: false,
+        }),
+        policy: { retireGraceMs: 0 },
+      });
+      const existing = seedEnvironment(harness.deps, {
+        projectId: fixture.context.project.id,
+        hostId: fixture.host.id,
+        path: "/tmp/existing",
+        environmentProviderId: fixture.record.provider.id,
+        environmentProviderPluginId: "test",
+        environmentProviderInstanceKey: "original-key",
+        environmentProviderSelection: {
+          machine: { type: "existing", hostId: fixture.host.id },
+          inputs: { path: "/tmp/existing" },
+        },
+      });
+      fixture.ask();
+      await fixture.settled();
+      expect(fixture.row().id).toBe(existing.id);
+
+      expect(fixture.ask()).toMatchObject({ action: "ready" });
+      expect(fixture.row()).toMatchObject({
+        id: existing.id,
+        path: "/tmp/existing",
+        teardownStatus: null,
+      });
+      expect(fixture.row().status).not.toBe("destroyed");
     }));
 });
 

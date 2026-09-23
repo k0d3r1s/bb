@@ -2,7 +2,7 @@
 
 An environment row exists before its provider creates the workspace. Its `status` moves from `creating` through `provisioning` (daemon attachment and setup) to `ready`, or to `error`. `environment-engine.ts` owns that walk, cancellation, cleanup, and retirement, using one operation registry. The periodic sweep resumes the same walk after a restart.
 
-Placement validates the selected provider, reserves the environment, and asks the engine to advance it. It no longer turns provider output into another placement intent or creates a second environment after the provider returns. A provider that returns an existing project checkout preserves that checkout's identity and retires the unused reservation.
+Placement validates the selected provider, reserves the environment, and asks the engine to advance it. It no longer turns provider output into another placement intent or creates a second environment after the provider returns. A provider that returns an existing project checkout preserves that checkout's identity and retires the unused reservation. Identity means the workspace's cleanup handles: its instance key, resource, merge base, and path ownership. The adopted row records the reservation's own provider selection instead, because placement compares that selection against the request on every provisioning pass and a preserved older selection would read as a changed request.
 
 Creation adds five fields to `environments`:
 
@@ -14,7 +14,7 @@ Creation adds five fields to `environments`:
 
 There is no parallel provisioning phase, attached flag, rejected-path flag, transient-failure counter, or automatic create retry ladder. A rejected foreign path records an error and completed teardown without handing that path to removal. Creation failures are terminal. Cleanup failures still use the existing teardown status, attempt, message, and retry deadline. Setup failure can be retried on the same environment without recreating its workspace.
 
-Cancellation waits for the active create to settle before removing its resources. After attachment, the engine cancels daemon setup. Shared environments remain until their last live thread leaves; retirement uses the provider's existing grace period. Provider ownership checks continue to protect cleanup, and pending cleanup survives provider unavailability and server restart.
+Cancellation waits for the active create to settle before removing its resources. After attachment, the engine cancels daemon setup. Shared environments remain until their last live thread leaves; retirement uses the provider's existing grace period. An adopted environment is released rather than removed: `adoptedFromStatus` holds the status it had before adoption, and cancellation restores that status and clears the reservation's ownership, claim, and teardown fields. Attachment clears the marker, after which the shared-environment rules apply. Provider ownership checks continue to protect cleanup, and pending cleanup survives provider unavailability and server restart.
 
 The thread owns its startup request in `threads.startup_context`:
 

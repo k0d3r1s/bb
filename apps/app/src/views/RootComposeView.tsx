@@ -25,6 +25,7 @@ import type {
 } from "@bb/server-contract";
 import {
   NewThreadComposer,
+  type NewThreadComposerSeed,
   type NewThreadComposerState,
   type NewThreadComposerSubmission,
 } from "@/components/promptbox/NewThreadComposer";
@@ -94,7 +95,10 @@ import type { PromptDraftAttachment } from "@bb/client-core";
 import {
   buildForkThreadRequest,
   FORK_THREAD_CREATE_SEED_LOCATION_STATE_KEY,
+  mergeThreadHandoffComposeDraft,
+  readThreadHandoffComposeSeedFromLocationState,
   type ForkThreadCreateSeed,
+  type ThreadHandoffComposeSeed,
 } from "@bb/client-core";
 import { useNavigateToThreadAfterCreatePreference } from "@/lib/root-compose-create-preference";
 import {
@@ -144,6 +148,7 @@ import {
 } from "@/lib/live-file-navigation";
 import {
   useRootComposeForkSeed,
+  useRootComposeHandoffSeed,
   useRootComposeProjectId,
   useRootComposeSectionId,
   useSetRootComposeProjectId,
@@ -405,11 +410,34 @@ function readForkThreadCreateSeedFromLocationState(
   };
 }
 
+export function buildHandoffComposerSeed(
+  handoffSeed: ThreadHandoffComposeSeed,
+  projectId: string,
+): NewThreadComposerSeed {
+  return {
+    providerId: handoffSeed.providerId,
+    model: handoffSeed.model,
+    reasoningLevel: handoffSeed.reasoningLevel,
+    serviceTier: handoffSeed.serviceTier,
+    permissionMode: handoffSeed.permissionMode,
+    ...(handoffSeed.environmentId !== null &&
+    projectId === handoffSeed.projectId
+      ? {
+          environment: {
+            type: "reuse" as const,
+            environmentId: handoffSeed.environmentId,
+          },
+        }
+      : {}),
+  };
+}
+
 export function hasSingleUseRootComposeTargetState(state: unknown): boolean {
   return (
     readRootComposeSectionTargetFromLocationState(state) !== null ||
     readReuseEnvironmentIdFromLocationState(state) !== null ||
-    readForkThreadCreateSeedFromLocationState(state) !== null
+    readForkThreadCreateSeedFromLocationState(state) !== null ||
+    readThreadHandoffComposeSeedFromLocationState(state) !== null
   );
 }
 
@@ -526,6 +554,7 @@ export function RootComposeView() {
   const [navigateToThreadAfterCreate] =
     useNavigateToThreadAfterCreatePreference();
   const [forkSeed, setForkSeed] = useRootComposeForkSeed();
+  const [handoffSeed, setHandoffSeed] = useRootComposeHandoffSeed();
 
   const handleProjectChange = useCallback(
     (projectId: string) => {
@@ -537,7 +566,7 @@ export function RootComposeView() {
   const handleSubmit = useCallback(
     async (request: NewThreadComposerSubmission) => {
       const shouldNavigateToCreatedThread = shouldNavigateAfterThreadCreate({
-        isForkDraft: forkSeed !== null,
+        isForkDraft: forkSeed !== null || handoffSeed !== null,
         navigateToThreadAfterCreate,
       });
       const { sendAt, ...requestFields } = request;
@@ -572,6 +601,7 @@ export function RootComposeView() {
       );
       setLastCreatedThreadId(thread.id);
       setForkSeed(null);
+      setHandoffSeed(null);
       setRootComposeSectionId(null);
       if (shouldNavigateToCreatedThread) {
         navigate(
@@ -585,18 +615,22 @@ export function RootComposeView() {
     [
       createThread,
       forkSeed,
+      handoffSeed,
       queryClient,
       navigate,
       navigateToThreadAfterCreate,
       rootComposeSectionId,
       setForkSeed,
+      setHandoffSeed,
       setRootComposeSectionId,
     ],
   );
   const composerSeed = useMemo(
     () =>
       forkSeed === null
-        ? undefined
+        ? handoffSeed === null
+          ? undefined
+          : buildHandoffComposerSeed(handoffSeed, rootComposeProjectId)
         : {
             providerId: forkSeed.providerId,
             model: forkSeed.model,
@@ -608,7 +642,7 @@ export function RootComposeView() {
               environmentId: forkSeed.environmentId,
             },
           },
-    [forkSeed],
+    [forkSeed, handoffSeed, rootComposeProjectId],
   );
 
   return (
@@ -618,17 +652,19 @@ export function RootComposeView() {
       draftStorage={{ kind: "new-thread" }}
       selectionScope="new-thread"
       seed={composerSeed}
-      resetKey={forkSeed?.sourceThreadId ?? null}
-      preferReadyProviderWhenUnset={forkSeed === null}
+      resetKey={forkSeed?.sourceThreadId ?? handoffSeed?.sourceThreadId ?? null}
+      preferReadyProviderWhenUnset={forkSeed === null && handoffSeed === null}
       onSubmit={handleSubmit}
     >
       {(composer) => (
         <RootComposeSurface
           composer={composer}
           forkSeed={forkSeed}
+          handoffSeed={handoffSeed}
           lastCreatedThreadId={lastCreatedThreadId}
           rootComposeProjectId={rootComposeProjectId}
           setForkSeed={setForkSeed}
+          setHandoffSeed={setHandoffSeed}
           setRootComposeProjectId={setRootComposeProjectId}
           setRootComposeSectionId={setRootComposeSectionId}
           setStartedComposing={setStartedComposing}
@@ -642,9 +678,11 @@ export function RootComposeView() {
 interface RootComposeSurfaceProps {
   composer: NewThreadComposerState;
   forkSeed: ForkThreadCreateSeed | null;
+  handoffSeed: ThreadHandoffComposeSeed | null;
   lastCreatedThreadId: string | null;
   rootComposeProjectId: string;
   setForkSeed: (seed: ForkThreadCreateSeed | null) => void;
+  setHandoffSeed: (seed: ThreadHandoffComposeSeed | null) => void;
   setRootComposeProjectId: (projectId: string) => void;
   setRootComposeSectionId: (sectionId: string | null) => void;
   setStartedComposing: (started: boolean) => void;
@@ -654,9 +692,11 @@ interface RootComposeSurfaceProps {
 function RootComposeSurface({
   composer,
   forkSeed,
+  handoffSeed,
   lastCreatedThreadId,
   rootComposeProjectId,
   setForkSeed,
+  setHandoffSeed,
   setRootComposeProjectId,
   setRootComposeSectionId,
   setStartedComposing,
@@ -736,6 +776,7 @@ function RootComposeSurface({
   const searchInitialDraft = useInitialPromptDraft(searchInitialPrompt);
   const stateInitialDraft = useInitialPromptDraft(stateInitialPrompt);
   const setPromptDraft = promptDraft.setDraft;
+  const getCurrentPromptDraft = promptDraft.getCurrent;
   const restorePromptDraftIfEmpty = promptDraft.restoreIfEmpty;
 
   useEffect(() => {
@@ -766,6 +807,9 @@ function RootComposeSurface({
     const nextForkSeed = readForkThreadCreateSeedFromLocationState(
       location.state,
     );
+    const nextHandoffSeed = readThreadHandoffComposeSeedFromLocationState(
+      location.state,
+    );
     if (!hasSingleUseRootComposeTargetState(location.state)) return;
     if (shouldStartComposingFromLocationState(location.state)) {
       setStartedComposing(true);
@@ -779,6 +823,7 @@ function RootComposeSurface({
       seedEnvironmentSelectionValue(encodeReuseValue(reuseEnvironmentId));
     }
     if (nextForkSeed !== null) {
+      setHandoffSeed(null);
       setForkSeed(nextForkSeed);
       setRootComposeProjectId(nextForkSeed.projectId);
       setProviderModelReasoning(nextForkSeed);
@@ -786,6 +831,25 @@ function RootComposeSurface({
       setServiceTier(nextForkSeed.serviceTier);
       seedEnvironmentSelectionValue(
         encodeReuseValue(nextForkSeed.environmentId),
+      );
+    }
+    if (nextHandoffSeed !== null) {
+      setForkSeed(null);
+      setHandoffSeed(nextHandoffSeed);
+      setRootComposeProjectId(nextHandoffSeed.projectId);
+      setProviderModelReasoning(nextHandoffSeed);
+      setPermissionMode(nextHandoffSeed.permissionMode);
+      setServiceTier(nextHandoffSeed.serviceTier);
+      if (nextHandoffSeed.environmentId !== null) {
+        seedEnvironmentSelectionValue(
+          encodeReuseValue(nextHandoffSeed.environmentId),
+        );
+      }
+      setPromptDraft(
+        mergeThreadHandoffComposeDraft(
+          nextHandoffSeed.draft,
+          getCurrentPromptDraft(),
+        ),
       );
     }
     navigate(getRootComposeRoutePath() + location.search, {
@@ -797,8 +861,11 @@ function RootComposeSurface({
     location.state,
     navigate,
     seedEnvironmentSelectionValue,
+    getCurrentPromptDraft,
     setForkSeed,
+    setHandoffSeed,
     setPermissionMode,
+    setPromptDraft,
     setProviderModelReasoning,
     setRootComposeProjectId,
     setRootComposeSectionId,
@@ -1803,6 +1870,7 @@ function RootComposeSurface({
   const isForkDraft = forkSeed !== null;
   const showEmptyWelcome =
     !isForkDraft &&
+    handoffSeed === null &&
     !startedComposing &&
     projects !== undefined &&
     projects.length === 0;
@@ -1861,13 +1929,44 @@ function RootComposeSurface({
     setForkSeed(null);
     window.requestAnimationFrame(focusPromptBox);
   }, [focusPromptBox, setForkSeed]);
+  const handleCancelHandoffDraft = useCallback(() => {
+    setHandoffSeed(null);
+    window.requestAnimationFrame(focusPromptBox);
+  }, [focusPromptBox, setHandoffSeed]);
 
   const forkSourceDisplayTitle = useThreadTitleDisplayText(
     forkSeed?.sourceThreadTitle ?? "",
   );
   const promptHeader = useMemo(() => {
     if (forkSeed === null) {
-      return null;
+      if (handoffSeed === null) {
+        return null;
+      }
+      return (
+        <div className="flex">
+          <div
+            aria-label={`Handing off ${handoffSeed.sourceThreadTitle}`}
+            className="-ml-1.5 inline-flex h-7 max-w-full items-center gap-1.5 rounded-full bg-muted py-0 pl-2.5 pr-1 text-xs font-medium text-muted-foreground"
+          >
+            <Icon
+              name="MessageSquarePlus"
+              className="size-3.5 shrink-0"
+              aria-hidden
+            />
+            <span className="min-w-0 truncate">
+              Handing off {handoffSeed.sourceThreadTitle}
+            </span>
+            <button
+              type="button"
+              aria-label="Cancel handoff"
+              className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={handleCancelHandoffDraft}
+            >
+              <Icon name="X" className="size-3" aria-hidden />
+            </button>
+          </div>
+        </div>
+      );
     }
     return (
       <div className="flex">
@@ -1891,7 +1990,13 @@ function RootComposeSurface({
         </div>
       </div>
     );
-  }, [forkSeed, forkSourceDisplayTitle, handleCancelForkDraft]);
+  }, [
+    forkSeed,
+    forkSourceDisplayTitle,
+    handleCancelForkDraft,
+    handleCancelHandoffDraft,
+    handoffSeed,
+  ]);
 
   const promptBanner = useMemo(() => {
     if (blockingProviderCliStatus === null) {

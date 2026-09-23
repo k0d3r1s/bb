@@ -110,6 +110,7 @@ export interface ModelReasoningPickerHandoff {
   onStart: () => void;
   onExit: () => void;
   onSelect: (selection: ModelReasoningPickerHandoffSelection) => void;
+  onChangeTarget: () => void;
 }
 
 const FAILED_TO_LOAD_MODELS_LABEL = "Failed to load models";

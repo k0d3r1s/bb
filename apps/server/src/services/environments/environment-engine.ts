@@ -554,6 +554,7 @@ export function markProviderEnvironmentAttached(
       ownerThreadId: null,
       claimPath: null,
       retireAt: null,
+      adoptedFromStatus: null,
     })
     .where(eq(environments.id, row.id))
     .run();
@@ -774,19 +775,25 @@ async function sweepProviderEnvironmentInSlot(
   const machineRemoving = getHost(deps.db, row.hostId)?.phase === "removing";
   const shared =
     !machineRemoving && environmentHasLiveThreads(deps.db, environmentId);
+  const adoptedFromStatus = row.adoptedFromStatus;
   if (
     !machineRemoving &&
     row.ownerThreadId !== null &&
     row.teardownStatus !== null &&
-    (shared || (row.status === "ready" && row.path !== null))
+    (shared ||
+      adoptedFromStatus !== null ||
+      (row.status === "ready" && row.path !== null))
   ) {
     const released = {
       ownerThreadId: null,
       claimPath: null,
       retireAt: null,
       teardownStatus: null,
+      adoptedFromStatus: null,
+      ...(adoptedFromStatus === null ? {} : { status: adoptedFromStatus }),
     };
     writeEnvironment(deps, environmentId, released);
+    if (adoptedFromStatus !== null) return;
     row = { ...row, ...released };
   }
   const cancelled = row.ownerThreadId !== null && row.teardownStatus !== null;

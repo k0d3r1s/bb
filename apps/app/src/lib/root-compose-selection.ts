@@ -1,7 +1,10 @@
 import { atom, useAtom, useSetAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
-import type { ForkThreadCreateSeed } from "@bb/client-core";
+import type {
+  ForkThreadCreateSeed,
+  ThreadHandoffComposeSeed,
+} from "@bb/client-core";
 import { createTabScopedStorage } from "./browser-storage";
 
 const ROOT_COMPOSE_PROJECT_ID_STORAGE_KEY = "bb.root-compose.project-id";
@@ -34,6 +37,8 @@ const rootComposeSectionIdAtom = atom<string | null>(null);
 
 const rootComposeForkSeedAtom = atom<ForkThreadCreateSeed | null>(null);
 
+const rootComposeHandoffSeedAtom = atom<ThreadHandoffComposeSeed | null>(null);
+
 export function useRootComposeProjectId() {
   return useAtom(rootComposeProjectIdAtom);
 }
@@ -52,4 +57,8 @@ export function useRootComposeSectionId() {
 
 export function useRootComposeForkSeed() {
   return useAtom(rootComposeForkSeedAtom);
+}
+
+export function useRootComposeHandoffSeed() {
+  return useAtom(rootComposeHandoffSeedAtom);
 }

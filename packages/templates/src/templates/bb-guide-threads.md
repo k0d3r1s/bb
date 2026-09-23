@@ -94,9 +94,13 @@ Handoff:
   one from the current provider. Exit handoff restores the original execution
   settings and keeps draft edits, removing the automatic source reference.
   Closing the picker keeps handoff active; the composer also has Exit handoff.
-  CLI callers can use bb thread spawn with --provider, --model, --environment
-  and --prompt 'Continue from @thread:THREAD_ID ...'. SDK callers use
-  threads.spawn with the corresponding execution, environment and input fields.
+  Change project or environment moves the handoff draft and execution into the
+  new-thread composer, where project, environment and branch can change, for
+  example to plan in one project and implement in another's worktree.
+  CLI callers can use bb thread spawn with --project, --provider, --model,
+  --environment, --new-environment or --environment-provider and --prompt
+  'Continue from @thread:THREAD_ID ...'. SDK callers use threads.spawn with the
+  corresponding project, execution, environment and input fields.
 
 Forking:
 

@@ -1,0 +1,1 @@
+ALTER TABLE `environments` ADD `adopted_from_status` text;

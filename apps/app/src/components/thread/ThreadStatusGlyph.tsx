@@ -12,6 +12,7 @@ import {
   SIDEBAR_STATUS_ICON_CLASS,
   SIDEBAR_SUCCESS_STATUS_COLOR_CLASS,
   SIDEBAR_SUCCESS_STATUS_DOT_CLASS,
+  SIDEBAR_WAITING_STATUS_COLOR_CLASS,
   SIDEBAR_WORKING_STATUS_COLOR_CLASS,
 } from "@/components/sidebar/sidebarRowClasses";
 
@@ -207,7 +208,12 @@ export function ThreadStatusGlyph({
       return (
         <Icon
           name={WAITING_ICONS[kind]}
-          className={cn("text-muted-foreground/75", iconSizeClass)}
+          className={cn(
+            kind === "waiting-for-input"
+              ? SIDEBAR_WAITING_STATUS_COLOR_CLASS
+              : "text-muted-foreground/75",
+            iconSizeClass,
+          )}
           aria-label={getThreadListIndicatorLabel(kind) ?? undefined}
         />
       );
