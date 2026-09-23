@@ -126,13 +126,13 @@ BB_HOST_DAEMON_PORT only for an intentional non-default target.
   `unavailable`, or `unknown` until the background probe answers). Read or set `managedBranchPrefix`
   through `bb settings show` and `bb settings general <key> <value>`.
 - The provider-turn stall watchdog flags (6h) then interrupts (12h) a turn whose
-  active operation goes idle. Tune it with `bb settings general
-providerTurnIdleWatchdogEnabled <on|off>`, `providerTurnIdleNotifyMs <ms>`, and
-  `providerTurnIdleInterruptMs <ms>` (interrupt must exceed notify; both floor at
-  300000ms / 5 minutes).
+  active operation goes idle. Tune it with
+  `bb settings general providerTurnIdleWatchdogEnabled <on|off>`,
+  `providerTurnIdleNotifyMs <ms>`, and `providerTurnIdleInterruptMs <ms>`
+  (interrupt must exceed notify; both floor at 300000ms / 5 minutes).
 - The server keeps a registry of sidebar layout preferences (organization
-  mode, section order, collapsed rows, navigation entries): `bb settings ui
-list`, `get`, `set`, and `reset`.
+  mode, section order, collapsed rows, navigation entries):
+  `bb settings ui list`, `get`, `set`, and `reset`.
 - Query provider models on the machine that will run the thread.
 - Prefer non-interactive commands and machine-readable output for automation.
 - Pass `--yes` for a confirmed destructive command in a non-interactive shell.
@@ -200,8 +200,10 @@ bb spend --by thread --from 2026-09-01 --json
 bb spend backfill
 ```
 
-Weighted units are a cost proxy, not invoice data. Coverage reports distinguish
-complete histories from floors where older usage events were already pruned.
+Weighted units are a cost proxy, not invoice data. Coverage separates threads
+whose history is proven complete from partial threads that could not be proven
+complete, because usage events may have been pruned before the rollup recorded
+them; a partial thread's total is a floor.
 
 `bb machine reconcile <id-or-name> [--json]` asks core to enforce its recorded
 suspended state through the provider and waits for completion. It leaves active

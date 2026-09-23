@@ -13,6 +13,7 @@ import {
   releaseQueuedMessageClaim,
   releaseStaleQueuedMessageClaims,
   type DbQueryConnection,
+  type DbTransaction,
   type QueuedThreadMessageGroupClaimPolicy,
   type QueuedThreadMessageGroupEligibility,
 } from "@bb/db";
@@ -187,6 +188,7 @@ async function requireReadyQueuedMessageEnvironment(
 export interface CreateQueuedMessageForThreadArgs {
   payload: CreateQueuedMessageRequest;
   thread: Thread;
+  withinTransaction?: (tx: DbTransaction) => void;
 }
 
 function admitQueuedMessage(
@@ -242,6 +244,7 @@ export async function createQueuedMessageForThread(
           throw new ApiError(404, "thread_not_found", "Thread not found");
         }
         const { hasProviderSession } = admitQueuedMessage(tx, currentThread);
+        args.withinTransaction?.(tx);
         if (senderThreadId === null) {
           deleteEnterWorktreeContinuations(
             { kind: "transaction", db: tx },

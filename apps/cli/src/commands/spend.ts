@@ -134,7 +134,7 @@ export function registerSpendCommands(
           console.log("No dollar figure: bb does not guess a billing rate.");
         if (result.coverage.historyPartial > 0) {
           console.log(
-            `${result.coverage.historyPartial} of ${result.coverage.threads} threads had usage events pruned before the rollup existed; their totals are floors.`,
+            `${result.coverage.historyPartial} of ${result.coverage.threads} threads could not be proven complete; their totals are floors.`,
           );
         }
       }),
@@ -156,7 +156,7 @@ export function registerSpendCommands(
         if (result.threadsHistoryPartial > 0) {
           console.log("");
           console.log(
-            "A partial thread had usage events pruned before this existed. Its recorded total is a floor.",
+            "A partial thread could not be proven complete: usage events may have been pruned before the rollup recorded them. Its recorded total is a floor.",
           );
         }
       }),

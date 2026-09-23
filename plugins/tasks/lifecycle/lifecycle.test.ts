@@ -6,7 +6,9 @@ import { describe, expect, it, vi } from "vitest";
 import { createStore } from "../api";
 import type { TaskThreadLiveStatus } from "../db";
 import {
+  archiveExpiredTasks,
   registerLifecycle,
+  TASK_ARCHIVE_AFTER_MS,
   THREAD_STATUS_IDLE_INTERVAL_MS,
   THREAD_STATUS_RECONCILE_INTERVAL_MS,
 } from ".";
@@ -411,5 +413,106 @@ describe("task thread lifecycle", () => {
     }).toEqual({ listTasks: 0, listTaskThreads: 0 });
 
     await harness.dispose();
+  });
+});
+
+describe("task auto-archive", () => {
+  function closedTasksFixture() {
+    const host = createFakePluginHost({ pluginId: "tasks" });
+    const store = createStore(host.bb);
+    const first = store.tasks.createProject({
+      name: "First",
+      prefix: "ONE",
+      color: "blue",
+    });
+    const second = store.tasks.createProject({
+      name: "Second",
+      prefix: "TWO",
+      color: "red",
+    });
+    const tasks = [
+      store.tasks.createTask({
+        projectId: first.id,
+        title: "Done one",
+        status: "done",
+      }),
+      store.tasks.createTask({
+        projectId: first.id,
+        title: "Canceled one",
+        status: "canceled",
+      }),
+      store.tasks.createTask({
+        projectId: second.id,
+        title: "Done two",
+        status: "done",
+      }),
+    ];
+    return { ...host, store, first, second, tasks };
+  }
+
+  const afterWindow = () => Date.now() + TASK_ARCHIVE_AFTER_MS + 60_000;
+
+  it("archives with history comments and publishes once per project", async () => {
+    const fixture = closedTasksFixture();
+    try {
+      archiveExpiredTasks(fixture.bb, fixture.store, afterWindow());
+
+      for (const task of fixture.tasks) {
+        expect(fixture.store.tasks.getTask(task.id)?.archivedAt).toEqual(
+          expect.any(String),
+        );
+        expect(fixture.store.tasks.listComments(task.id)).toContainEqual(
+          expect.objectContaining({
+            kind: "system",
+            body: "Archived automatically 7 days after closing",
+          }),
+        );
+      }
+      expect(fixture.harness.realtimeSignals).toEqual([
+        {
+          channel: "tasks:changed",
+          payload: { taskId: null, projectId: fixture.first.id },
+        },
+        {
+          channel: "tasks:changed",
+          payload: {
+            taskId: fixture.tasks[2]?.id,
+            projectId: fixture.second.id,
+          },
+        },
+        { channel: "comments:changed", payload: { taskId: null } },
+      ]);
+    } finally {
+      await fixture.harness.dispose();
+    }
+  });
+
+  it("rolls back the archive when a history comment cannot be written", async () => {
+    const fixture = closedTasksFixture();
+    try {
+      const createComment = fixture.store.tasks.createComment;
+      let calls = 0;
+      vi.spyOn(fixture.store.tasks, "createComment").mockImplementation(
+        (input) => {
+          calls += 1;
+          if (calls === 2) throw new Error("comment write failed");
+          return createComment(input);
+        },
+      );
+
+      expect(() =>
+        archiveExpiredTasks(fixture.bb, fixture.store, afterWindow()),
+      ).toThrow("comment write failed");
+
+      vi.restoreAllMocks();
+      for (const task of fixture.tasks) {
+        expect(fixture.store.tasks.getTask(task.id)?.archivedAt).toBeNull();
+        expect(fixture.store.tasks.listComments(task.id)).toEqual([]);
+      }
+      expect(fixture.harness.realtimeSignals).toEqual([]);
+    } finally {
+      vi.restoreAllMocks();
+      await fixture.harness.dispose();
+    }
   });
 });

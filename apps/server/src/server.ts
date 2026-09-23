@@ -56,7 +56,6 @@ import { invalidateEnvironmentProviderMachineAvailability } from "./services/env
 import { requestQueuedMessageDispatch } from "./services/threads/queued-message-dispatch.js";
 import { createQueuedMessageForThread } from "./services/threads/queued-messages.js";
 import { haltThreadForUnansweredQuestion } from "./services/threads/thread-lifecycle.js";
-import { planUnclaimedAnswerDelivery } from "./services/interactions/deliver-unclaimed-answer.js";
 import { registerInternalEventRoutes } from "./internal/events.js";
 import { registerInternalHostRoutes } from "./internal/hosts.js";
 import { registerInternalInteractiveRequestRoutes } from "./internal/interactive-requests.js";
@@ -742,28 +741,20 @@ export function createApp(
       haltThreadForUnansweredQuestion(deps, interaction);
     },
   );
-  deps.pendingInteractions.setUnclaimedPluginAnswerListener(
-    ({ interaction, value }) => {
-      const delivery = planUnclaimedAnswerDelivery({ interaction, value });
-      if (delivery === null) return;
+  deps.pendingInteractions.setUnclaimedPluginAnswerDeliverer(
+    async ({ delivery, claimInTransaction }) => {
       const thread = getThread(deps.db, delivery.threadId);
-      if (!thread) return;
+      if (!thread) {
+        throw new ApiError(404, "thread_not_found", "Thread not found");
+      }
       const payload: CreateQueuedMessageRequest = {
         input: [{ type: "text", text: delivery.text, mentions: [] }],
       };
-      void createQueuedMessageForThread(deps, { payload, thread })
-        .then(() => {
-          requestQueuedMessageDispatch(deps, {
-            kind: "interaction-settled",
-            threadId: delivery.threadId,
-          });
-        })
-        .catch((error: unknown) => {
-          deps.logger.warn(
-            { err: error, threadId: delivery.threadId },
-            "Could not queue an answer that arrived after its tool call ended",
-          );
-        });
+      await createQueuedMessageForThread(deps, {
+        payload,
+        thread,
+        withinTransaction: claimInTransaction,
+      });
     },
   );
   setPluginThreadEventEmitter(pluginService.events);

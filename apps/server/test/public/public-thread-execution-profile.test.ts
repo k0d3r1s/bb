@@ -1,4 +1,7 @@
-import { setThreadExecutionOverride } from "@bb/db";
+import {
+  setThreadExecutionOverride,
+  upsertThreadExecutionReport,
+} from "@bb/db";
 import { encodeClientTurnRequestIdNumber, threadScope } from "@bb/domain";
 import { threadExecutionProfileResponseSchema } from "@bb/server-contract";
 import { describe, expect, it } from "vitest";
@@ -70,6 +73,38 @@ describe("thread execution profile", () => {
       expect(profile.lastRequested).toBeNull();
       expect(profile.overrides).toEqual({ model: null, reasoningLevel: null });
       expect(profile.executed).toBeNull();
+    });
+  });
+
+  it("returns the executed profile with the time it was reported", async () => {
+    await withTestHarness(async (harness) => {
+      const { thread } = seedThreadFixture(harness);
+      upsertThreadExecutionReport(harness.db, {
+        threadId: thread.id,
+        execution: {
+          model: "gpt-5.5-mini",
+          reasoningLevel: "medium",
+          permissionMode: "auto",
+          serviceTier: "fast",
+        },
+        reportedAt: 1_760_000_000_000,
+      });
+
+      const response = await harness.app.request(
+        `/api/v1/threads/${thread.id}/execution-profile`,
+      );
+      expect(response.status).toBe(200);
+      const profile = threadExecutionProfileResponseSchema.parse(
+        await readJson(response),
+      );
+
+      expect(profile.executed).toEqual({
+        model: "gpt-5.5-mini",
+        reasoningLevel: "medium",
+        permissionMode: "auto",
+        serviceTier: "fast",
+        reportedAt: 1_760_000_000_000,
+      });
     });
   });
 });

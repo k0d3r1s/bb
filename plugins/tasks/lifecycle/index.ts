@@ -1,7 +1,7 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import {
   publishCommentsChanged,
-  publishTasksChanged,
+  publishTaskBatchChanged,
   type TasksApiStore,
 } from "../api";
 import type { TaskThread, TaskThreadLiveStatus } from "../db";
@@ -158,6 +158,27 @@ function waitForNextReconciliation(
   });
 }
 
+export function archiveExpiredTasks(
+  bb: BbPluginApi,
+  store: TasksApiStore,
+  now: number,
+): void {
+  const cutoff = new Date(now - TASK_ARCHIVE_AFTER_MS).toISOString();
+  const archived = store.transaction(() => {
+    const tasks = store.tasks.archiveClosedBefore(cutoff);
+    for (const task of tasks) {
+      store.tasks.createComment({
+        taskId: task.id,
+        kind: "system",
+        authorName: "Tasks",
+        body: "Archived automatically 7 days after closing",
+      });
+    }
+    return tasks;
+  });
+  publishTaskBatchChanged(bb, archived);
+}
+
 export async function registerLifecycle(
   bb: BbPluginApi,
   store: TasksApiStore,
@@ -201,20 +222,7 @@ export async function registerLifecycle(
   bb.background.service("task-auto-archive", {
     async start(signal) {
       while (!signal.aborted) {
-        const cutoff = new Date(
-          Date.now() - TASK_ARCHIVE_AFTER_MS,
-        ).toISOString();
-        const archived = store.tasks.archiveClosedBefore(cutoff);
-        for (const task of archived) {
-          store.tasks.createComment({
-            taskId: task.id,
-            kind: "system",
-            authorName: "Tasks",
-            body: "Archived automatically 7 days after closing",
-          });
-          publishTasksChanged(bb, task.id, task.projectId);
-          publishCommentsChanged(bb, task.id);
-        }
+        archiveExpiredTasks(bb, store, Date.now());
         await waitForNextReconciliation(signal, TASK_ARCHIVE_INTERVAL_MS);
       }
     },

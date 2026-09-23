@@ -198,6 +198,30 @@ export function publishCommentsChanged(bb: BbPluginApi, taskId: string): void {
   bb.realtime.publish("comments:changed", payload);
 }
 
+export function publishTaskBatchChanged(
+  bb: BbPluginApi,
+  tasks: readonly Pick<StoredTask, "id" | "projectId">[],
+): void {
+  const tasksByProject = new Map<string, string[]>();
+  for (const task of tasks) {
+    const taskIds = tasksByProject.get(task.projectId);
+    if (taskIds) taskIds.push(task.id);
+    else tasksByProject.set(task.projectId, [task.id]);
+  }
+  for (const [projectId, taskIds] of tasksByProject) {
+    const payload: TasksChangedEvent = {
+      taskId: taskIds.length === 1 ? (taskIds[0] ?? null) : null,
+      projectId,
+    };
+    bb.realtime.publish("tasks:changed", payload);
+  }
+  if (tasks.length === 0) return;
+  const payload: CommentsChangedEvent = {
+    taskId: tasks.length === 1 ? (tasks[0]?.id ?? null) : null,
+  };
+  bb.realtime.publish("comments:changed", payload);
+}
+
 function apiTask(store: TasksApiStore, task: StoredTask): Task {
   return {
     ...task,
@@ -772,31 +796,35 @@ export function registerHandlers(
       return { deleted };
     },
     archiveTasks(input) {
-      const tasks = store.tasks.archiveTasks(input.projectId, input.taskIds);
-      for (const task of tasks) {
-        store.tasks.createComment({
-          taskId: task.id,
-          kind: "system",
-          authorName: input.authorName,
-          body: `Archived by ${input.authorName}`,
-        });
-        publishTasksChanged(bb, task.id, task.projectId);
-        publishCommentsChanged(bb, task.id);
-      }
+      const tasks = store.transaction(() => {
+        const archived = store.tasks.archiveTasks(
+          input.projectId,
+          input.taskIds,
+        );
+        for (const task of archived) {
+          writeSystemComments(store, task.id, input.authorName, [
+            `Archived by ${input.authorName}`,
+          ]);
+        }
+        return archived;
+      });
+      publishTaskBatchChanged(bb, tasks);
       return { tasks: apiTasks(store, tasks) };
     },
     restoreTasks(input) {
-      const tasks = store.tasks.restoreTasks(input.projectId, input.taskIds);
-      for (const task of tasks) {
-        store.tasks.createComment({
-          taskId: task.id,
-          kind: "system",
-          authorName: input.authorName,
-          body: `Restored from archive by ${input.authorName}`,
-        });
-        publishTasksChanged(bb, task.id, task.projectId);
-        publishCommentsChanged(bb, task.id);
-      }
+      const tasks = store.transaction(() => {
+        const restored = store.tasks.restoreTasks(
+          input.projectId,
+          input.taskIds,
+        );
+        for (const task of restored) {
+          writeSystemComments(store, task.id, input.authorName, [
+            `Restored from archive by ${input.authorName}`,
+          ]);
+        }
+        return restored;
+      });
+      publishTaskBatchChanged(bb, tasks);
       return { tasks: apiTasks(store, tasks) };
     },
     listTasks(input) {

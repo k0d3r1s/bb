@@ -20,11 +20,29 @@ timezone can tell whether a row straddles its own day boundary.
 
 Why the server records this:
 
-  `thread/tokenUsage/updated` is a prunable event type. The pruner keeps at most
-  two of them per thread below its cutoff, so the event store is a window onto
-  recent usage rather than a record of it. Anything that polls the event log for
-  spend is racing deletion. The server sees each usage event before it is
-  pruned, so it records the total then.
+  `thread/tokenUsage/updated` is a prunable event type. The periodic usage
+  pruner deletes every one of them in a thread except the latest root-turn
+  reading, so the event store is a window onto recent usage rather than a
+  record of it. Anything that polls the event log for spend is racing deletion.
+  The server sees each usage event before it is pruned, so it records the total
+  then.
+
+How readings are counted:
+
+  Each reading carries the usage of its own request and a running total for
+  its provider thread. bb records the request's usage only when the running
+  total moves past the highest total it already counted for that provider
+  thread, or when the running total restarts: it is below the previous total
+  and equal to the reading's own usage, as after a provider process restart.
+  A restart-shaped reading identical to one already stored for the same turn
+  is a retried delivery and is not counted. A daemon that re-sends a batch
+  the server already committed therefore adds nothing.
+
+Grouping:
+
+  `--by day` lists days newest first. `--by thread`, `--by provider` and
+  `--by model` list the largest total first. The coverage line honours
+  `--thread` and `--provider` as well as the day window.
 
 What the columns mean:
 
@@ -50,10 +68,26 @@ What the columns mean:
 
 Backfill:
 
-  `bb spend backfill` replays the usage events still in the store. It is safe to
-  run repeatedly and safe to run alongside live traffic. It reports how many
-  threads it could only record a floor for. There is no way to see a deleted
-  row, so a thread is called complete only when that can be proved: it has not
-  reached the pruner's smallest keep-recent window, so the pruner cannot have
-  run; or the rollup was running when the thread emitted its very first usage
-  event. Everything else is reported as partial and its total read as a floor.
+  `bb spend backfill` replays the usage events still in the store. Each thread
+  is replayed in its own transaction, so it is safe to run repeatedly, safe to
+  run alongside live traffic, and an interrupted run does not count anything
+  twice. It reports how many threads it could only record a floor for.
+
+When a thread counts as complete:
+
+  There is no way to see a deleted row, so a thread is complete only when that
+  can be proved, in one of two ways:
+
+  - Live: the rollup was running when the thread emitted its first usage
+    event. That holds when no earlier usage event of the thread is stored and
+    the thread has never had a message edited, or when every provider thread
+    already recorded for it is complete. Event count and later pruning do not
+    change this.
+  - Backfill: the thread's stored event sequence numbers run from 1 to its
+    latest event without a gap and the thread has never had a message edited,
+    so nothing of it was ever deleted. Any gap, whichever event type the pruner
+    removed, leaves the thread partial.
+
+  A thread with several provider threads is complete only when all of them
+  are. Complete never reverts to partial; a backfill can only upgrade a thread.
+  Everything else is reported as partial and its total read as a floor.

@@ -111,3 +111,78 @@ it("reports again when a session is resumed", async () => {
     }),
   ]);
 });
+
+const AUTO_SESSION_OPTIONS = {
+  model: "gpt-5.5",
+  permissionMode: "auto",
+  permissionScope: "workspace",
+  approvalReviewer: "automatic",
+  permissionEscalation: "ask",
+} as const;
+
+async function completedTurnCount(expected: number): Promise<void> {
+  await vi.waitFor(
+    () => {
+      const completed = assembleCapturedThreadEvents(
+        harness.messages,
+        "codex",
+      ).filter((event) => event.type === "turn/completed");
+      expect(completed).toHaveLength(expected);
+    },
+    { timeout: 10_000 },
+  );
+}
+
+async function runTurn(
+  id: number,
+  clientRequestId: string,
+  overrides: { model?: string; serviceTier?: "fast" },
+): Promise<void> {
+  harness.sendRequest(id, "turn/start", {
+    threadId: THREAD_ID,
+    providerThreadId,
+    input: [{ type: "text", text: "/clear", mentions: [] }],
+    clientRequestId,
+    options: { ...AUTO_SESSION_OPTIONS, ...overrides },
+  });
+  const response = await harness.waitForResponse(id);
+  expect(response.error).toBeUndefined();
+}
+
+it("reports a fresh profile when a turn changes the model or service tier, and stays quiet when it does not", async () => {
+  harness.sendRequest(1, "thread/start", {
+    threadId: THREAD_ID,
+    cwd: workspaceDir,
+    instructionMode: "append",
+    options: AUTO_SESSION_OPTIONS,
+  });
+  const started = await harness.waitForResponse(1);
+  expect(started.error).toBeUndefined();
+  providerThreadId = (started.result as { providerThreadId: string })
+    .providerThreadId;
+
+  await runTurn(2, "creq_execrptaaa", {});
+  await completedTurnCount(1);
+  expect(executionReports()).toHaveLength(1);
+
+  await runTurn(3, "creq_execrptbbb", {
+    model: "gpt-5.5-mini",
+    serviceTier: "fast",
+  });
+  await completedTurnCount(2);
+
+  expect(executionReports().map((report) => report.execution)).toEqual([
+    {
+      model: "gpt-5.5",
+      reasoningLevel: "medium",
+      permissionMode: "auto",
+      serviceTier: "default",
+    },
+    {
+      model: "gpt-5.5-mini",
+      reasoningLevel: "medium",
+      permissionMode: "auto",
+      serviceTier: "fast",
+    },
+  ]);
+}, 30_000);

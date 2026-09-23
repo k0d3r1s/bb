@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
   applySpendContribution,
+  emptySpendCursorState,
+  saveSpendCursor,
   spendWeightedUnits,
   type SpendUsageBreakdown,
 } from "@bb/db";
@@ -116,6 +118,93 @@ describe("spend rollup route", () => {
         ),
       );
       expect(grouped.rows[0]?.costUsd).toBeNull();
+    });
+  });
+
+  it("orders a by-day grouping by day rather than by volume", async () => {
+    await withTestHarness(async (harness) => {
+      const volumes: [string, number][] = [
+        ["2026-09-09", 1],
+        ["2026-09-10", 3],
+        ["2026-09-11", 2],
+      ];
+      for (const [day, multiple] of volumes) {
+        const usage = { ...USAGE, totalTokens: USAGE.totalTokens * multiple };
+        applySpendContribution(harness.db, {
+          day,
+          model: "gpt-5",
+          providerId: "codex",
+          threadId: "thr_one",
+          usage,
+          weightedUnits: spendWeightedUnits(usage),
+          at: Date.parse(`${day}T12:00:00Z`),
+        });
+      }
+      const byDay = spendRollupResponseSchema.parse(
+        await readJson(
+          await harness.app.request(
+            "/api/v1/spend/rollup?from=2026-09-01&groupBy=day",
+          ),
+        ),
+      );
+      expect(byDay.rows.map((row) => row.day)).toEqual([
+        "2026-09-11",
+        "2026-09-10",
+        "2026-09-09",
+      ]);
+      expect(byDay.rows.map((row) => row.threadId)).toEqual(["*", "*", "*"]);
+    });
+  });
+
+  it("scopes coverage to the thread and provider filters", async () => {
+    await withTestHarness(async (harness) => {
+      const threads: [string, string, boolean[]][] = [
+        ["thr_complete", "codex", [true]],
+        ["thr_partial", "claude-code", [true, false]],
+      ];
+      for (const [threadId, providerId, cursors] of threads) {
+        applySpendContribution(harness.db, {
+          day: "2026-09-11",
+          model: "a-model",
+          providerId,
+          threadId,
+          usage: USAGE,
+          weightedUnits: spendWeightedUnits(USAGE),
+          at: Date.parse("2026-09-11T12:00:00Z"),
+        });
+        for (const [index, historyComplete] of cursors.entries()) {
+          saveSpendCursor(harness.db, {
+            threadId,
+            providerThreadId: `${threadId}-provider-${index}`,
+            state: emptySpendCursorState(1),
+            historyComplete,
+          });
+        }
+      }
+      const coverage = async (query: string) =>
+        spendRollupResponseSchema.parse(
+          await readJson(
+            await harness.app.request(
+              `/api/v1/spend/rollup?from=2026-09-01${query}`,
+            ),
+          ),
+        ).coverage;
+
+      expect(await coverage("")).toEqual({
+        threads: 2,
+        historyComplete: 1,
+        historyPartial: 1,
+      });
+      expect(await coverage("&threadId=thr_complete")).toEqual({
+        threads: 1,
+        historyComplete: 1,
+        historyPartial: 0,
+      });
+      expect(await coverage("&providerId=claude-code")).toEqual({
+        threads: 1,
+        historyComplete: 0,
+        historyPartial: 1,
+      });
     });
   });
 

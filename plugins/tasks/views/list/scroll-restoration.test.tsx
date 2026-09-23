@@ -14,16 +14,18 @@ import {
 describe("listScrollScopeKey", () => {
   const base = {
     projectId: null,
-    activeOnly: false,
+    mode: "focus" as const,
     filters: EMPTY_FILTERS,
     sort: "manual" as const,
   };
 
-  it("distinguishes the all/active/project lists", () => {
+  it("distinguishes the all/mode/project lists", () => {
     const all = listScrollScopeKey(base);
-    const active = listScrollScopeKey({ ...base, activeOnly: true });
+    const active = listScrollScopeKey({ ...base, mode: "active" });
+    const recent = listScrollScopeKey({ ...base, mode: "recent" });
+    const archive = listScrollScopeKey({ ...base, mode: "archive" });
     const project = listScrollScopeKey({ ...base, projectId: "proj_1" });
-    expect(new Set([all, active, project]).size).toBe(3);
+    expect(new Set([all, active, recent, archive, project]).size).toBe(5);
   });
 
   it("ignores filter member order but reflects filter content", () => {

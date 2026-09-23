@@ -203,7 +203,6 @@ describe("list filter/sort preference persistence", () => {
       statuses: ["done"],
       key: "ALP-3",
     },
-    { subPath: PROJECT_A, label: "Done", statuses: [], key: "ALP-1" },
   ])(
     "sends the selected status intersection for $subPath / $label",
     async ({ subPath, label, statuses, key }) => {
@@ -222,6 +221,50 @@ describe("list filter/sort preference persistence", () => {
       );
     },
   );
+
+  it("offers only the statuses the current mode can list", async () => {
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: PROJECT_A },
+      { rpc: baseRpc() },
+    );
+    await slot.findByText("ALP-1");
+    fireEvent.click(slot.getByRole("button", { name: /^Status/ }));
+    await slot.findByRole("menuitemcheckbox", { name: "Todo" });
+    expect(slot.queryByRole("menuitemcheckbox", { name: "Done" })).toBeNull();
+    expect(
+      slot.queryByRole("menuitemcheckbox", { name: "Canceled" }),
+    ).toBeNull();
+  });
+
+  it("ignores persisted statuses the mode cannot list instead of emptying it", async () => {
+    window.localStorage.setItem(
+      LIST_PREFERENCE_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        scopes: {
+          [`project:${PROJECT_A}`]: {
+            filters: { statuses: ["done"], priorities: [], labelNames: [] },
+            sort: "manual",
+          },
+        },
+      }),
+    );
+    const rpc = baseRpc();
+    const slot = renderSlot(app.navPanels[0]!, { subPath: PROJECT_A }, { rpc });
+
+    await slot.findByText("ALP-1");
+    expect(rpc.listTasksCalls).toContainEqual(
+      expect.objectContaining({
+        projectId: PROJECT_A,
+        statuses: ["backlog", "todo", "in_progress", "in_review"],
+      }),
+    );
+    expect(
+      slot.getByRole("button", { name: /^Status/ }).textContent,
+    ).not.toContain("Done");
+    expect(slot.queryByRole("button", { name: /Clear/ })).toBeNull();
+  });
 
   it("restores sort and filters after unmount (navigation / remount)", async () => {
     const registration = app.navPanels[0]!;

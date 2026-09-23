@@ -12,6 +12,7 @@ interface ExecutionReportRow {
   reasoningLevel: string | null;
   permissionMode: string | null;
   serviceTier: string | null;
+  reportedAt: number;
 }
 
 export function upsertThreadExecutionReport(
@@ -40,10 +41,11 @@ export function upsertThreadExecutionReport(
 export function getThreadExecutionReport(
   db: DbQueryConnection,
   threadId: string,
-): ThreadExecutionReport | null {
+): (ThreadExecutionReport & { reportedAt: number }) | null {
   const row = db.get<ExecutionReportRow>(
     sql`SELECT model, reasoning_level AS reasoningLevel,
-          permission_mode AS permissionMode, service_tier AS serviceTier
+          permission_mode AS permissionMode, service_tier AS serviceTier,
+          reported_at AS reportedAt
         FROM ${sql.raw(EXECUTION_REPORTS_TABLE)}
         WHERE thread_id = ${threadId}`,
   );
@@ -51,5 +53,5 @@ export function getThreadExecutionReport(
     return null;
   }
   const parsed = threadExecutionReportSchema.safeParse(row);
-  return parsed.success ? parsed.data : null;
+  return parsed.success ? { ...parsed.data, reportedAt: row.reportedAt } : null;
 }

@@ -9,7 +9,13 @@ import { Button } from "@/components/ui/button";
 import { DelayedLoading } from "@/components/ui/delayed-loading";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useLabels, useListTasks, useTaskListMeta } from "./data.js";
+import {
+  modeStatusOptions,
+  statusFilterForMode,
+  useLabels,
+  useListTasks,
+  useTaskListMeta,
+} from "./data.js";
 import {
   EMPTY_FILTERS,
   hasActiveFilters,
@@ -78,7 +84,14 @@ export function ListView({ projectId, mode }: ListViewProps) {
   useEffect(() => {
     setPreference(loadListPreference(preferenceScope));
   }, [preferenceScope]);
-  const filters = preference.filters;
+  const storedFilters = preference.filters;
+  const filters = useMemo(
+    (): ListFilterState => ({
+      ...storedFilters,
+      statuses: statusFilterForMode(mode, storedFilters.statuses),
+    }),
+    [storedFilters, mode],
+  );
   const sort = preference.sort;
   const setFilters = (next: ListFilterState) => {
     setPreference((current) => {
@@ -158,18 +171,38 @@ export function ListView({ projectId, mode }: ListViewProps) {
     filters.priorities,
     labelIds,
   ]);
-  const groups = useMemo(
-    () => groupTasksByStatus(sortTasks(displayTasks ?? [], sort)),
-    [displayTasks, sort],
-  );
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => setSelected(new Set()), [projectId, mode]);
   const selectable =
     projectId !== null && (mode === "recent" || mode === "archive");
+  const selectableIds = useMemo(() => {
+    const statuses = modeStatusOptions(mode);
+    return new Set(
+      (displayTasks ?? [])
+        .filter((task) => statuses.includes(task.status))
+        .map((task) => task.id),
+    );
+  }, [displayTasks, mode]);
+  const visibleSelected = useMemo(
+    () => [...selected].filter((taskId) => selectableIds.has(taskId)),
+    [selected, selectableIds],
+  );
+  useEffect(() => {
+    if (displayTasks === undefined) return;
+    setSelected((current) => {
+      const kept = [...current].filter((taskId) => selectableIds.has(taskId));
+      return kept.length === current.size ? current : new Set(kept);
+    });
+  }, [displayTasks, selectableIds]);
+  const [archivePending, setArchivePending] = useState(false);
+  const archiveInFlight = useRef(false);
   const mutateSelection = async () => {
-    if (projectId === null || selected.size === 0) return;
+    if (projectId === null || visibleSelected.length === 0) return;
+    if (archiveInFlight.current) return;
+    archiveInFlight.current = true;
+    setArchivePending(true);
     try {
-      const input = { projectId, taskIds: [...selected], authorName: "You" };
+      const input = { projectId, taskIds: visibleSelected, authorName: "You" };
       if (mode === "archive") await rpc.call("restoreTasks", input);
       else await rpc.call("archiveTasks", input);
       setSelected(new Set());
@@ -178,6 +211,9 @@ export function ListView({ projectId, mode }: ListViewProps) {
       push(
         error instanceof Error ? error.message : "Task archive action failed",
       );
+    } finally {
+      archiveInFlight.current = false;
+      setArchivePending(false);
     }
   };
   const setTaskSelected = (taskId: string, checked: boolean) => {
@@ -202,7 +238,6 @@ export function ListView({ projectId, mode }: ListViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scopeKey = listScrollScopeKey({
     projectId,
-    activeOnly,
     mode,
     filters,
     sort,
@@ -302,7 +337,9 @@ export function ListView({ projectId, mode }: ListViewProps) {
       );
     }
   } else {
-    const renderStatusGroups = (taskGroups: typeof groups) =>
+    const renderStatusGroups = (
+      taskGroups: ReturnType<typeof groupTasksByStatus>,
+    ) =>
       taskGroups.map((group) => (
         <section key={group.status}>
           <div
@@ -331,7 +368,7 @@ export function ListView({ projectId, mode }: ListViewProps) {
               selected={selected.has(task.id)}
               selectionDisabled={
                 !selected.has(task.id) &&
-                selected.size >= TASK_ARCHIVE_BATCH_MAX
+                visibleSelected.length >= TASK_ARCHIVE_BATCH_MAX
               }
               onSelectedChange={(checked) => setTaskSelected(task.id, checked)}
             />
@@ -375,7 +412,9 @@ export function ListView({ projectId, mode }: ListViewProps) {
       });
       body = sections;
     } else {
-      body = renderStatusGroups(groups);
+      body = renderStatusGroups(
+        groupTasksByStatus(sortTasks(displayTasks, sort)),
+      );
     }
   }
 
@@ -387,17 +426,19 @@ export function ListView({ projectId, mode }: ListViewProps) {
         sort={sort}
         onSortChange={setSort}
         labelOptions={labelOptions}
+        statusOptions={modeStatusOptions(mode)}
         taskCount={displayTasks?.length}
       />
       {selectable ? (
         <div className="flex items-center justify-between border-b border-border-hairline px-3.5 py-2 text-xs">
           <span className="text-muted-foreground" aria-live="polite">
-            {selected.size} selected
+            {visibleSelected.length} selected
           </span>
           <Button
             size="sm"
             variant="outline"
-            disabled={selected.size === 0}
+            disabled={visibleSelected.length === 0 || archivePending}
+            aria-busy={archivePending}
             onClick={() => void mutateSelection()}
           >
             <Icon

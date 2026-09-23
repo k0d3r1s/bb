@@ -210,6 +210,14 @@ Inspecting:
     --diff-merge-base <branch>             Override merge-base branch for diff
 
   Shows pull request status for the attached environment branch when available.
+  The Execution block lists Next turn (model, reasoning, permission mode,
+  service tier the next turn resolves to), Overrides (stored model/reasoning
+  overrides), Last requested (what the latest turn asked for), Executed (what
+  the provider reported it runs; "unreported" marks fields it did not report),
+  and Reported (when that report arrived). Codex reports on session start or
+  resume and again when a turn changes the profile. --json carries the same
+  under .execution, with executed.reportedAt in epoch milliseconds; execution
+  is null against a server without the execution-profile route.
 
   bb thread log [id]                       Show thread event log
     --self                                 Target current thread

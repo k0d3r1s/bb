@@ -124,7 +124,10 @@ function LabelsSection() {
 
   const askDelete = (label: Label) =>
     run(async () => {
-      const tasks = await listAllTasks(rpc, { labelIds: [label.id] });
+      const tasks = await listAllTasks(rpc, {
+        labelIds: [label.id],
+        archive: "all",
+      });
       setConfirmDelete({ label, usedBy: tasks.length });
     });
 

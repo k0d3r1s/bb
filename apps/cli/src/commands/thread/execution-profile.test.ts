@@ -31,6 +31,7 @@ describe("printExecutionProfile (get-bb/bb#1787)", () => {
     expect(out).toContain("Overrides:      model default · reasoning max");
     expect(out).toContain("Last requested: gpt-5 · medium · full · default");
     expect(out).toContain("Executed:       not reported by the provider");
+    expect(out).not.toContain("Reported:");
   });
 
   it("prints what the provider reported it runs, marking what it did not report", () => {
@@ -44,11 +45,15 @@ describe("printExecutionProfile (get-bb/bb#1787)", () => {
         reasoningLevel: "xhigh",
         permissionMode: "full",
         serviceTier: null,
+        reportedAt: 1_760_000_000_000,
       },
     });
     const out = log.mock.calls.map((call) => String(call[0])).join("\n");
     expect(out).toContain(
       "Executed:       claude-opus-5 · xhigh · full · unreported",
+    );
+    expect(out).toContain(
+      `Reported:       ${new Date(1_760_000_000_000).toLocaleString()}`,
     );
     expect(out).not.toContain("not reported by the provider");
   });

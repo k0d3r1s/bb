@@ -112,6 +112,15 @@ hostId, providerId, projectId, parentThreadId, groupBy })`.
   absolute file/image paths and `file:` URLs are uploaded from the CLI machine before the update.
 - Use `bb thread show <thread-id>` for status, parent, environment, pull request
   status, and result.
+- The `Execution:` block of `bb thread show` separates `Next turn` (model ·
+  reasoning · permission mode · service tier the next turn resolves to),
+  `Overrides` (stored model/reasoning overrides), `Last requested` (what the
+  latest turn asked for), `Executed` (what the provider reported it runs;
+  `unreported` marks fields it did not report), and `Reported` (when that
+  report arrived). Codex reports on session start or resume and again when a
+  turn changes the profile. `--json` carries the same under `.execution`, with
+  `executed.reportedAt` in epoch milliseconds; `execution` is `null` against a
+  server without the execution-profile route.
 - Use `bb thread show <thread-id> --git-diff` to review file changes.
 - Use `bb thread log <thread-id>` to inspect the conversation. The default
   shows only the newest 20 user-message turns and ends with a notice when older

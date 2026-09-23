@@ -105,6 +105,7 @@ describe("executed in the thread execution profile (get-bb/bb#1787)", () => {
         reasoningLevel: "xhigh",
         permissionMode: "full",
         serviceTier: null,
+        reportedAt: expect.any(Number),
       });
       expect(
         harness.db

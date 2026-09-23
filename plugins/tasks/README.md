@@ -106,7 +106,10 @@ archived. **Archive** is recoverable and retains the task key, project, status,
 comments, attachments, and attached threads. Use `bb tasks list --archived` to
 list only archived tasks or `--include-archived` to include both states. Bulk
 archive and restore accept at most 500 tasks and reject mixed-project or open
-selections atomically.
+selections atomically; the status change and its history comments commit
+together. Repeated CLI addresses for the same task, such as its key and its
+ULID, count once. Each list's **Status** filter offers only the statuses that
+list can contain.
 
 The **Board** also shows only Backlog, Todo, In Progress, and In Review; open a
 task to mark it Done or Canceled. Sub-task progress still counts completed
@@ -158,6 +161,7 @@ Type `@` in the bb composer and select **Tasks** to search by task key or title.
 Sending the mention gives the agent the task's description, status, priority,
 labels, subtasks, attachments, recent comments, attached threads, and CLI
 action contract as context. Tasks linked to the current bb project rank first.
+Archived tasks are left out of suggestions.
 
 Inside a task description or comment, `@` also inserts a task pill. These
 references are stored in Markdown as `[PROD-1](bbtask://PROD-1)`, so they remain

@@ -25,11 +25,13 @@ import {
   isPluginExtensionInteractionRequestPayload,
   isPluginExtensionPendingInteraction,
   isPluginPendingInteraction,
+  isPluginPendingInteractionResolution,
   parseExtensionKind,
   pluginInteractionDescriptionSchema,
   type JsonValue,
   type PendingInteraction,
   type PluginInteractionDescription,
+  type PluginPendingInteraction,
   type ThreadEventItemPresentation,
   type PendingInteractionCreate,
   type PendingInteractionResolution,
@@ -70,6 +72,10 @@ import {
   validatePendingInteractionResolution,
 } from "./pending-interaction-validation.js";
 import { emitPluginInteractionPending } from "../plugins/plugin-thread-events.js";
+import {
+  planUnclaimedAnswerDelivery,
+  type UnclaimedAnswerDelivery,
+} from "./deliver-unclaimed-answer.js";
 import {
   SERVER_MOVE_FROZEN_RETRY_MS,
   isServerMoveFrozen,
@@ -306,10 +312,39 @@ export type ThreadInteractionSettledListener = (
   interaction: PendingInteraction,
 ) => void;
 
-export type UnclaimedPluginAnswerListener = (args: {
-  interaction: PendingInteraction;
-  value: JsonValue;
-}) => void;
+export type UnclaimedPluginAnswerDeliverer = (args: {
+  delivery: UnclaimedAnswerDelivery;
+  claimInTransaction: (tx: DbTransaction) => void;
+}) => Promise<void>;
+
+const LATE_ANSWER_RESOLUTION = {
+  kind: "plugin_submitted",
+  description: { title: "Answered after the question timed out" },
+} satisfies PendingInteractionResolution;
+
+function isLateAnswerRecoverable(
+  interaction: PluginPendingInteraction,
+): boolean {
+  return (
+    interaction.status === "interrupted" &&
+    interaction.statusReason === "timeout" &&
+    interaction.origin.pluginId === ASK_USER_QUESTION_PLUGIN_ID &&
+    interaction.origin.rendererId === ASK_USER_QUESTION_RENDERER_ID
+  );
+}
+
+function isRecoveredLateAnswer(interaction: PendingInteraction): boolean {
+  return (
+    isPluginPendingInteraction(interaction) &&
+    interaction.status === "resolved" &&
+    interaction.origin.pluginId === ASK_USER_QUESTION_PLUGIN_ID &&
+    interaction.origin.rendererId === ASK_USER_QUESTION_RENDERER_ID &&
+    interaction.resolution !== null &&
+    isPluginPendingInteractionResolution(interaction.resolution) &&
+    interaction.resolution.description?.title ===
+      LATE_ANSWER_RESOLUTION.description.title
+  );
+}
 
 function buildInteractionChangeMetadata({
   db,
@@ -349,7 +384,7 @@ export class PendingInteractionLifecycle {
   private started = false;
   private interactionSettledListener: ThreadInteractionSettledListener | null =
     null;
-  private unclaimedPluginAnswerListener: UnclaimedPluginAnswerListener | null =
+  private unclaimedPluginAnswerDeliverer: UnclaimedPluginAnswerDeliverer | null =
     null;
 
   constructor(args: PendingInteractionLifecycleArgs) {
@@ -395,10 +430,10 @@ export class PendingInteractionLifecycle {
     this.interactionSettledListener = listener;
   }
 
-  setUnclaimedPluginAnswerListener(
-    listener: UnclaimedPluginAnswerListener,
+  setUnclaimedPluginAnswerDeliverer(
+    deliverer: UnclaimedPluginAnswerDeliverer,
   ): void {
-    this.unclaimedPluginAnswerListener = listener;
+    this.unclaimedPluginAnswerDeliverer = deliverer;
   }
 
   listPendingThreadInteractions(threadId: string): PendingInteraction[] {
@@ -667,25 +702,11 @@ export class PendingInteractionLifecycle {
       throw new ApiError(400, "invalid_request", "Plugin interaction expected");
     }
     if (current.status !== "pending") {
-      if (
-        current.status !== "interrupted" ||
-        current.statusReason !== "timeout" ||
-        current.origin.pluginId !== ASK_USER_QUESTION_PLUGIN_ID ||
-        current.origin.rendererId !== ASK_USER_QUESTION_RENDERER_ID
-      ) {
+      if (isRecoveredLateAnswer(current)) return current;
+      if (!isLateAnswerRecoverable(current)) {
         throw buildResolveConflictError(current);
       }
-      const updated = setTimedOutPendingInteractionResolved(this.deps.db, {
-        id: current.id,
-        resolution: JSON.stringify({ kind: "plugin_submitted" }),
-      });
-      if (!updated) {
-        throw buildResolveConflictError(this.requireInteraction(current.id));
-      }
-      const interaction = toPendingInteraction(updated);
-      this.reportUnclaimedPluginAnswer(interaction, args.value);
-      this.settlePluginInteractionTerminalSideEffects(interaction);
-      return interaction;
+      return this.deliverLateAnswer(current, args.value);
     }
     const waiter = this.pluginWaiters.get(current.id);
     if (waiter === undefined) {
@@ -711,7 +732,14 @@ export class PendingInteractionLifecycle {
       logger: this.deps.logger,
     });
     if (this.pluginWaiters.get(current.id) !== waiter) {
-      throw buildResolveConflictError(this.requireInteraction(current.id));
+      const latest = this.requireInteraction(current.id);
+      if (
+        isPluginPendingInteraction(latest) &&
+        isLateAnswerRecoverable(latest)
+      ) {
+        return this.deliverLateAnswer(latest, args.value);
+      }
+      throw buildResolveConflictError(latest);
     }
     const updated = setPendingInteractionResolved(this.deps.db, {
       id: current.id,
@@ -1076,23 +1104,50 @@ export class PendingInteractionLifecycle {
     }
   }
 
-  private reportUnclaimedPluginAnswer(
-    interaction: PendingInteraction,
+  private async deliverLateAnswer(
+    current: PluginPendingInteraction,
     value: JsonValue,
-  ): void {
-    this.deps.logger.warn(
-      { interactionId: interaction.id, threadId: interaction.threadId },
-      "An answer arrived after the provider stopped waiting for it",
-    );
-    if (!this.unclaimedPluginAnswerListener) return;
-    try {
-      this.unclaimedPluginAnswerListener({ interaction, value });
-    } catch (error) {
-      this.deps.logger.warn(
-        { err: error, interactionId: interaction.id },
-        "Unclaimed plugin answer listener failed",
+  ): Promise<PendingInteraction> {
+    const deliverer = this.unclaimedPluginAnswerDeliverer;
+    if (deliverer === null) throw buildResolveConflictError(current);
+    const delivery = planUnclaimedAnswerDelivery({
+      interaction: current,
+      value,
+    });
+    if (delivery === null) {
+      throw new ApiError(
+        400,
+        "invalid_request",
+        "The answer does not answer any of the questions that were asked",
       );
     }
+    try {
+      await deliverer({
+        delivery,
+        claimInTransaction: (tx) => {
+          const claimed = setTimedOutPendingInteractionResolved(tx, {
+            id: current.id,
+            resolution: JSON.stringify(LATE_ANSWER_RESOLUTION),
+          });
+          if (claimed) return;
+          const latest = getPendingInteraction(tx, current.id);
+          throw buildResolveConflictError(
+            latest ? toPendingInteraction(latest) : current,
+          );
+        },
+      });
+    } catch (error) {
+      const latest = this.requireInteraction(current.id);
+      if (isRecoveredLateAnswer(latest)) return latest;
+      throw error;
+    }
+    const interaction = this.requireInteraction(current.id);
+    this.deps.logger.info(
+      { interactionId: interaction.id, threadId: interaction.threadId },
+      "Queued an answer that arrived after the provider stopped waiting for it",
+    );
+    this.settlePluginInteractionTerminalSideEffects(interaction);
+    return interaction;
   }
 
   private cancelPluginInteractionFromCallback(args: {

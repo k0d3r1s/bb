@@ -103,14 +103,18 @@ async function runArchiveAction(
   action: "archive" | "restore",
   json: boolean,
 ): Promise<string> {
-  if (addresses.length > TASK_ARCHIVE_BATCH_MAX) {
+  const uniqueAddresses = [...new Set(addresses)];
+  if (uniqueAddresses.length > TASK_ARCHIVE_BATCH_MAX) {
     throw new CliError(
-      `${action} accepts at most ${TASK_ARCHIVE_BATCH_MAX} tasks at a time; received ${addresses.length}`,
+      `${action} accepts at most ${TASK_ARCHIVE_BATCH_MAX} tasks at a time; received ${uniqueAddresses.length}`,
     );
   }
-  const tasks = await Promise.all(
-    addresses.map((address) => resolveTask(domain, address)),
+  const resolved = await Promise.all(
+    uniqueAddresses.map((address) => resolveTask(domain, address)),
   );
+  const tasks = [
+    ...new Map(resolved.map((task) => [task.id, task])).values(),
+  ];
   const first = tasks[0];
   if (!first) throw new CliError(`${action} requires at least one task`);
   if (tasks.some((task) => task.projectId !== first.projectId)) {

@@ -7,9 +7,7 @@ export const BOARD_STATUSES = [
   "in_review",
 ] as const satisfies readonly TaskStatus[];
 
-export function visibleBoardStatuses(
-  _columns: Readonly<Record<TaskStatus, readonly unknown[]>>,
-): TaskStatus[] {
+export function visibleBoardStatuses(): TaskStatus[] {
   return [...BOARD_STATUSES];
 }
 

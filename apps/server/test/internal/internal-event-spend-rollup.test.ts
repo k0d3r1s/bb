@@ -1,10 +1,11 @@
 import { and, eq, sql } from "drizzle-orm";
-import { events, listSpendRollupRows, type SpendRollupRow } from "@bb/db";
 import {
-  encodeClientTurnRequestIdNumber,
-  threadScope,
-  turnScope,
-} from "@bb/domain";
+  advanceThreadPruning,
+  events,
+  listSpendRollupRows,
+  type SpendRollupRow,
+} from "@bb/db";
+import { turnScope } from "@bb/domain";
 import {
   groupHostDaemonEvents,
   hostDaemonEventBatchResponseSchema,
@@ -15,12 +16,11 @@ import { backfillSpend } from "../../src/services/system/spend-rollup.js";
 import { internalAuthHeaders } from "../helpers/commands.js";
 import {
   seedEnvironment,
-  seedEvent,
   seedHostSession,
   seedProjectWithSource,
   seedThread,
 } from "../helpers/seed.js";
-import { withTestHarness } from "../helpers/test-app.js";
+import { withTestHarness, type TestAppHarness } from "../helpers/test-app.js";
 
 interface Reading {
   cached?: number;
@@ -42,6 +42,101 @@ function breakdown(total: number, parts: { cached?: number; output?: number }) {
     reasoningOutputTokens: 0,
     totalTokens: total,
   };
+}
+
+function seedSpendThread(harness: TestAppHarness, hostId: string) {
+  const { host, session } = seedHostSession(harness.deps, { id: hostId });
+  const { project } = seedProjectWithSource(harness.deps, {
+    hostId: host.id,
+  });
+  const environment = seedEnvironment(harness.deps, {
+    hostId: host.id,
+    projectId: project.id,
+  });
+  const thread = seedThread(harness.deps, {
+    projectId: project.id,
+    environmentId: environment.id,
+    providerId: "codex",
+    status: "active",
+  });
+  const turnStarted: HostDaemonEventEnvelope = {
+    threadId: thread.id,
+    event: {
+      type: "turn/started",
+      threadId: thread.id,
+      providerThreadId: PROVIDER_THREAD_ID,
+      scope: turnScope(TURN_ID),
+    },
+  };
+  const usage = (reading: Reading): HostDaemonEventEnvelope => ({
+    threadId: thread.id,
+    event: {
+      type: "thread/tokenUsage/updated",
+      threadId: thread.id,
+      providerThreadId: PROVIDER_THREAD_ID,
+      scope: turnScope(TURN_ID),
+      tokenUsage: {
+        total: breakdown(reading.total, {}),
+        last: breakdown(reading.last, {
+          cached: reading.cached,
+          output: reading.output,
+        }),
+        modelContextWindow: 258_400,
+      },
+    },
+  });
+  const post = (envelopes: HostDaemonEventEnvelope[]) =>
+    harness.app.request("/internal/session/events", {
+      method: "POST",
+      headers: internalAuthHeaders(harness, { hostId: host.id }),
+      body: JSON.stringify({
+        sessionId: session.id,
+        eventGroups: groupHostDaemonEvents(envelopes),
+      }),
+    });
+  return {
+    post,
+    turnStarted,
+    usage,
+    totalTokens: () =>
+      listSpendRollupRows(harness.db, { threadId: thread.id }).reduce(
+        (sum, row) => sum + row.totalTokens,
+        0,
+      ),
+    historyComplete: () =>
+      harness.db.get<{ historyComplete: number }>(
+        sql`SELECT history_complete AS historyComplete
+            FROM fork_thread_spend_cursor WHERE thread_id = ${thread.id}`,
+      )?.historyComplete,
+    storedUsageEvents: () =>
+      harness.db
+        .select({ id: events.id })
+        .from(events)
+        .where(
+          and(
+            eq(events.threadId, thread.id),
+            eq(events.type, "thread/tokenUsage/updated"),
+          ),
+        )
+        .all().length,
+    latestSequence: () =>
+      harness.db.get<{ latest: number }>(
+        sql`SELECT MAX(sequence) AS latest FROM events
+            WHERE thread_id = ${thread.id}`,
+      )?.latest ?? 0,
+  };
+}
+
+function runUsagePruning(harness: TestAppHarness): number {
+  let removed = 0;
+  for (let step = 0; step < 200; step += 1) {
+    const result = advanceThreadPruning(harness.db, "usage");
+    removed += result.removed;
+    if (result.action === "cycle-complete") {
+      return removed;
+    }
+  }
+  throw new Error("Usage pruning did not complete a cycle");
 }
 
 describe("daemon event spend rollup", () => {
@@ -73,12 +168,8 @@ describe("daemon event spend rollup", () => {
           scope: turnScope(TURN_ID),
         },
       };
-      const usage = (
-        reading: Reading,
-        replayKey?: string,
-      ): HostDaemonEventEnvelope => ({
+      const usage = (reading: Reading): HostDaemonEventEnvelope => ({
         threadId: thread.id,
-        ...(replayKey === undefined ? {} : { replayKey }),
         event: {
           type: "thread/tokenUsage/updated",
           threadId: thread.id,
@@ -401,88 +492,87 @@ describe("daemon event spend rollup", () => {
     });
   });
 
-  it("marks a thread whose usage history was pruned as incomplete", async () => {
+  it("does not double count a batch the daemon retried after it committed", async () => {
     await withTestHarness(async (harness) => {
-      const { host, session } = seedHostSession(harness.deps, {
-        id: "host-spend-coverage",
-      });
-      const { project } = seedProjectWithSource(harness.deps, {
-        hostId: host.id,
-      });
-      const environment = seedEnvironment(harness.deps, {
-        hostId: host.id,
-        projectId: project.id,
-      });
-      const thread = seedThread(harness.deps, {
-        projectId: project.id,
-        environmentId: environment.id,
-        providerId: "codex",
-        status: "active",
-      });
-      const response = await harness.app.request("/internal/session/events", {
-        method: "POST",
-        headers: internalAuthHeaders(harness, { hostId: host.id }),
-        body: JSON.stringify({
-          sessionId: session.id,
-          eventGroups: groupHostDaemonEvents([
-            {
-              threadId: thread.id,
-              event: {
-                type: "turn/started",
-                threadId: thread.id,
-                providerThreadId: PROVIDER_THREAD_ID,
-                scope: turnScope(TURN_ID),
-              },
-            },
-            {
-              threadId: thread.id,
-              event: {
-                type: "thread/tokenUsage/updated",
-                threadId: thread.id,
-                providerThreadId: PROVIDER_THREAD_ID,
-                scope: turnScope(TURN_ID),
-                tokenUsage: {
-                  total: breakdown(100, {}),
-                  last: breakdown(100, {}),
-                  modelContextWindow: 258_400,
-                },
-              },
-            },
-          ]),
-        }),
-      });
-      expect(response.status).toBe(200);
-      seedEvent(harness.deps, {
-        threadId: thread.id,
-        environmentId: environment.id,
-        sequence: 500,
-        type: "client/turn/requested",
-        scope: threadScope(),
-        data: {
-          direction: "outbound",
-          requestId: encodeClientTurnRequestIdNumber({ value: 500 }),
-          input: [{ type: "text", text: "more" }],
-          target: { kind: "new-turn" },
-          execution: {
-            model: "gpt-5",
-            reasoningLevel: "medium",
-            permissionMode: "full",
-            serviceTier: "default",
-            source: "client/turn/requested",
-          },
-          initiator: "user",
-          senderThreadId: null,
-          request: { method: "turn/start", params: {} },
-          source: "tell",
-        },
-      });
+      const fixture = seedSpendThread(harness, "host-spend-retry");
+      expect((await fixture.post([fixture.turnStarted])).status).toBe(200);
+      const batch = [
+        fixture.usage({ total: 100, last: 100 }),
+        fixture.usage({ total: 250, last: 150 }),
+      ];
+      expect((await fixture.post(batch)).status).toBe(200);
+      expect(fixture.totalTokens()).toBe(250);
+      expect((await fixture.post(batch)).status).toBe(200);
+      expect(fixture.totalTokens()).toBe(250);
+      expect(
+        (await fixture.post([fixture.usage({ total: 330, last: 80 })])).status,
+      ).toBe(200);
+      expect(fixture.totalTokens()).toBe(330);
+
+      harness.db.run(sql`DELETE FROM fork_thread_spend_daily`);
       harness.db.run(sql`DELETE FROM fork_thread_spend_cursor`);
       backfillSpend(harness.db);
-      const complete = harness.db.get<{ historyComplete: number }>(
-        sql`SELECT history_complete AS historyComplete
-            FROM fork_thread_spend_cursor WHERE thread_id = ${thread.id}`,
-      );
-      expect(complete?.historyComplete).toBe(0);
+      expect(fixture.totalTokens()).toBe(330);
+    });
+  });
+
+  it("reports a backfilled thread as partial once the pruner removed usage", async () => {
+    await withTestHarness(async (harness) => {
+      const fixture = seedSpendThread(harness, "host-spend-pruned");
+      expect(
+        (
+          await fixture.post([
+            fixture.turnStarted,
+            fixture.usage({ total: 100, last: 100 }),
+            fixture.usage({ total: 250, last: 150 }),
+            fixture.usage({ total: 400, last: 150 }),
+          ])
+        ).status,
+      ).toBe(200);
+      expect(runUsagePruning(harness)).toBeGreaterThan(0);
+      expect(fixture.storedUsageEvents()).toBe(1);
+
+      harness.db.run(sql`DELETE FROM fork_thread_spend_daily`);
+      harness.db.run(sql`DELETE FROM fork_thread_spend_cursor`);
+      const result = backfillSpend(harness.db);
+      expect(result.threadsHistoryPartial).toBe(1);
+      expect(fixture.historyComplete()).toBe(0);
+      expect(fixture.totalTokens()).toBe(150);
+    });
+  });
+
+  it("keeps a thread tracked from its first usage complete through pruning and backfill", async () => {
+    await withTestHarness(async (harness) => {
+      const fixture = seedSpendThread(harness, "host-spend-tracked");
+      expect(
+        (
+          await fixture.post([
+            fixture.turnStarted,
+            fixture.usage({ total: 100, last: 100 }),
+          ])
+        ).status,
+      ).toBe(200);
+      expect(fixture.historyComplete()).toBe(1);
+      for (let turn = 2; turn <= 70; turn += 1) {
+        expect(
+          (
+            await fixture.post([
+              fixture.usage({ total: turn * 100, last: 100 }),
+              fixture.usage({ total: turn * 100, last: 100 }),
+            ])
+          ).status,
+        ).toBe(200);
+      }
+      expect(fixture.latestSequence()).toBeGreaterThan(120);
+      expect(fixture.totalTokens()).toBe(7_000);
+      expect(fixture.historyComplete()).toBe(1);
+
+      expect(runUsagePruning(harness)).toBeGreaterThan(0);
+      const result = backfillSpend(harness.db);
+      expect(result.contributionsApplied).toBe(0);
+      expect(result.threadsHistoryComplete).toBe(1);
+      expect(fixture.historyComplete()).toBe(1);
+      expect(fixture.totalTokens()).toBe(7_000);
     });
   });
 });

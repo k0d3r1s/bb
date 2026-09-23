@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { DbQueryConnection } from "../connection.js";
 
 const DAILY_TABLE = "fork_thread_spend_daily";
@@ -65,14 +65,6 @@ export interface SpendCoverage {
   historyPartial: number;
 }
 
-const ZERO_USAGE: SpendUsageBreakdown = {
-  inputTokens: 0,
-  cachedInputTokens: 0,
-  outputTokens: 0,
-  reasoningOutputTokens: 0,
-  totalTokens: 0,
-};
-
 export const SPEND_WEIGHTS = {
   input: 1,
   cachedInput: 0.1,
@@ -132,10 +124,38 @@ export function emptySpendCursorState(sequence: number): SpendCursorState {
   };
 }
 
+interface SpendFoldOptions {
+  isReplayedReading?: () => boolean;
+}
+
+type ReadingDisposition = "advance" | "restart" | "stale" | "uncumulative";
+
+function classifyReading(
+  state: SpendCursorState,
+  total: SpendUsageBreakdown,
+  last: SpendUsageBreakdown,
+  options: SpendFoldOptions,
+): ReadingDisposition {
+  if (total.totalTokens <= 0) {
+    return "uncumulative";
+  }
+  if (total.totalTokens > state.lastTotalTokens) {
+    return "advance";
+  }
+  const restartsCumulativeCount =
+    total.totalTokens < state.lastTotalTokens &&
+    total.totalTokens === last.totalTokens;
+  if (restartsCumulativeCount && options.isReplayedReading?.() !== true) {
+    return "restart";
+  }
+  return "stale";
+}
+
 export function foldTokenUsageObservation(
   state: SpendCursorState,
   observation: TokenUsageObservation,
   model: string,
+  options: SpendFoldOptions = {},
 ): { next: SpendCursorState; contribution: SpendContribution | null } {
   if (observation.sequence <= state.lastSequence) {
     return { next: state, contribution: null };
@@ -143,11 +163,14 @@ export function foldTokenUsageObservation(
 
   const total = normalizeSpendUsage(observation.total, observation.providerId);
   const last = normalizeSpendUsage(observation.last, observation.providerId);
+  const disposition = classifyReading(state, total, last, options);
 
   const advanced: SpendCursorState = {
     lastSequence: observation.sequence,
     lastTotalTokens:
-      total.totalTokens > 0 ? total.totalTokens : state.lastTotalTokens,
+      disposition === "advance" || disposition === "restart"
+        ? total.totalTokens
+        : state.lastTotalTokens,
     firstSequence:
       state.firstSequence === 0
         ? observation.sequence
@@ -156,9 +179,7 @@ export function foldTokenUsageObservation(
     lastModel: model,
   };
 
-  const isRepeat =
-    total.totalTokens > 0 && total.totalTokens === state.lastTotalTokens;
-  if (isRepeat || last.totalTokens <= 0) {
+  if (disposition === "stale" || last.totalTokens <= 0) {
     return { next: advanced, contribution: null };
   }
 
@@ -176,9 +197,9 @@ export function foldTokenUsageObservation(
   };
 }
 
-export const SPEND_PRUNE_SAFE_SEQUENCE = 120;
+const TOKEN_USAGE_EVENT_TYPE = "thread/tokenUsage/updated";
 
-export function hasThreadRewind(
+function hasThreadRewind(
   db: DbQueryConnection,
   args: { threadId: string },
 ): boolean {
@@ -192,15 +213,25 @@ export function hasThreadRewind(
   return row?.found === 1;
 }
 
-export function getSpendThreadLatestSequence(
+export function isReplayedTokenUsageReading(
   db: DbQueryConnection,
-  args: { threadId: string },
-): number | null {
-  const row = db.get<{ latestSequence: number | null }>(
-    sql`SELECT MAX(sequence) AS latestSequence FROM events
-        WHERE thread_id = ${args.threadId}`,
+  args: { threadId: string; sequence: number },
+): boolean {
+  const row = db.get<{ found: number }>(
+    sql`SELECT 1 AS found
+        FROM events reading
+        JOIN events earlier
+          ON earlier.thread_id = reading.thread_id
+          AND earlier.type = reading.type
+          AND earlier.sequence < reading.sequence
+          AND earlier.data = reading.data
+          AND earlier.turn_id IS reading.turn_id
+        WHERE reading.thread_id = ${args.threadId}
+          AND reading.sequence = ${args.sequence}
+          AND reading.type = ${TOKEN_USAGE_EVENT_TYPE}
+        LIMIT 1`,
   );
-  return row?.latestSequence ?? null;
+  return row?.found === 1;
 }
 
 export function getSpendCursor(
@@ -232,54 +263,87 @@ export function saveSpendCursor(
     threadId: string;
     providerThreadId: string;
     state: SpendCursorState;
-    historyComplete?: boolean | undefined;
+    historyComplete: boolean;
   },
 ): void {
-  const historyComplete =
-    args.historyComplete === undefined ? null : args.historyComplete ? 1 : 0;
+  const historyComplete = args.historyComplete ? 1 : 0;
   db.run(
     sql`INSERT INTO ${sql.raw(CURSOR_TABLE)} (thread_id, provider_thread_id,
           last_sequence, last_total_tokens, first_sequence, history_complete,
           last_turn_id, last_model)
         VALUES (${args.threadId}, ${args.providerThreadId},
           ${args.state.lastSequence}, ${args.state.lastTotalTokens},
-          ${args.state.firstSequence}, COALESCE(${historyComplete}, 0),
+          ${args.state.firstSequence}, ${historyComplete},
           ${args.state.lastTurnId}, ${args.state.lastModel})
         ON CONFLICT (thread_id, provider_thread_id) DO UPDATE SET
           last_sequence = excluded.last_sequence,
           last_total_tokens = excluded.last_total_tokens,
           first_sequence = MIN(${sql.raw(CURSOR_TABLE)}.first_sequence,
             excluded.first_sequence),
-          history_complete = COALESCE(${historyComplete},
-            ${sql.raw(CURSOR_TABLE)}.history_complete),
+          history_complete = MAX(${sql.raw(CURSOR_TABLE)}.history_complete,
+            excluded.history_complete),
           last_turn_id = excluded.last_turn_id,
           last_model = excluded.last_model`,
   );
 }
 
-export function isSpendHistoryComplete(
+export function isLiveSpendHistoryComplete(
   db: DbQueryConnection,
-  args: { firstSequence: number; threadId: string },
+  args: { sequence: number; threadId: string },
 ): boolean {
   const row = db.get<{
-    earliestUsage: number | null;
-    latest: number | null;
+    cursors: number;
+    partialCursors: number;
+    earlierUsage: number;
   }>(
     sql`SELECT
-          (SELECT MIN(sequence) FROM events
+          (SELECT COUNT(*) FROM ${sql.raw(CURSOR_TABLE)}
+            WHERE thread_id = ${args.threadId}) AS cursors,
+          (SELECT COUNT(*) FROM ${sql.raw(CURSOR_TABLE)}
             WHERE thread_id = ${args.threadId}
-              AND type = 'thread/tokenUsage/updated') AS earliestUsage,
-          (SELECT MAX(sequence) FROM events
-            WHERE thread_id = ${args.threadId}) AS latest`,
+              AND history_complete = 0) AS partialCursors,
+          EXISTS (SELECT 1 FROM events
+            WHERE thread_id = ${args.threadId}
+              AND type = ${TOKEN_USAGE_EVENT_TYPE}
+              AND sequence < ${args.sequence}) AS earlierUsage`,
   );
-  if (row?.earliestUsage == null || row.latest == null) {
+  if (row === undefined) {
     return false;
   }
+  if (row.cursors > 0) {
+    return row.partialCursors === 0;
+  }
   return (
-    !hasThreadRewind(db, { threadId: args.threadId }) &&
-    row.earliestUsage === args.firstSequence &&
-    row.latest <= SPEND_PRUNE_SAFE_SEQUENCE
+    row.earlierUsage === 0 && !hasThreadRewind(db, { threadId: args.threadId })
   );
+}
+
+export function isStoredSpendHistoryIntact(
+  db: DbQueryConnection,
+  args: { threadId: string },
+): boolean {
+  const row = db.get<{ stored: number; latest: number | null }>(
+    sql`SELECT COUNT(*) AS stored, MAX(sequence) AS latest
+        FROM events
+        WHERE thread_id = ${args.threadId}`,
+  );
+  if (row === undefined || row.latest === null || row.stored !== row.latest) {
+    return false;
+  }
+  return !hasThreadRewind(db, { threadId: args.threadId });
+}
+
+export function isSpendThreadHistoryComplete(
+  db: DbQueryConnection,
+  args: { threadId: string },
+): boolean {
+  const row = db.get<{ cursors: number; partialCursors: number }>(
+    sql`SELECT COUNT(*) AS cursors,
+               COUNT(CASE WHEN history_complete = 0 THEN 1 END) AS partialCursors
+        FROM ${sql.raw(CURSOR_TABLE)}
+        WHERE thread_id = ${args.threadId}`,
+  );
+  return row !== undefined && row.cursors > 0 && row.partialCursors === 0;
 }
 
 export function applySpendContribution(
@@ -318,29 +382,48 @@ export function applySpendContribution(
 export type SpendGroupBy = "day" | "thread" | "provider" | "model";
 
 export interface ListSpendRollupArgs {
-  from?: string;
-  to?: string;
-  threadId?: string;
-  providerId?: string;
+  from?: string | undefined;
+  to?: string | undefined;
+  threadId?: string | undefined;
+  providerId?: string | undefined;
 }
+
+const SPEND_ALL = "*";
+
+const SPEND_GROUP_COLUMNS: Record<SpendGroupBy, string> = {
+  day: "day",
+  thread: "thread_id",
+  provider: "provider_id",
+  model: "model",
+};
+
+function spendRollupConditions(args: ListSpendRollupArgs): SQL {
+  const conditions = [sql`1 = 1`];
+  if (args.from !== undefined) {
+    conditions.push(sql`rollup.day >= ${args.from}`);
+  }
+  if (args.to !== undefined) {
+    conditions.push(sql`rollup.day <= ${args.to}`);
+  }
+  if (args.threadId !== undefined) {
+    conditions.push(sql`rollup.thread_id = ${args.threadId}`);
+  }
+  if (args.providerId !== undefined) {
+    conditions.push(sql`rollup.provider_id = ${args.providerId}`);
+  }
+  return sql.join(conditions, sql` AND `);
+}
+
+const ROLLUP_COST_SQL = sql`CASE WHEN price.provider_id IS NULL THEN NULL ELSE
+  (rollup.input_tokens * price.input_usd_per_mtok
+   + rollup.cached_input_tokens * price.cached_input_usd_per_mtok
+   + rollup.output_tokens * price.output_usd_per_mtok) / 1000000.0
+END`;
 
 export function listSpendRollupRows(
   db: DbQueryConnection,
   args: ListSpendRollupArgs,
 ): SpendRollupRow[] {
-  const conditions = [sql`1 = 1`];
-  if (args.from !== undefined) {
-    conditions.push(sql` AND rollup.day >= ${args.from}`);
-  }
-  if (args.to !== undefined) {
-    conditions.push(sql` AND rollup.day <= ${args.to}`);
-  }
-  if (args.threadId !== undefined) {
-    conditions.push(sql` AND rollup.thread_id = ${args.threadId}`);
-  }
-  if (args.providerId !== undefined) {
-    conditions.push(sql` AND rollup.provider_id = ${args.providerId}`);
-  }
   return db.all<SpendRollupRow>(
     sql`SELECT rollup.day AS day,
                rollup.thread_id AS threadId,
@@ -355,40 +438,68 @@ export function listSpendRollupRows(
                rollup.turns AS turns,
                rollup.first_event_at AS firstEventAt,
                rollup.last_event_at AS lastEventAt,
-               CASE WHEN price.provider_id IS NULL THEN NULL ELSE
-                 (rollup.input_tokens * price.input_usd_per_mtok
-                  + rollup.cached_input_tokens * price.cached_input_usd_per_mtok
-                  + rollup.output_tokens * price.output_usd_per_mtok) / 1000000.0
-               END AS costUsd
+               ${ROLLUP_COST_SQL} AS costUsd
         FROM ${sql.raw(DAILY_TABLE)} rollup
         LEFT JOIN ${sql.raw(PRICES_TABLE)} price
           ON price.provider_id = rollup.provider_id
           AND price.model = rollup.model
-        WHERE ${sql.join(conditions, sql``)}
+        WHERE ${spendRollupConditions(args)}
         ORDER BY rollup.day DESC, rollup.total_tokens DESC`,
+  );
+}
+
+export function listSpendRollupGroups(
+  db: DbQueryConnection,
+  args: ListSpendRollupArgs & { groupBy: SpendGroupBy },
+): SpendRollupRow[] {
+  const groupColumn = sql.raw(`rollup.${SPEND_GROUP_COLUMNS[args.groupBy]}`);
+  const dimension = (groupBy: SpendGroupBy): SQL =>
+    groupBy === args.groupBy ? groupColumn : sql`${SPEND_ALL}`;
+  const order =
+    args.groupBy === "day"
+      ? sql`day DESC`
+      : sql`totalTokens DESC, ${groupColumn} ASC`;
+  return db.all<SpendRollupRow>(
+    sql`SELECT ${dimension("day")} AS day,
+               ${dimension("thread")} AS threadId,
+               ${dimension("provider")} AS providerId,
+               ${dimension("model")} AS model,
+               SUM(rollup.input_tokens) AS inputTokens,
+               SUM(rollup.cached_input_tokens) AS cachedInputTokens,
+               SUM(rollup.output_tokens) AS outputTokens,
+               SUM(rollup.reasoning_output_tokens) AS reasoningOutputTokens,
+               SUM(rollup.total_tokens) AS totalTokens,
+               SUM(rollup.weighted_units) AS weightedUnits,
+               SUM(rollup.turns) AS turns,
+               MIN(rollup.first_event_at) AS firstEventAt,
+               MAX(rollup.last_event_at) AS lastEventAt,
+               CASE WHEN COUNT(price.provider_id) = COUNT(*)
+                 THEN SUM(${ROLLUP_COST_SQL}) ELSE NULL END AS costUsd
+        FROM ${sql.raw(DAILY_TABLE)} rollup
+        LEFT JOIN ${sql.raw(PRICES_TABLE)} price
+          ON price.provider_id = rollup.provider_id
+          AND price.model = rollup.model
+        WHERE ${spendRollupConditions(args)}
+        GROUP BY ${groupColumn}
+        ORDER BY ${order}`,
   );
 }
 
 export function getSpendCoverage(
   db: DbQueryConnection,
-  args: { from?: string; to?: string } = {},
+  args: ListSpendRollupArgs = {},
 ): SpendCoverage {
-  const windowConditions = [sql`1 = 1`];
-  if (args.from !== undefined) {
-    windowConditions.push(sql` AND rollup.day >= ${args.from}`);
-  }
-  if (args.to !== undefined) {
-    windowConditions.push(sql` AND rollup.day <= ${args.to}`);
-  }
-  const row = db.get<{ threads: number; historyComplete: number }>(
-    sql`SELECT COUNT(DISTINCT cursor.thread_id) AS threads,
-               COUNT(DISTINCT CASE WHEN cursor.history_complete = 1
-                 THEN cursor.thread_id END) AS historyComplete
-        FROM ${sql.raw(CURSOR_TABLE)} cursor
-        WHERE EXISTS (
-          SELECT 1 FROM ${sql.raw(DAILY_TABLE)} rollup
-          WHERE rollup.thread_id = cursor.thread_id
-            AND ${sql.join(windowConditions, sql``)}
+  const row = db.get<{ threads: number; historyComplete: number | null }>(
+    sql`SELECT COUNT(*) AS threads, SUM(complete) AS historyComplete
+        FROM (
+          SELECT cursor.thread_id, MIN(cursor.history_complete) AS complete
+          FROM ${sql.raw(CURSOR_TABLE)} cursor
+          WHERE EXISTS (
+            SELECT 1 FROM ${sql.raw(DAILY_TABLE)} rollup
+            WHERE rollup.thread_id = cursor.thread_id
+              AND ${spendRollupConditions(args)}
+          )
+          GROUP BY cursor.thread_id
         )`,
   );
   const threads = row?.threads ?? 0;
@@ -399,15 +510,6 @@ export function getSpendCoverage(
     historyPartial: threads - historyComplete,
   };
 }
-
-export function countSpendCursors(db: DbQueryConnection): number {
-  const row = db.get<{ n: number }>(
-    sql`SELECT COUNT(*) AS n FROM ${sql.raw(CURSOR_TABLE)}`,
-  );
-  return row?.n ?? 0;
-}
-
-export { ZERO_USAGE as ZERO_SPEND_USAGE };
 
 export function resolveSpendModel(
   db: DbQueryConnection,
@@ -444,7 +546,7 @@ export function listStoredTokenUsageEvents(
                turn_id AS turnId, sequence, created_at AS createdAt, data
         FROM events
         WHERE thread_id = ${args.threadId}
-          AND type = 'thread/tokenUsage/updated'
+          AND type = ${TOKEN_USAGE_EVENT_TYPE}
         ORDER BY sequence`,
   );
 }
@@ -452,7 +554,6 @@ export function listStoredTokenUsageEvents(
 export interface SpendBackfillThreadRow {
   threadId: string;
   providerId: string;
-  latestSequence: number;
 }
 
 export function listSpendBackfillThreads(
@@ -460,12 +561,10 @@ export function listSpendBackfillThreads(
 ): SpendBackfillThreadRow[] {
   return db.all<SpendBackfillThreadRow>(
     sql`SELECT usage.thread_id AS threadId,
-               threads.provider_id AS providerId,
-               (SELECT MAX(any_event.sequence) FROM events any_event
-                 WHERE any_event.thread_id = usage.thread_id) AS latestSequence
+               threads.provider_id AS providerId
         FROM events usage
         JOIN threads ON threads.id = usage.thread_id
-        WHERE usage.type = 'thread/tokenUsage/updated'
+        WHERE usage.type = ${TOKEN_USAGE_EVENT_TYPE}
         GROUP BY usage.thread_id, threads.provider_id
         ORDER BY usage.thread_id`,
   );

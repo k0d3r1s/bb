@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
   TASK_PRIORITIES,
-  TASK_STATUSES,
   type TaskPriority,
   type TaskStatus,
 } from "../../shared/contract.js";
@@ -134,6 +133,7 @@ export function ListFilterBar({
   sort,
   onSortChange,
   labelOptions,
+  statusOptions,
   taskCount,
 }: {
   filters: ListFilterState;
@@ -141,6 +141,7 @@ export function ListFilterBar({
   sort: TaskSort;
   onSortChange: (sort: TaskSort) => void;
   labelOptions: readonly LabelFilterOption[];
+  statusOptions: readonly TaskStatus[];
   taskCount: number | undefined;
 }) {
   const keepOpen = (event: Event) => event.preventDefault();
@@ -156,7 +157,7 @@ export function ListFilterBar({
             (status) => STATUS_LABELS[status],
           )}
         >
-          {TASK_STATUSES.map((status) => (
+          {statusOptions.map((status) => (
             <DropdownMenuCheckboxItem
               key={status}
               checked={filters.statuses.includes(status)}

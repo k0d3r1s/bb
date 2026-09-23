@@ -3,7 +3,7 @@ import { z } from "zod";
 import { mapCodexReasoningLevelToBb } from "./models.js";
 
 type ThreadExecutionDelta = Extract<ThreadDelta, { kind: "thread.execution" }>;
-type ThreadExecution = ThreadExecutionDelta["execution"];
+export type ThreadExecution = ThreadExecutionDelta["execution"];
 
 const codexSessionSettingsResultSchema = z
   .object({
@@ -69,4 +69,44 @@ export function toCodexExecutionDelta(
       serviceTier: toBbServiceTier(settings.serviceTier),
     },
   };
+}
+
+export interface CodexTurnExecutionSettings {
+  model: string | undefined;
+  serviceTier: "fast" | null | undefined;
+  approvalPolicy: unknown;
+  approvalsReviewer: string;
+  sandboxType: string;
+}
+
+export function toCodexTurnExecution(
+  previous: ThreadExecution,
+  turn: CodexTurnExecutionSettings,
+): ThreadExecution {
+  return {
+    model: turn.model ?? previous.model,
+    reasoningLevel: previous.reasoningLevel,
+    permissionMode: toBbPermissionMode({
+      model: turn.model ?? previous.model,
+      approvalPolicy: turn.approvalPolicy,
+      approvalsReviewer: turn.approvalsReviewer,
+      sandbox: { type: turn.sandboxType },
+    }),
+    serviceTier:
+      turn.serviceTier === undefined
+        ? previous.serviceTier
+        : toBbServiceTier(turn.serviceTier),
+  };
+}
+
+export function sameThreadExecution(
+  left: ThreadExecution,
+  right: ThreadExecution,
+): boolean {
+  return (
+    left.model === right.model &&
+    left.reasoningLevel === right.reasoningLevel &&
+    left.permissionMode === right.permissionMode &&
+    left.serviceTier === right.serviceTier
+  );
 }

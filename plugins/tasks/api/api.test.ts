@@ -1557,3 +1557,89 @@ function makePullRequest(
     ...overrides,
   };
 }
+
+describe("task archive batches", () => {
+  function batchFixture() {
+    const host = createFakePluginHost({ pluginId: "tasks" });
+    const store = createStore(host.bb);
+    registerTasksApi(host.bb, store);
+    const project = store.tasks.createProject({
+      name: "Batches",
+      prefix: "BAT",
+      color: "blue",
+    });
+    const tasks = [1, 2, 3].map((index) =>
+      store.tasks.createTask({
+        projectId: project.id,
+        title: `Finished ${index}`,
+        status: "done",
+      }),
+    );
+    return { ...host, store, project, taskIds: tasks.map((task) => task.id) };
+  }
+
+  it("archives and restores a batch with one realtime signal per channel", async () => {
+    const fixture = batchFixture();
+    try {
+      await fixture.harness.callRpc("archiveTasks", {
+        projectId: fixture.project.id,
+        taskIds: fixture.taskIds,
+        authorName: "Sawyer",
+      });
+      expect(fixture.harness.realtimeSignals).toEqual([
+        {
+          channel: "tasks:changed",
+          payload: { taskId: null, projectId: fixture.project.id },
+        },
+        { channel: "comments:changed", payload: { taskId: null } },
+      ]);
+
+      await fixture.harness.callRpc("restoreTasks", {
+        projectId: fixture.project.id,
+        taskIds: fixture.taskIds,
+        authorName: "Sawyer",
+      });
+      expect(fixture.harness.realtimeSignals).toHaveLength(4);
+      for (const taskId of fixture.taskIds) {
+        expect(
+          fixture.store.tasks.listComments(taskId).map((comment) => comment.body),
+        ).toEqual(["Archived by Sawyer", "Restored from archive by Sawyer"]);
+      }
+    } finally {
+      await fixture.harness.dispose();
+    }
+  });
+
+  it("leaves every task unarchived when a history comment fails mid-batch", async () => {
+    const fixture = batchFixture();
+    try {
+      const createComment = fixture.store.tasks.createComment;
+      let calls = 0;
+      vi.spyOn(fixture.store.tasks, "createComment").mockImplementation(
+        (input) => {
+          calls += 1;
+          if (calls === 2) throw new Error("comment write failed");
+          return createComment(input);
+        },
+      );
+
+      await expect(
+        fixture.harness.callRpc("archiveTasks", {
+          projectId: fixture.project.id,
+          taskIds: fixture.taskIds,
+          authorName: "Sawyer",
+        }),
+      ).rejects.toThrow("comment write failed");
+
+      vi.restoreAllMocks();
+      for (const taskId of fixture.taskIds) {
+        expect(fixture.store.tasks.getTask(taskId)?.archivedAt).toBeNull();
+        expect(fixture.store.tasks.listComments(taskId)).toEqual([]);
+      }
+      expect(fixture.harness.realtimeSignals).toEqual([]);
+    } finally {
+      vi.restoreAllMocks();
+      await fixture.harness.dispose();
+    }
+  });
+});

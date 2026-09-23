@@ -3,10 +3,13 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import {
   events as eventTable,
+  getPendingInteraction,
   listPendingInteractionsByThread,
   pendingInteractions as pendingInteractionTable,
+  queuedThreadMessages as queuedThreadMessageTable,
+  threads as threadTable,
 } from "@bb/db";
-import type { PendingInteractionCreate } from "@bb/domain";
+import type { JsonValue, PendingInteractionCreate } from "@bb/domain";
 import {
   ASK_USER_QUESTION_PLUGIN_ID,
   ASK_USER_QUESTION_RENDERER_ID,
@@ -21,6 +24,7 @@ import {
   seedProjectWithSource,
   seedSession,
   seedThread,
+  seedThreadRuntimeState,
   seedTurnStarted,
 } from "../helpers/seed.js";
 import {
@@ -100,64 +104,235 @@ function requestPluginInteraction(
   });
 }
 
+const LATE_ANSWER = { answers: { q0: { selected: ["q0o0"] } } };
+
+function seedLateAnswerThread(deps: AppDeps, suffix: string) {
+  const thread = seedPluginInteractionThread(deps, suffix);
+  seedThreadRuntimeState(deps, {
+    environmentId: thread.environmentId,
+    providerThreadId: `provider-${suffix}`,
+    threadId: thread.id,
+  });
+  return thread;
+}
+
+function requestAskUserQuestion(
+  deps: AppDeps,
+  args: {
+    threadId: string;
+    timeoutMs: number;
+    describeSubmission: Parameters<
+      AppDeps["pendingInteractions"]["requestPluginInteraction"]
+    >[0]["describeSubmission"];
+  },
+) {
+  return deps.pendingInteractions.requestPluginInteraction({
+    pluginId: ASK_USER_QUESTION_PLUGIN_ID,
+    rendererId: ASK_USER_QUESTION_RENDERER_ID,
+    threadId: args.threadId,
+    title: "Layout",
+    payload: {
+      questions: [
+        {
+          id: "q0",
+          prompt: "Which layout?",
+          shortLabel: "Layout",
+          multiSelect: false,
+          options: [{ value: "q0o0", label: "Inner area" }],
+          allowFreeText: true,
+        },
+      ],
+    },
+    presentation: {
+      label: { pending: "Waiting", completed: "Answered" },
+      icon: { glyph: "Toolbox" },
+    },
+    describeSubmission: args.describeSubmission,
+    timeoutMs: args.timeoutMs,
+  });
+}
+
+async function timeOutAskUserQuestion(
+  deps: AppDeps,
+  args: { threadId: string },
+) {
+  const request = requestAskUserQuestion(deps, {
+    threadId: args.threadId,
+    timeoutMs: 1,
+    describeSubmission: null,
+  });
+  const [interaction] = deps.pendingInteractions.listPendingThreadInteractions(
+    args.threadId,
+  );
+  await expect(request).resolves.toEqual({
+    outcome: "cancelled",
+    reason: "timeout",
+  });
+  return interaction!;
+}
+
+function queuedMessageContents(deps: AppDeps, threadId: string): string[] {
+  return deps.db
+    .select({ content: queuedThreadMessageTable.content })
+    .from(queuedThreadMessageTable)
+    .where(eq(queuedThreadMessageTable.threadId, threadId))
+    .all()
+    .map((row) => row.content);
+}
+
 describe("pending interaction lifecycle", () => {
-  it("recovers one late AskUserQuestion answer and rejects other interrupted interactions", async () => {
+  it("queues one message for a late AskUserQuestion answer and accepts an identical retry", async () => {
     await withTestHarness(async (harness) => {
-      const thread = seedPluginInteractionThread(harness.deps, "late-answer");
-      const delivered: string[] = [];
-      harness.deps.pendingInteractions.setUnclaimedPluginAnswerListener(
-        ({ interaction }) => delivered.push(interaction.id),
-      );
-      const late = harness.deps.pendingInteractions.requestPluginInteraction({
-        pluginId: ASK_USER_QUESTION_PLUGIN_ID,
-        rendererId: ASK_USER_QUESTION_RENDERER_ID,
+      const thread = seedLateAnswerThread(harness.deps, "late-answer");
+      const interaction = await timeOutAskUserQuestion(harness.deps, {
         threadId: thread.id,
-        title: "Layout",
-        payload: {
-          questions: [
-            {
-              id: "q0",
-              prompt: "Which layout?",
-              shortLabel: "Layout",
-              multiSelect: false,
-              options: [{ value: "q0o0", label: "Inner area" }],
-              allowFreeText: true,
-            },
-          ],
-        },
-        presentation: {
-          label: { pending: "Waiting", completed: "Answered" },
-          icon: { glyph: "Toolbox" },
-        },
-        describeSubmission: null,
-        timeoutMs: 1,
       });
-      const [lateInteraction] =
+      const respond = () =>
+        harness.app.request(
+          `/api/v1/threads/${thread.id}/interactions/${interaction.id}/respond`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ value: LATE_ANSWER }),
+          },
+        );
+
+      const first = await respond();
+      expect(first.status).toBe(200);
+      expect(await first.json()).toMatchObject({
+        status: "resolved",
+        resolution: {
+          kind: "plugin_submitted",
+          description: { title: "Answered after the question timed out" },
+        },
+      });
+      expect(queuedMessageContents(harness.deps, thread.id)).toEqual([
+        expect.stringContaining("Which layout? — Inner area"),
+      ]);
+
+      const retry = await respond();
+      expect(retry.status).toBe(200);
+      expect(queuedMessageContents(harness.deps, thread.id)).toHaveLength(1);
+    });
+  });
+
+  it("queues exactly one message when identical late answers race", async () => {
+    await withTestHarness(async (harness) => {
+      const thread = seedLateAnswerThread(harness.deps, "late-race");
+      const interaction = await timeOutAskUserQuestion(harness.deps, {
+        threadId: thread.id,
+      });
+      const respond = () =>
+        harness.deps.pendingInteractions.respondToPluginInteraction({
+          threadId: thread.id,
+          interactionId: interaction.id,
+          value: LATE_ANSWER,
+        });
+
+      const results = await Promise.all([respond(), respond()]);
+
+      expect(results.map((result) => result.status)).toEqual([
+        "resolved",
+        "resolved",
+      ]);
+      expect(queuedMessageContents(harness.deps, thread.id)).toHaveLength(1);
+    });
+  });
+
+  it("keeps a late answer recoverable when it cannot be delivered", async () => {
+    await withTestHarness(async (harness) => {
+      const thread = seedLateAnswerThread(harness.deps, "late-failed");
+      const interaction = await timeOutAskUserQuestion(harness.deps, {
+        threadId: thread.id,
+      });
+      const respond = (value: JsonValue) =>
+        harness.deps.pendingInteractions.respondToPluginInteraction({
+          threadId: thread.id,
+          interactionId: interaction.id,
+          value,
+        });
+      const expectStillTimedOut = () =>
+        expect(
+          toPendingInteraction(
+            getPendingInteraction(harness.deps.db, interaction.id)!,
+          ),
+        ).toMatchObject({ status: "interrupted", statusReason: "timeout" });
+
+      await expect(
+        respond({ answers: { q0: { selected: [] } } }),
+      ).rejects.toMatchObject({ status: 400 });
+      expectStillTimedOut();
+
+      harness.deps.db
+        .update(threadTable)
+        .set({ archivedAt: Date.now() })
+        .where(eq(threadTable.id, thread.id))
+        .run();
+      await expect(respond(LATE_ANSWER)).rejects.toMatchObject({
+        status: 409,
+      });
+      expectStillTimedOut();
+      expect(queuedMessageContents(harness.deps, thread.id)).toEqual([]);
+
+      harness.deps.db
+        .update(threadTable)
+        .set({ archivedAt: null })
+        .where(eq(threadTable.id, thread.id))
+        .run();
+      await expect(respond(LATE_ANSWER)).resolves.toMatchObject({
+        status: "resolved",
+      });
+      expect(queuedMessageContents(harness.deps, thread.id)).toHaveLength(1);
+    });
+  });
+
+  it("recovers an answer whose submit was overtaken by the question timeout", async () => {
+    await withTestHarness(async (harness) => {
+      const thread = seedLateAnswerThread(harness.deps, "late-overtaken");
+      let releaseDescription: () => void = () => undefined;
+      const descriptionGate = new Promise<void>((resolve) => {
+        releaseDescription = resolve;
+      });
+      const request = requestAskUserQuestion(harness.deps, {
+        threadId: thread.id,
+        timeoutMs: 20,
+        describeSubmission: async () => {
+          await descriptionGate;
+          return { title: "Answered Which layout?" };
+        },
+      });
+      const [interaction] =
         harness.deps.pendingInteractions.listPendingThreadInteractions(
           thread.id,
         );
-      await expect(late).resolves.toEqual({
+      const submitted =
+        harness.deps.pendingInteractions.respondToPluginInteraction({
+          threadId: thread.id,
+          interactionId: interaction!.id,
+          value: LATE_ANSWER,
+        });
+
+      await expect(request).resolves.toEqual({
         outcome: "cancelled",
         reason: "timeout",
       });
-      const answer = { answers: { q0: { selected: ["q0o0"] } } };
-      await expect(
-        harness.deps.pendingInteractions.respondToPluginInteraction({
-          threadId: thread.id,
-          interactionId: lateInteraction!.id,
-          value: answer,
-        }),
-      ).resolves.toMatchObject({ status: "resolved" });
-      expect(delivered).toEqual([lateInteraction!.id]);
-      await expect(
-        harness.deps.pendingInteractions.respondToPluginInteraction({
-          threadId: thread.id,
-          interactionId: lateInteraction!.id,
-          value: answer,
-        }),
-      ).rejects.toMatchObject({ status: 409 });
-      expect(delivered).toEqual([lateInteraction!.id]);
+      releaseDescription();
 
+      await expect(submitted).resolves.toMatchObject({
+        status: "resolved",
+        resolution: {
+          description: { title: "Answered after the question timed out" },
+        },
+      });
+      expect(queuedMessageContents(harness.deps, thread.id)).toEqual([
+        expect.stringContaining("Which layout? — Inner area"),
+      ]);
+    });
+  });
+
+  it("rejects late answers to interrupted interactions other than AskUserQuestion", async () => {
+    await withTestHarness(async (harness) => {
+      const thread = seedLateAnswerThread(harness.deps, "late-other");
       const unrelated =
         harness.deps.pendingInteractions.requestPluginInteraction({
           pluginId: "secrets",
@@ -187,6 +362,7 @@ describe("pending interaction lifecycle", () => {
           value: { values: {} },
         }),
       ).rejects.toMatchObject({ status: 409 });
+      expect(queuedMessageContents(harness.deps, thread.id)).toEqual([]);
     });
   });
 

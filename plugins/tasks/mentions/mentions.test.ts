@@ -221,6 +221,42 @@ describe("@task mention provider", () => {
     }
   });
 
+  it("keeps archived tasks out of suggestions even when they were just updated", async () => {
+    const { harness, provider, store } = setup();
+    try {
+      const project = store.tasks.createProject({
+        name: "Archive search",
+        prefix: "ARS",
+        color: "blue",
+      });
+      const open = store.tasks.createTask({
+        projectId: project.id,
+        title: "Ship search filter",
+      });
+      const archived = store.tasks.createTask({
+        projectId: project.id,
+        title: "Ship archived filter",
+      });
+      store.tasks.updateTask(archived.id, { status: "done" });
+      store.tasks.archiveTasks(project.id, [archived.id]);
+
+      for (const query of ["", "ship", "ARS-2"]) {
+        const ids = (
+          await provider.search({
+            trigger: "@",
+            query,
+            projectId: null,
+            threadId: null,
+          })
+        ).map((item) => item.id);
+        expect(ids).not.toContain(archived.id);
+        if (query !== "ARS-2") expect(ids).toContain(open.id);
+      }
+    } finally {
+      await harness.dispose();
+    }
+  });
+
   it("rejects an unknown task id", async () => {
     const { harness, provider } = setup();
     try {

@@ -57,7 +57,11 @@ function observation(
 
 function play(
   readings: readonly Reading[],
-  options: { providerId?: string; state?: SpendCursorState } = {},
+  options: {
+    providerId?: string;
+    replayed?: ReadonlySet<number>;
+    state?: SpendCursorState;
+  } = {},
 ): { contributed: number; rows: number; state: SpendCursorState } {
   let state = options.state ?? emptySpendCursorState(readings[0]?.sequence ?? 1);
   let contributed = 0;
@@ -67,6 +71,10 @@ function play(
       state,
       observation(reading, options.providerId),
       "a-model",
+      {
+        isReplayedReading: () =>
+          options.replayed?.has(reading.sequence) === true,
+      },
     );
     state = result.next;
     if (result.contribution !== null) {
@@ -125,6 +133,54 @@ describe("spend fold", () => {
     expect(first.contributed).toBe(250);
     expect(replayed.contributed).toBe(0);
     expect(replayed.rows).toBe(0);
+  });
+
+  it("drops a whole batch the daemon retried under new sequences", () => {
+    const first = play([
+      { sequence: 1, total: 100, last: 100 },
+      { sequence: 2, total: 250, last: 150 },
+    ]);
+    const retried = play(
+      [
+        { sequence: 3, total: 100, last: 100 },
+        { sequence: 4, total: 250, last: 150 },
+      ],
+      { state: first.state, replayed: new Set([3]) },
+    );
+    expect(first.contributed).toBe(250);
+    expect(retried.contributed).toBe(0);
+    expect(retried.state.lastSequence).toBe(4);
+    expect(retried.state.lastTotalTokens).toBe(250);
+  });
+
+  it("drops a retried mid-run batch on the running total alone", () => {
+    const first = play([
+      { sequence: 1, total: 100, last: 100 },
+      { sequence: 2, total: 250, last: 150 },
+      { sequence: 3, total: 400, last: 150 },
+    ]);
+    const retried = play(
+      [
+        { sequence: 4, total: 250, last: 150 },
+        { sequence: 5, total: 400, last: 150 },
+      ],
+      { state: first.state },
+    );
+    expect(first.contributed).toBe(400);
+    expect(retried.contributed).toBe(0);
+  });
+
+  it("counts the rest of a run that restarted below the previous total", () => {
+    const result = play([
+      { sequence: 1, total: 100, last: 100 },
+      { sequence: 2, total: 250, last: 150 },
+      { sequence: 3, total: 40, last: 40 },
+      { sequence: 4, total: 90, last: 50 },
+      { sequence: 5, total: 200, last: 110 },
+      { sequence: 6, total: 300, last: 100 },
+    ]);
+    expect(result.contributed).toBe(550);
+    expect(result.state.lastTotalTokens).toBe(300);
   });
 
   it("contributes nothing for a zero-token reading", () => {

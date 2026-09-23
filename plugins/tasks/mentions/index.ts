@@ -46,10 +46,13 @@ function searchTasks(
           t.status
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
-        WHERE @search = '%%'
-          OR (p.prefix || '-' || t.number) LIKE @search ESCAPE '\\'
-          OR CAST(t.number AS TEXT) LIKE @search ESCAPE '\\'
-          OR t.title LIKE @search ESCAPE '\\'
+        WHERE t.archived_at IS NULL
+          AND (
+            @search = '%%'
+            OR (p.prefix || '-' || t.number) LIKE @search ESCAPE '\\'
+            OR CAST(t.number AS TEXT) LIKE @search ESCAPE '\\'
+            OR t.title LIKE @search ESCAPE '\\'
+          )
         ORDER BY
           CASE
             WHEN @bbProjectId IS NOT NULL

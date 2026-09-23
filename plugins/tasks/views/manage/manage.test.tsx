@@ -1120,3 +1120,63 @@ describe("NewProjectDialog", () => {
     expect(slot.queryByPlaceholderText("proj_…")).toBeNull();
   });
 });
+
+describe("Labels section", () => {
+  it("counts archived tasks when confirming a label delete", async () => {
+    const LABEL_ID = "01HZZZZZZZZZZZZZZZZZZZZLB1";
+    const listTasksCalls: Array<Record<string, unknown>> = [];
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "manage" },
+      {
+        rpc: {
+          listProjects: () => ({ projects: [project] }),
+          listFolders: () => ({ folders: [] }),
+          listPresets: () => ({ presets: [] }),
+          sidebarSummary: () => ({ projects: [] }),
+          listLabels: () => ({
+            labels: [
+              {
+                id: LABEL_ID,
+                projectId: PROJECT_ID,
+                name: "Bug",
+                color: "#ef4444",
+              },
+            ],
+          }),
+          listTasks: (input: Record<string, unknown>) => {
+            listTasksCalls.push(input);
+            const tasks = [
+              makeTask({ id: TASK_ID, projectId: PROJECT_ID, labelIds: [LABEL_ID] }),
+              makeTask({
+                id: "01HZZZZZZZZZZZZZZZZZZZZZT2",
+                projectId: PROJECT_ID,
+                status: "done",
+                archivedAt: "2026-09-14T00:00:00.000Z",
+                labelIds: [LABEL_ID],
+              }),
+            ];
+            return {
+              tasks:
+                input.archive === "all"
+                  ? tasks
+                  : tasks.filter((task) => task.archivedAt === null),
+              nextCursor: null,
+            };
+          },
+        },
+      },
+    );
+
+    fireEvent.click(
+      await slot.findByRole("button", { name: "Delete label Bug" }),
+    );
+
+    expect(
+      await slot.findByText("Used by 2 tasks — removing it detaches them."),
+    ).toBeDefined();
+    expect(listTasksCalls).toContainEqual(
+      expect.objectContaining({ labelIds: [LABEL_ID], archive: "all" }),
+    );
+  });
+});

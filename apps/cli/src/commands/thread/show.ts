@@ -216,6 +216,27 @@ export function printExecutionProfile(
   console.log(
     `    Executed:       ${executed ? `${executed.model} · ${executed.reasoningLevel ?? "unreported"} · ${executed.permissionMode ?? "unreported"} · ${executed.serviceTier ?? "unreported"}` : "not reported by the provider"}`,
   );
+  if (executed !== null) {
+    console.log(
+      `    Reported:       ${new Date(executed.reportedAt).toLocaleString()}`,
+    );
+  }
+}
+
+async function fetchExecutionProfile(args: {
+  sdk: BbSdk;
+  threadId: string;
+}): Promise<ThreadExecutionProfileResult | null> {
+  try {
+    return await args.sdk.threads.executionProfile({
+      threadId: args.threadId,
+    });
+  } catch (error) {
+    if (error instanceof BbHttpError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export function registerShowCommand(
@@ -349,9 +370,7 @@ export function registerShowCommand(
           sdk,
           threadId,
         });
-        const execution = await sdk.threads
-          .executionProfile({ threadId })
-          .catch(() => null);
+        const execution = await fetchExecutionProfile({ sdk, threadId });
 
         if (opts.json) {
           const environment = await getEnvironment();

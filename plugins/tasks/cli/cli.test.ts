@@ -306,9 +306,16 @@ describe("bb tasks CLI", () => {
       }),
     ]);
 
-    expect(stdout(await harness.runCli(["restore", task.key]))).toBe(
-      `Restored ${task.key}`,
-    );
+    expect(
+      stdout(
+        await harness.runCli([
+          "restore",
+          task.key,
+          task.id,
+          task.key.toLowerCase(),
+        ]),
+      ),
+    ).toBe(`Restored ${task.key}`);
     expect(store.tasks.getTask(task.id)).toMatchObject({
       status: "done",
       archivedAt: null,
@@ -353,7 +360,10 @@ describe("bb tasks CLI", () => {
     ]);
 
     await expect(
-      harness.runCli(["archive", ...Array(501).fill(parent.key)]),
+      harness.runCli([
+        "archive",
+        ...Array.from({ length: 501 }, (_, index) => `UNI-${index + 1}`),
+      ]),
     ).resolves.toMatchObject({
       exitCode: 1,
       stderr: "archive accepts at most 500 tasks at a time; received 501\n",

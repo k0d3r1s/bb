@@ -785,7 +785,7 @@ export type SidebarProjectSummary = z.infer<
 >["projects"][number];
 
 export interface TasksChangedEvent {
-  taskId: string;
+  taskId: string | null;
   projectId: string;
 }
 
@@ -794,7 +794,7 @@ export interface ProjectsChangedEvent {
 }
 
 export interface CommentsChangedEvent {
-  taskId: string;
+  taskId: string | null;
 }
 
 export interface ThreadsChangedEvent {

@@ -272,7 +272,9 @@ export const threadExecutionProfileResponseSchema = z.object({
     reasoningLevel: reasoningLevelSchema.nullable(),
   }),
   nextTurn: resolvedThreadExecutionOptionsSchema.nullable(),
-  executed: threadExecutionReportSchema.nullable(),
+  executed: threadExecutionReportSchema
+    .extend({ reportedAt: z.number().int() })
+    .nullable(),
 });
 export type ThreadExecutionProfileResponse = z.infer<
   typeof threadExecutionProfileResponseSchema

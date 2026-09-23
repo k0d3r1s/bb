@@ -8,26 +8,8 @@ import {
 } from "./drop-position.js";
 
 describe("visibleBoardStatuses", () => {
-  const columns = (canceled: number): Record<TaskStatus, unknown[]> => ({
-    backlog: [],
-    todo: ["t1"],
-    in_progress: [],
-    in_review: [],
-    done: [],
-    canceled: Array.from({ length: canceled }, (_, index) => `c${index}`),
-  });
-
   it("shows only actionable workflow columns", () => {
-    expect(visibleBoardStatuses(columns(0))).toEqual([
-      "backlog",
-      "todo",
-      "in_progress",
-      "in_review",
-    ]);
-  });
-
-  it("keeps terminal columns out even if stale data is present", () => {
-    expect(visibleBoardStatuses(columns(2))).toEqual([
+    expect(visibleBoardStatuses()).toEqual([
       "backlog",
       "todo",
       "in_progress",

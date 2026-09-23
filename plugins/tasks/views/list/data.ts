@@ -1,10 +1,11 @@
 import { listAllTasks, useTasksQuery } from "../../shell/data.js";
-import type {
-  Label,
-  Task,
-  TaskPriority,
-  TaskStatus,
-  TaskThread,
+import {
+  TASK_STATUSES,
+  type Label,
+  type Task,
+  type TaskPriority,
+  type TaskStatus,
+  type TaskThread,
 } from "../../shared/contract.js";
 import { isActiveThread } from "../detail/meta.js";
 
@@ -20,23 +21,38 @@ const FOCUS_STATUSES: readonly TaskStatus[] = [
   "in_progress",
   "in_review",
 ];
-const RECENT_STATUSES: readonly TaskStatus[] = ["done", "canceled"];
+const CLOSED_STATUSES: readonly TaskStatus[] = ["done", "canceled"];
 
 export type ListTaskMode = "focus" | "recent" | "archive" | "active";
+
+const MODE_STATUS_OPTIONS: Record<ListTaskMode, readonly TaskStatus[]> = {
+  focus: FOCUS_STATUSES,
+  recent: CLOSED_STATUSES,
+  archive: CLOSED_STATUSES,
+  active: TASK_STATUSES,
+};
+
+export function modeStatusOptions(mode: ListTaskMode): readonly TaskStatus[] {
+  return MODE_STATUS_OPTIONS[mode];
+}
+
+export function statusFilterForMode(
+  mode: ListTaskMode,
+  selected: readonly TaskStatus[],
+): TaskStatus[] {
+  const options = MODE_STATUS_OPTIONS[mode];
+  return selected.filter((status) => options.includes(status));
+}
 
 export function requestedStatuses(
   mode: ListTaskMode,
   selected: readonly TaskStatus[],
 ): readonly TaskStatus[] | undefined {
-  const allowed =
-    mode === "focus"
-      ? FOCUS_STATUSES
-      : mode === "recent"
-        ? RECENT_STATUSES
-        : null;
-  if (allowed === null) return selected.length > 0 ? selected : undefined;
-  if (selected.length === 0) return allowed;
-  return allowed.filter((status) => selected.includes(status));
+  const narrowed = statusFilterForMode(mode, selected);
+  if (narrowed.length > 0) return narrowed;
+  return mode === "focus" || mode === "recent"
+    ? MODE_STATUS_OPTIONS[mode]
+    : undefined;
 }
 
 export function useListTasks(

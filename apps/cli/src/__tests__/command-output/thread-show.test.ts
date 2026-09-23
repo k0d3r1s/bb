@@ -18,6 +18,23 @@ describe("bb thread show command output", () => {
   const register: CommandRegistrar = (program) =>
     registerThreadCommands(program, () => "http://server");
 
+  function jsonResponse(status: number, body: object): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  function stubThreadShowApi(
+    handlers: Parameters<typeof stubServerApi>[0],
+  ): void {
+    stubServerApi({
+      "v1.threads.:id.execution-profile.$get": async () =>
+        jsonResponse(404, { code: "not_found", message: "Not found" }),
+      ...handlers,
+    });
+  }
+
   function makePullRequest(
     overrides: Partial<domain.ThreadPullRequest> = {},
   ): domain.ThreadPullRequest {
@@ -64,7 +81,7 @@ describe("bb thread show command output", () => {
     });
     const get = vi.fn(async () => thread);
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.threads.:id.$get": get,
       "v1.threads.:id.timeline.$get": timelineGet,
     });
@@ -96,7 +113,7 @@ describe("bb thread show command output", () => {
     });
     const get = vi.fn(async () => thread);
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.threads.:id.$get": get,
       "v1.threads.:id.timeline.$get": timelineGet,
     });
@@ -119,7 +136,7 @@ describe("bb thread show command output", () => {
     });
     const get = vi.fn(async () => thread);
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.threads.:id.$get": get,
       "v1.threads.:id.timeline.$get": timelineGet,
     });
@@ -159,7 +176,7 @@ describe("bb thread show command output", () => {
     }));
     const pullRequestGet = vi.fn(async () => ({ outcome: "absent" }));
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.environments.:id.$get": environmentGet,
       "v1.environments.:id.pull-request.$get": pullRequestGet,
       "v1.environments.:id.status.$get": statusGet,
@@ -230,7 +247,7 @@ describe("bb thread show command output", () => {
     const diffGet = vi.fn(async () => diffResponse);
     const pullRequestGet = vi.fn(async () => ({ outcome: "absent" }));
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.environments.:id.$get": environmentGet,
       "v1.environments.:id.diff.$get": diffGet,
       "v1.environments.:id.pull-request.$get": pullRequestGet,
@@ -284,7 +301,7 @@ describe("bb thread show command output", () => {
     const diffGet = vi.fn(async () => diffResponse);
     const pullRequestGet = vi.fn(async () => ({ outcome: "absent" }));
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.environments.:id.$get": environmentGet,
       "v1.environments.:id.diff.$get": diffGet,
       "v1.environments.:id.pull-request.$get": pullRequestGet,
@@ -346,7 +363,7 @@ describe("bb thread show command output", () => {
       pullRequest,
     }));
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.environments.:id.$get": environmentGet,
       "v1.environments.:id.pull-request.$get": pullRequestGet,
       "v1.threads.:id.$get": get,
@@ -399,7 +416,7 @@ describe("bb thread show command output", () => {
       message: "gh pr view failed: authentication required",
     }));
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.environments.:id.$get": environmentGet,
       "v1.environments.:id.pull-request.$get": pullRequestGet,
       "v1.threads.:id.$get": get,
@@ -439,7 +456,7 @@ describe("bb thread show command output", () => {
       pullRequest,
     }));
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.environments.:id.$get": environmentGet,
       "v1.environments.:id.pull-request.$get": pullRequestGet,
       "v1.threads.:id.$get": get,
@@ -478,7 +495,7 @@ describe("bb thread show command output", () => {
     });
     const get = vi.fn(async () => thread);
     const timelineGet = fixtures.makeEmptyTimelineGetMock();
-    stubServerApi({
+    stubThreadShowApi({
       "v1.threads.:id.$get": get,
       "v1.threads.:id.timeline.$get": timelineGet,
     });
@@ -496,5 +513,97 @@ describe("bb thread show command output", () => {
       pendingTodos: null,
       execution: null,
     });
+  });
+
+  it("bb thread show prints the execution profile with the time the provider reported it", async () => {
+    const thread: domain.Thread = fixtures.makeThread({
+      id: "thread-show-execution",
+      projectId: "proj-1",
+      providerId: "codex",
+      status: "idle",
+      createdAt: 1,
+      updatedAt: 2,
+    });
+    const reportedAt = 1_760_000_000_000;
+    const executionProfile = vi.fn(async () => ({
+      lastRequested: null,
+      overrides: { model: null, reasoningLevel: null },
+      nextTurn: null,
+      executed: {
+        model: "gpt-5.5-mini",
+        reasoningLevel: "medium",
+        permissionMode: "auto",
+        serviceTier: "fast",
+        reportedAt,
+      },
+    }));
+    stubThreadShowApi({
+      "v1.threads.:id.$get": vi.fn(async () => thread),
+      "v1.threads.:id.timeline.$get": fixtures.makeEmptyTimelineGetMock(),
+      "v1.threads.:id.execution-profile.$get": executionProfile,
+    });
+
+    await runCommand(["thread", "show", "thread-show-execution"], register);
+
+    expect(executionProfile).toHaveBeenCalledWith({
+      param: { id: "thread-show-execution" },
+    });
+    const lines = collectLogLines(vi.mocked(console.log));
+    expect(lines).toContain("  Execution:");
+    expect(lines).toContain(
+      "    Executed:       gpt-5.5-mini · medium · auto · fast",
+    );
+    expect(lines).toContain(
+      `    Reported:       ${new Date(reportedAt).toLocaleString()}`,
+    );
+  });
+
+  it("bb thread show omits the execution profile when an older server has no such route", async () => {
+    const thread: domain.Thread = fixtures.makeThread({
+      id: "thread-show-old-server",
+      projectId: "proj-1",
+      providerId: "codex",
+      status: "idle",
+      createdAt: 1,
+      updatedAt: 2,
+    });
+    stubThreadShowApi({
+      "v1.threads.:id.$get": vi.fn(async () => thread),
+      "v1.threads.:id.timeline.$get": fixtures.makeEmptyTimelineGetMock(),
+    });
+
+    await runCommand(["thread", "show", "thread-show-old-server"], register);
+
+    expect(collectLogLines(vi.mocked(console.log))).not.toContain(
+      "  Execution:",
+    );
+    expect(collectLogLines(vi.mocked(console.error))).toEqual([]);
+  });
+
+  it("bb thread show fails instead of hiding a server error from the execution profile", async () => {
+    const thread: domain.Thread = fixtures.makeThread({
+      id: "thread-show-profile-error",
+      projectId: "proj-1",
+      providerId: "codex",
+      status: "idle",
+      createdAt: 1,
+      updatedAt: 2,
+    });
+    stubThreadShowApi({
+      "v1.threads.:id.$get": vi.fn(async () => thread),
+      "v1.threads.:id.timeline.$get": fixtures.makeEmptyTimelineGetMock(),
+      "v1.threads.:id.execution-profile.$get": async () =>
+        jsonResponse(500, { code: "internal", message: "database locked" }),
+    });
+
+    await expect(
+      runCommand(["thread", "show", "thread-show-profile-error"], register),
+    ).rejects.toThrow("process.exit:1");
+
+    expect(
+      collectLogLines(vi.mocked(console.error)).some((line) =>
+        line.includes("database locked"),
+      ),
+    ).toBe(true);
   });
 });
