@@ -76,7 +76,12 @@ import {
 import {
   ProjectActionsContextMenu,
   ProjectActionsMenuItems,
+  type ProjectActionsMenuSurface,
 } from "./ProjectActionsMenu.js";
+import {
+  ProjectGroupMenuItems,
+  useNewProjectGroupDialog,
+} from "./ProjectGroupMenuItems.js";
 import {
   COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
   COARSE_POINTER_GLYPH_BOX_CLASS,
@@ -2377,6 +2382,17 @@ function ProjectRowComponent({
     }
     return getCollapsedChildActivity(projectThreads, draftThreadIds);
   }, [draftThreadIds, isCollapsed, projectThreads, threadListState.status]);
+  const newGroupDialog = useNewProjectGroupDialog(project.id);
+  const projectExtraActions = (surface: ProjectActionsMenuSurface) => (
+    <>
+      <ProjectGroupMenuItems
+        projectId={project.id}
+        surface={surface}
+        onNewGroup={newGroupDialog.openDialog}
+      />
+      <ThreadListVisibilityMenuItems surface={surface} />
+    </>
+  );
   const projectActions = (
     <SidebarHeaderControls
       label={project.name}
@@ -2390,9 +2406,7 @@ function ProjectRowComponent({
         surface="dropdown"
         onRename={rename.startEditingFromMenu}
         onRemove={requestRemove}
-        extraActions={(surface) => (
-          <ThreadListVisibilityMenuItems surface={surface} />
-        )}
+        extraActions={projectExtraActions}
       />
     </SidebarHeaderControls>
   );
@@ -2400,9 +2414,7 @@ function ProjectRowComponent({
   return (
     <>
       <ProjectActionsContextMenu
-        extraActions={(surface) => (
-          <ThreadListVisibilityMenuItems surface={surface} />
-        )}
+        extraActions={projectExtraActions}
         project={project}
         disabled={rename.isEditing}
         onRename={rename.startEditingFromMenu}
@@ -2450,6 +2462,7 @@ function ProjectRowComponent({
           </TopLevelSidebarSection>
         </div>
       </ProjectActionsContextMenu>
+      {newGroupDialog.dialog}
       <ConfirmDeleteDialog
         open={isRemoveDialogOpen}
         onOpenChange={setIsRemoveDialogOpen}

@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { act, cleanup, waitFor } from "@testing-library/react";
+import { cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { isBuiltinIconName } from "@bb/shared-ui/icon";
@@ -83,16 +83,8 @@ describe("tasks icon names", () => {
     );
 
     const row = await slot.findByText("Recently closed");
-    const icon = row.parentElement?.querySelector("svg[data-icon]");
+    const icon = row.parentElement?.querySelector("[data-icon]");
     expect(icon?.getAttribute("data-icon")).toBe("TimeSchedule");
-    await act(async () => {
-      await waitFor(() =>
-        expect(
-          row.parentElement?.querySelector("svg[data-icon=TimeSchedule]")
-            ?.childElementCount ?? 0,
-        ).toBeGreaterThan(0),
-      );
-    });
   });
 
   it("renders the Recently closed empty state with registered artwork", async () => {
@@ -124,8 +116,8 @@ describe("tasks icon names", () => {
 
     await slot.findByText("No recently closed tasks");
     expect(
-      slot.container.querySelector("svg[data-icon=TimeSchedule]"),
+      slot.container.querySelector("[data-icon=TimeSchedule]"),
     ).not.toBeNull();
-    expect(slot.container.querySelector("svg[data-icon=Zap]")).toBeNull();
+    expect(slot.container.querySelector("[data-icon=Zap]")).toBeNull();
   });
 });

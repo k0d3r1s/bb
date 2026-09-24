@@ -10,10 +10,6 @@ import {
   threads as threadTable,
 } from "@bb/db";
 import type { JsonValue, PendingInteractionCreate } from "@bb/domain";
-import {
-  ASK_USER_QUESTION_PLUGIN_ID,
-  ASK_USER_QUESTION_RENDERER_ID,
-} from "@bb/plugin-interaction-contracts";
 import { handleHostSessionOpened } from "../../src/internal/session-owner-side-effects.js";
 import { toPendingInteraction } from "../../src/services/interactions/pending-interaction-serialization.js";
 import { PendingInteractionLifecycle } from "../../src/services/interactions/pending-interactions.js";
@@ -127,8 +123,8 @@ function requestAskUserQuestion(
   },
 ) {
   return deps.pendingInteractions.requestPluginInteraction({
-    pluginId: ASK_USER_QUESTION_PLUGIN_ID,
-    rendererId: ASK_USER_QUESTION_RENDERER_ID,
+    pluginId: "ask-user-question",
+    rendererId: "ask-user-question",
     threadId: args.threadId,
     title: "Layout",
     payload: {

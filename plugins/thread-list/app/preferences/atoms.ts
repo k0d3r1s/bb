@@ -40,6 +40,11 @@ export const sidebarProjectSortDirectionAtom = createSyncedPreferenceAtom(
 export const sidebarCollapsedThreadSectionsAtom = createSyncedPreferenceAtom(
   "collapsedThreadSections",
 );
+export const sidebarProjectGroupsAtom =
+  createSyncedPreferenceAtom("projectGroups");
+export const collapsedProjectGroupIdsAtom = createSyncedPreferenceAtom(
+  "collapsedProjectGroups",
+);
 export const sidebarCollapsedMachinesAtom =
   createSyncedPreferenceAtom("collapsedMachines");
 

@@ -924,6 +924,27 @@ keys you want to keep hidden. `reset` restores the default empty list and shows
 every group. The plugin's `setPreference` and `resetPreference` RPCs expose the
 same operations to its app client.
 
+### Thread-list project groups
+
+When organized by project, a project's **Move to group** menu puts it in a
+named group, creates a new group, or removes it from its group. Grouped
+projects render together under a collapsible group header at the position of
+the group's first project; drag a member to move the whole group. With
+Alphabetical or Recent activity project sorting, groups sort by name or by
+their most recent member activity. The group header's menu renames the group or
+ungroups its projects. A group with no remaining projects is removed.
+
+The Thread list plugin's `projectGroups` preference defaults to `[]` and holds
+`{"id","name","projectIds"}` objects. Group ids must be unique, names are
+trimmed and cannot be blank, and a project can belong to only one group.
+`collapsedProjectGroups` lists collapsed group ids.
+
+```sh
+bb thread-list prefs get projectGroups --json
+bb thread-list prefs set projectGroups '[{"id":"work","name":"Work","projectIds":["proj_a","proj_b"]}]'
+bb thread-list prefs reset projectGroups
+```
+
 ### Sidebar footer
 
 Settings → Appearance → Sidebar footer lets users reorder and hide built-in and

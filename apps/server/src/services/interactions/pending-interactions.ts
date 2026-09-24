@@ -37,10 +37,6 @@ import {
   type PendingInteractionResolution,
   type ThreadChangeMetadata,
 } from "@bb/domain";
-import {
-  ASK_USER_QUESTION_PLUGIN_ID,
-  ASK_USER_QUESTION_RENDERER_ID,
-} from "@bb/plugin-interaction-contracts";
 import type { HostDaemonCommand } from "@bb/host-daemon-contract";
 import type { CommandResultReportForType } from "../../internal/command-result-side-effects.js";
 import { ApiError } from "../../errors.js";
@@ -322,14 +318,16 @@ const LATE_ANSWER_RESOLUTION = {
   description: { title: "Answered after the question timed out" },
 } satisfies PendingInteractionResolution;
 
+const ASK_USER_QUESTION_ID = "ask-user-question";
+
 function isLateAnswerRecoverable(
   interaction: PluginPendingInteraction,
 ): boolean {
   return (
     interaction.status === "interrupted" &&
     interaction.statusReason === "timeout" &&
-    interaction.origin.pluginId === ASK_USER_QUESTION_PLUGIN_ID &&
-    interaction.origin.rendererId === ASK_USER_QUESTION_RENDERER_ID
+    interaction.origin.pluginId === ASK_USER_QUESTION_ID &&
+    interaction.origin.rendererId === ASK_USER_QUESTION_ID
   );
 }
 
@@ -337,8 +335,8 @@ function isRecoveredLateAnswer(interaction: PendingInteraction): boolean {
   return (
     isPluginPendingInteraction(interaction) &&
     interaction.status === "resolved" &&
-    interaction.origin.pluginId === ASK_USER_QUESTION_PLUGIN_ID &&
-    interaction.origin.rendererId === ASK_USER_QUESTION_RENDERER_ID &&
+    interaction.origin.pluginId === ASK_USER_QUESTION_ID &&
+    interaction.origin.rendererId === ASK_USER_QUESTION_ID &&
     interaction.resolution !== null &&
     isPluginPendingInteractionResolution(interaction.resolution) &&
     interaction.resolution.description?.title ===

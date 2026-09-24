@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import {
@@ -349,6 +355,172 @@ describe("thread-list plugin", () => {
 
     await screen.findByText("Pinned thread");
     expect(sectionHeaders()).toEqual(["Pinned", "App", "Web", "Threads"]);
+  });
+
+  describe("project groups", () => {
+    const groupedProjects = [
+      ...PROJECTS,
+      makePluginProject({ id: "proj_docs", name: "Docs" }),
+    ];
+    const groupedSectionOrder = [
+      "pinned",
+      "project:proj_app",
+      "project:proj_docs",
+      "project:proj_web",
+      "threads",
+    ];
+    const workGroup = {
+      id: "work",
+      name: "Work",
+      projectIds: ["proj_app", "proj_web"],
+    };
+
+    function renderGroupedList(preferences: Partial<PreferenceValues>) {
+      return renderList(
+        {
+          organizationMode: "project",
+          sectionOrder: groupedSectionOrder,
+          projectGroups: [workGroup],
+          ...preferences,
+        },
+        {
+          sidebarThreads: {
+            projects: groupedProjects,
+            sections: SECTIONS,
+            threads: THREADS,
+          },
+        },
+      );
+    }
+
+    it("renders grouped projects together under the group header", async () => {
+      setPreferencesMirrorStorageForTest(null);
+      renderGroupedList({});
+
+      await screen.findByText("Parent thread");
+      expect(sectionHeaders()).toEqual([
+        "Pinned",
+        "Work",
+        "App",
+        "Web",
+        "Docs",
+        "Threads",
+      ]);
+      const group = document.querySelector(
+        '[data-sidebar-project-group-id="work"]',
+      ) as HTMLElement;
+      expect(within(group).getByTitle("App")).not.toBeNull();
+      expect(within(group).getByTitle("Web")).not.toBeNull();
+      expect(within(group).queryByTitle("Docs")).toBeNull();
+    });
+
+    it("hides member projects while the group is collapsed", async () => {
+      setPreferencesMirrorStorageForTest(null);
+      renderGroupedList({ collapsedProjectGroups: ["work"] });
+
+      await screen.findByText("Personal thread");
+      expect(sectionHeaders()).toEqual(["Pinned", "Work", "Docs", "Threads"]);
+      expect(screen.queryByText("Parent thread")).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Expand Work section" }),
+      ).not.toBeNull();
+    });
+
+    async function openMoveToGroupMenu(projectName: string) {
+      fireEvent.keyDown(
+        screen.getByRole("button", {
+          name: new RegExp(`^${projectName} actions(?:;|$)`),
+        }),
+        { key: "Enter" },
+      );
+      fireEvent.keyDown(
+        await screen.findByRole("menuitem", { name: "Move to group" }),
+        { key: "ArrowRight" },
+      );
+    }
+
+    function projectGroupWrites(
+      rpcCalls: readonly { method: string; input: unknown }[],
+    ): unknown[] {
+      return rpcCalls
+        .filter((call) => call.method === "setPreference")
+        .map((call) => call.input)
+        .filter(
+          (input) => (input as { key: string }).key === "projectGroups",
+        );
+    }
+
+    it("moves a project into an existing group from its menu", async () => {
+      setPreferencesMirrorStorageForTest(null);
+      const { rpcCalls } = renderGroupedList({});
+      await screen.findByText("Parent thread");
+
+      await openMoveToGroupMenu("Docs");
+      fireEvent.click(
+        await screen.findByRole("menuitemradio", { name: "Work" }),
+      );
+
+      await waitFor(() =>
+        expect(projectGroupWrites(rpcCalls)).toEqual([
+          {
+            key: "projectGroups",
+            value: [
+              { ...workGroup, projectIds: ["proj_app", "proj_web", "proj_docs"] },
+            ],
+          },
+        ]),
+      );
+      expect(sectionHeaders()).toEqual([
+        "Pinned",
+        "Work",
+        "App",
+        "Docs",
+        "Web",
+        "Threads",
+      ]);
+    });
+
+    it("creates a new group for a project from its menu", async () => {
+      setPreferencesMirrorStorageForTest(null);
+      const { rpcCalls } = renderGroupedList({});
+      await screen.findByText("Parent thread");
+
+      await openMoveToGroupMenu("Docs");
+      fireEvent.click(await screen.findByRole("menuitem", { name: "New group…" }));
+      fireEvent.change(await screen.findByLabelText("Group name"), {
+        target: { value: "  Side projects " },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Create group" }));
+
+      await waitFor(() => expect(projectGroupWrites(rpcCalls)).toHaveLength(1));
+      const [write] = projectGroupWrites(rpcCalls) as {
+        value: { name: string; projectIds: string[] }[];
+      }[];
+      expect(write?.value.map(({ name, projectIds }) => ({ name, projectIds })))
+        .toEqual([
+          { name: "Work", projectIds: ["proj_app", "proj_web"] },
+          { name: "Side projects", projectIds: ["proj_docs"] },
+        ]);
+      expect(sectionHeaders()).toContain("Side projects");
+    });
+
+    it("orders groups by group name when projects sort alphabetically", async () => {
+      setPreferencesMirrorStorageForTest(null);
+      renderGroupedList({
+        projectSort: "alpha",
+        projectGroups: [{ ...workGroup, name: "Clients" }],
+      });
+
+      await screen.findByText("Parent thread");
+      expect(sectionHeaders()).toEqual([
+        "Pinned",
+        "Clients",
+        "App",
+        "Web",
+        "Docs",
+        "Threads",
+      ]);
+    });
   });
 
   it("calls onNavigate when a thread row is opened", async () => {

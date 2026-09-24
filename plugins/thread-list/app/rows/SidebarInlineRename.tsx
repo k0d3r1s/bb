@@ -12,7 +12,13 @@ import { useIsCompactViewport } from "@/components/ui/hooks/use-compact-viewport
 import { SidebarRenameEditor, renameError } from "./SidebarRenameEditor.js";
 
 interface SidebarRenameArgs {
-  kind: "thread" | "project" | "section" | "environment" | "machine";
+  kind:
+    | "thread"
+    | "project"
+    | "projectGroup"
+    | "section"
+    | "environment"
+    | "machine";
   id: string;
   name: string;
   label: string;

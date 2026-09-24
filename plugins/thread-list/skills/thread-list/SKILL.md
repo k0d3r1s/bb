@@ -1,6 +1,6 @@
 ---
 name: thread-list
-description: "Inspect or change the sidebar thread list's layout preferences: organization mode, sort, section order, hidden groups, and collapsed groups."
+description: "Inspect or change the sidebar thread list's layout preferences: organization mode, sort, section order, project groups, hidden groups, and collapsed groups."
 ---
 
 # Thread list preferences
@@ -8,10 +8,12 @@ description: "Inspect or change the sidebar thread list's layout preferences: or
 The Thread list plugin owns the sidebar's layout state. Read it with
 `bb thread-list prefs list --json`; keys are `showProviderIcons`, `threadLifecycles`,
 `organizationMode`, `environmentGrouping`, `chronologicalSort`, `sortDirection`,
-`projectSort`, `projectSortDirection`, `sectionOrder`, `manualSectionOrder`,
+`projectSort`, `projectSortDirection`, `projectGroups`, `sectionOrder`,
+`manualSectionOrder`,
 `machineSectionOrder`, `hiddenGroups` (including the built-in `threads` group),
 `collapsedSections`, `collapsedProjects`, `collapsedThreads`,
-`collapsedEnvironments`, `collapsedThreadSections`, and `collapsedMachines`.
+`collapsedEnvironments`, `collapsedThreadSections`, `collapsedProjectGroups`,
+and `collapsedMachines`.
 
 ```sh
 bb thread-list prefs list [--json]
@@ -47,3 +49,19 @@ Thread sorting and project sorting are independent. `chronologicalSort` and
 `custom`, `alpha`, or `activity`; `projectSortDirection` controls automatic
 project order without changing the stored drag order. Recent activity is the
 latest visible, non-archived thread update in each project.
+
+Project groups keep related projects together when organized by project.
+`projectGroups` is a list of `{"id","name","projectIds"}` objects; ids must be
+unique, names cannot be blank, and a project belongs to at most one group.
+Groups render at their first project's position (or by group name / latest
+member activity under automatic project sorting). `collapsedProjectGroups`
+lists collapsed group ids. `set` replaces every group, so read the current
+value first:
+
+```sh
+bb thread-list prefs get projectGroups --json
+bb thread-list prefs set projectGroups '[{"id":"work","name":"Work","projectIds":["proj_a","proj_b"]},{"id":"bb","name":"bb","projectIds":["proj_c"]}]'
+```
+
+In the app, a project's **Move to group** menu assigns, creates, or clears its
+group, and a group header's menu renames or ungroups it.

@@ -398,14 +398,15 @@ describe("tasks storage", () => {
       });
       expect(first.tasks).toHaveLength(1);
       expect(first.nextCursor).not.toBeNull();
-      if (first.nextCursor === null)
+      const archivedCursor = first.nextCursor;
+      if (archivedCursor === null)
         throw new Error("expected archived cursor");
       expect(
         store.listTasksPage({
           projectId: project.id,
           archive: "archived",
           limit: 1,
-          cursor: first.nextCursor,
+          cursor: archivedCursor,
         }).tasks,
       ).toHaveLength(1);
       expect(() =>
@@ -413,7 +414,7 @@ describe("tasks storage", () => {
           projectId: project.id,
           archive: "active",
           limit: 1,
-          cursor: first.nextCursor,
+          cursor: archivedCursor,
         }),
       ).toThrow("does not match the current filters");
     } finally {

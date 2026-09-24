@@ -1125,7 +1125,7 @@ test("VPS plugin synchronization re-points plugins from a moved collection", () 
       `plugin install --yes --plugin shared-runtime ${vpsCollection}`,
     ),
   );
-  assert.ok(cli.calls.includes("plugin update dir-skills"));
+  assert.ok(cli.calls.includes("plugin update --yes dir-skills"));
   assert.ok(!cli.calls.includes("plugin remove dir-skills"));
   assert.equal(cli.requested()["shared-runtime"], vpsCollection);
 });

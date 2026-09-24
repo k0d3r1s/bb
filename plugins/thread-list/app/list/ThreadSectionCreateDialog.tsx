@@ -9,6 +9,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { RenameDialog, useNameValidation } from "../ui/RenameDialog.js";
 
+export interface NameCreateDialogCopy {
+  title: string;
+  description: string;
+  inputLabel: string;
+  submitLabel: string;
+  emptyMessage: string;
+}
+
+const THREAD_SECTION_DIALOG_COPY: NameCreateDialogCopy = {
+  title: "New section",
+  description: "Create a section for threads.",
+  inputLabel: "Section name",
+  submitLabel: "Create section",
+  emptyMessage: "Section name cannot be empty.",
+};
+
 interface ThreadSectionCreateDialogProps {
   errorMessage?: string | null;
   open: boolean;
@@ -17,25 +33,38 @@ interface ThreadSectionCreateDialogProps {
   onCreate: (name: string) => void;
 }
 
-interface ThreadSectionDialogContentProps {
+interface NameCreateDialogProps extends ThreadSectionCreateDialogProps {
+  copy: NameCreateDialogCopy;
+}
+
+interface NameCreateDialogContentProps {
+  copy: NameCreateDialogCopy;
   errorMessage?: string | null;
   pending: boolean;
   onSubmit: (name: string) => void;
   inputRef: RefObject<HTMLInputElement | null>;
 }
 
-export function ThreadSectionCreateDialog({
+export function ThreadSectionCreateDialog(
+  props: ThreadSectionCreateDialogProps,
+) {
+  return <NameCreateDialog {...props} copy={THREAD_SECTION_DIALOG_COPY} />;
+}
+
+export function NameCreateDialog({
+  copy,
   errorMessage,
   open,
   pending = false,
   onOpenChange,
   onCreate,
-}: ThreadSectionCreateDialogProps) {
+}: NameCreateDialogProps) {
   return (
     <RenameDialog open={open} onOpenChange={onOpenChange}>
       {(inputRef) =>
         open ? (
-          <ThreadSectionDialogContent
+          <NameCreateDialogContent
+            copy={copy}
             errorMessage={errorMessage}
             pending={pending}
             onSubmit={onCreate}
@@ -47,19 +76,20 @@ export function ThreadSectionCreateDialog({
   );
 }
 
-function ThreadSectionDialogContent({
+function NameCreateDialogContent({
+  copy,
   errorMessage,
   pending,
   onSubmit,
   inputRef,
-}: ThreadSectionDialogContentProps) {
+}: NameCreateDialogContentProps) {
   const inputId = useId();
   const [name, setName] = useState("");
   const [hiddenErrorMessage, setHiddenErrorMessage] = useState<string | null>(
     null,
   );
   const { validationMessage, validate, clearMessage } = useNameValidation({
-    emptyMessage: "Section name cannot be empty.",
+    emptyMessage: copy.emptyMessage,
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -79,15 +109,15 @@ function ThreadSectionDialogContent({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>New section</DialogTitle>
-        <DialogDescription>Create a section for threads.</DialogDescription>
+        <DialogTitle>{copy.title}</DialogTitle>
+        <DialogDescription>{copy.description}</DialogDescription>
       </DialogHeader>
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="space-y-2">
           <Input
             ref={inputRef}
             id={inputId}
-            aria-label="Section name"
+            aria-label={copy.inputLabel}
             value={name}
             autoCapitalize="sentences"
             autoCorrect="off"
@@ -105,7 +135,7 @@ function ThreadSectionDialogContent({
         </div>
         <DialogFooter>
           <Button type="submit" disabled={pending}>
-            Create section
+            {copy.submitLabel}
           </Button>
         </DialogFooter>
       </form>

@@ -637,7 +637,7 @@ export function syncCollectionPlugin(
 ) {
   const action = externalPluginSyncAction(requested, plugin.source);
   if (action === "update") {
-    command(["plugin", "update", plugin.id]);
+    command(["plugin", "update", "--yes", plugin.id]);
     return;
   }
   if (action === "reinstall") {

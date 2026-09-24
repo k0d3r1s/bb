@@ -49,6 +49,27 @@ const hiddenGroupsSchema = z
   .max(LIST_MAX_LENGTH)
   .transform((value) => [...new Set(value)]);
 
+const projectGroupSchema = z
+  .object({
+    id: listItemSchema,
+    name: z.string().trim().min(1).max(STRING_MAX_LENGTH),
+    projectIds: stringListSchema,
+  })
+  .strict();
+export type ProjectGroup = z.infer<typeof projectGroupSchema>;
+
+const projectGroupsSchema = z
+  .array(projectGroupSchema)
+  .max(LIST_MAX_LENGTH)
+  .refine(
+    (groups) => new Set(groups.map((group) => group.id)).size === groups.length,
+    "Project group ids must be unique.",
+  )
+  .refine((groups) => {
+    const projectIds = groups.flatMap((group) => group.projectIds);
+    return new Set(projectIds).size === projectIds.length;
+  }, "A project can belong to only one project group.");
+
 function definePreference<Schema extends z.ZodTypeAny>(
   schema: Schema,
   defaultValue: z.infer<Schema>,
@@ -111,6 +132,12 @@ export const preferenceDefinitions = {
     "Project row sort direction; default keeps the field's natural direction.",
     null,
   ),
+  projectGroups: definePreference(
+    projectGroupsSchema,
+    [],
+    "Named project groups shown together when organized by project: [{id, name, projectIds}]. A project belongs to at most one group.",
+    null,
+  ),
   sectionOrder: definePreference(
     stringListSchema,
     ["pinned", "projects", "threads"],
@@ -164,6 +191,12 @@ export const preferenceDefinitions = {
     [],
     "Custom section ids that are collapsed.",
     "sidebar.collapsedThreadSections",
+  ),
+  collapsedProjectGroups: definePreference(
+    stringListSchema,
+    [],
+    "Project group ids whose rows are collapsed.",
+    null,
   ),
   collapsedMachines: definePreference(
     stringListSchema,

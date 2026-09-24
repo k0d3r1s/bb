@@ -206,16 +206,17 @@ describe("list filter/sort preference persistence", () => {
   ])(
     "sends the selected status intersection for $subPath / $label",
     async ({ subPath, label, statuses, key }) => {
-      const rpc = baseRpc();
+      const listTasksCalls: Record<string, unknown>[] = [];
+      const rpc = baseRpc({}, listTasksCalls);
       const slot = renderSlot(app.navPanels[0]!, { subPath }, { rpc });
       await slot.findByText(key);
-      rpc.listTasksCalls.length = 0;
+      listTasksCalls.length = 0;
       fireEvent.click(slot.getByRole("button", { name: /^Status/ }));
       fireEvent.click(
         await slot.findByRole("menuitemcheckbox", { name: label }),
       );
       await waitFor(() =>
-        expect(rpc.listTasksCalls).toContainEqual(
+        expect(listTasksCalls).toContainEqual(
           expect.objectContaining({ projectId: PROJECT_A, statuses }),
         ),
       );
@@ -250,11 +251,12 @@ describe("list filter/sort preference persistence", () => {
         },
       }),
     );
-    const rpc = baseRpc();
+    const listTasksCalls: Record<string, unknown>[] = [];
+    const rpc = baseRpc({}, listTasksCalls);
     const slot = renderSlot(app.navPanels[0]!, { subPath: PROJECT_A }, { rpc });
 
     await slot.findByText("ALP-1");
-    expect(rpc.listTasksCalls).toContainEqual(
+    expect(listTasksCalls).toContainEqual(
       expect.objectContaining({
         projectId: PROJECT_A,
         statuses: ["backlog", "todo", "in_progress", "in_review"],
